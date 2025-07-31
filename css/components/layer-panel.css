@@ -1,0 +1,579 @@
+/* 레이어 패널 컴포넌트 */
+
+/* 왼쪽 레이어 패널 */
+.layer-panel {
+  position: absolute;
+  top: 0;
+  left: 77.22px;
+  width: 320px;
+  height: 100vh;
+  background: #ffffff;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(0);
+  border-right: 1px solid #e2e8f0;
+}
+
+.layer-panel.collapsed {
+  transform: translateX(-316px);
+}
+
+.layer-panel.collapsed .fixed-tabs {
+  transform: translateX(0);
+}
+
+/* 고정 탭 영역 */
+.fixed-tabs {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.5rem;
+  z-index: 1002;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 0.5rem;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.fixed-tab {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  padding: 0.75rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 48px;
+  backdrop-filter: blur(10px);
+}
+
+.fixed-tab:hover {
+  background: rgba(255, 255, 255, 1);
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.fixed-tab.active {
+  background: rgb(30, 41, 59);
+  color: white;
+  border-color: rgb(30, 41, 59);
+  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.3);
+}
+
+.tab-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.tab-label {
+  font-size: 0.7rem;
+  font-weight: 500;
+  text-align: center;
+  line-height: 1;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  position: relative;
+}
+
+.panel-header h3 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.panel-toggle {
+  position: absolute;
+  right: -24px;
+  top: 50vh;
+  transform: translateY(-50%);
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  color: #64748b;
+  width: 24px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.panel-toggle:hover {
+  background: #f8fafc;
+  color: #1e293b;
+}
+
+.toggle-icon {
+  transition: transform 0.3s ease;
+}
+
+.layer-panel.collapsed .toggle-icon {
+  transform: rotate(180deg);
+}
+
+.panel-content {
+  padding: 0;
+  height: calc(100vh - 60px);
+  overflow-y: auto;
+  max-height: calc(100vh - 60px);
+}
+
+/* 탭 스타일 */
+.layer-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 0 1rem;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #64748b;
+  transition: all 0.3s ease;
+  position: relative;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.tab-btn.active {
+  color: rgb(30, 41, 59);
+  border-bottom: 2px solid rgb(30, 41, 59);
+  background: #ffffff;
+}
+
+/* 탭 콘텐츠 */
+.tab-content {
+  padding: 1rem;
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+/* 레이어 카테고리 */
+.layer-category h4 {
+  margin: 0 0 1rem 0;
+  color: #1e293b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e2e8f0;
+  transition: background-color 0.2s;
+}
+
+.category-header:hover {
+  background-color: #f9fafb;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin: 0 -0.75rem;
+}
+
+.category-header h4 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.category-toggle {
+  font-size: 0.8rem;
+  color: #6b7280;
+  transition: transform 0.3s ease;
+}
+
+.category-header.collapsed .category-toggle {
+  transform: rotate(-90deg);
+}
+
+.layer-list {
+  max-height: 300px;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.layer-list.collapsed {
+  max-height: 0;
+}
+
+.layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+}
+
+.layer-item:hover {
+  background: #f8fafc;
+}
+
+.layer-item:last-child {
+  border-bottom: none;
+}
+
+.layer-item input[type="radio"],
+.layer-item input[type="checkbox"] {
+  margin-right: 1rem;
+  accent-color: rgb(30, 41, 59);
+  width: 16px;
+  height: 16px;
+}
+
+.layer-item label {
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: #374151;
+  font-weight: 500;
+  flex: 1;
+}
+
+.empty-message {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 3rem 1rem;
+  font-style: italic;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+/* 새로운 탭 스타일들 */
+.input-group {
+  margin-bottom: 1rem;
+}
+
+.input-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: rgb(30, 41, 59);
+  box-shadow: 0 0 0 3px rgba(30, 41, 59, 0.1);
+}
+
+.route-options,
+.search-filters,
+.measure-tools,
+.draw-tools,
+.export-options {
+  margin-top: 1.5rem;
+}
+
+.route-options h4,
+.search-filters h4,
+.measure-tools h4,
+.draw-tools h4,
+.export-options h4 {
+  margin-bottom: 1rem;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.option-item,
+.filter-item,
+.measure-option,
+.draw-option,
+.export-option {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.option-item input,
+.filter-item input,
+.measure-option input,
+.draw-option input,
+.export-option input {
+  margin-right: 0.75rem;
+  accent-color: rgb(30, 41, 59);
+}
+
+.option-item label,
+.filter-item label,
+.measure-option label,
+.draw-option label,
+.export-option label {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.route-btn,
+.measure-btn,
+.draw-btn,
+.export-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: rgb(30, 41, 59);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 1rem;
+}
+
+.route-btn:hover,
+.measure-btn:hover,
+.draw-btn:hover,
+.export-btn:hover {
+  background: rgb(51, 65, 85);
+}
+
+.search-input {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.search-input input {
+  width: 100%;
+  padding: 0.75rem 2.5rem 0.75rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.search-btn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.bookmark-list h4 {
+  margin-bottom: 1rem;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.bookmark-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.bookmark-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.bookmark-address {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-left: 0.5rem;
+}
+
+.bookmark-delete {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.add-bookmark-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: all 0.2s;
+}
+
+.add-bookmark-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.clear-measure-btn,
+.clear-draw-btn {
+  width: 100%;
+  padding: 0.5rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.clear-measure-btn:hover,
+.clear-draw-btn:hover {
+  background: #e5e7eb;
+}
+
+/* 반응형 레이어 패널 */
+@media (max-width: 768px) {
+  .layer-panel {
+    width: 280px;
+  }
+
+  .layer-panel.collapsed {
+    transform: translateX(-240px);
+  }
+
+  .layer-panel.collapsed .fixed-tabs {
+    transform: translateX(0);
+  }
+
+  .panel-toggle {
+    right: -20px;
+    width: 20px;
+    height: 40px;
+    top: 50vh;
+  }
+
+  .layer-panel.collapsed .panel-toggle {
+    right: -20px;
+    top: 50vh;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 40px;
+  }
+
+  .fixed-tabs {
+    padding: 0.4rem;
+    left: -52px;
+  }
+
+  .fixed-tab {
+    padding: 0.6rem 0.4rem;
+    min-width: 44px;
+  }
+
+  .tab-icon {
+    font-size: 1.1rem;
+  }
+
+  .tab-label {
+    font-size: 0.65rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .layer-panel {
+    width: 260px;
+  }
+
+  .layer-panel.collapsed {
+    transform: translateX(-220px);
+  }
+
+  .layer-panel.collapsed .fixed-tabs {
+    transform: translateX(0);
+  }
+
+  .panel-toggle {
+    right: -18px;
+    width: 18px;
+    height: 36px;
+    top: 50vh;
+  }
+
+  .layer-panel.collapsed .panel-toggle {
+    right: -18px;
+    top: 50vh;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 36px;
+  }
+
+  .fixed-tabs {
+    padding: 0.3rem;
+    left: -48px;
+  }
+
+  .fixed-tab {
+    padding: 0.5rem 0.3rem;
+    min-width: 40px;
+  }
+
+  .tab-icon {
+    font-size: 1rem;
+  }
+
+  .tab-label {
+    font-size: 0.6rem;
+  }
+}

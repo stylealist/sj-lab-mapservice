@@ -8,7 +8,11 @@
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/ol@v7.4.0/ol.css"
     />
-    <link rel="stylesheet" href="css/styles.css" />
+    <!-- CSS 파일들 -->
+    <link rel="stylesheet" href="css/layouts/main.css" />
+    <link rel="stylesheet" href="css/components/header.css" />
+    <link rel="stylesheet" href="css/components/layer-panel.css" />
+    <link rel="stylesheet" href="css/components/map-controls.css" />
   </head>
   <body>
     <div id="app">
@@ -31,10 +35,42 @@
           <div class="map-container">
             <div id="map" class="map"></div>
 
-            <!-- 왼쪽 레이어 패널 -->
+            <!-- 왼쪽 고정 탭 영역 -->
+            <div class="fixed-tabs">
+              <button class="fixed-tab active" data-tab="route">
+                <span class="tab-icon">🚗</span>
+                <span class="tab-label">길찾기</span>
+              </button>
+              <button class="fixed-tab" data-tab="layers">
+                <span class="tab-icon">🗺️</span>
+                <span class="tab-label">레이어</span>
+              </button>
+              <button class="fixed-tab" data-tab="search">
+                <span class="tab-icon">🔍</span>
+                <span class="tab-label">검색</span>
+              </button>
+              <button class="fixed-tab" data-tab="bookmark">
+                <span class="tab-icon">⭐</span>
+                <span class="tab-label">즐겨찾기</span>
+              </button>
+              <button class="fixed-tab" data-tab="measure">
+                <span class="tab-icon">📏</span>
+                <span class="tab-label">측정</span>
+              </button>
+              <button class="fixed-tab" data-tab="draw">
+                <span class="tab-icon">✏️</span>
+                <span class="tab-label">그리기</span>
+              </button>
+              <button class="fixed-tab" data-tab="export">
+                <span class="tab-icon">💾</span>
+                <span class="tab-label">내보내기</span>
+              </button>
+            </div>
             <div class="layer-panel" id="layerPanel">
+              <!-- 고정 탭 영역 -->
+
               <div class="panel-header">
-                <h3>레이어 관리</h3>
+                <h3 id="panelTitle">길찾기</h3>
                 <button class="panel-toggle" id="panelToggle">
                   <svg
                     class="toggle-icon"
@@ -55,22 +91,69 @@
               </div>
 
               <div class="panel-content">
-                <div class="layer-tabs">
-                  <button class="tab-btn active" data-tab="background">
-                    배경지도
-                  </button>
-                  <button class="tab-btn" data-tab="overlay">오버레이</button>
-                  <button class="tab-btn" data-tab="custom">
-                    사용자 레이어
-                  </button>
-                </div>
-
                 <div class="tab-content">
-                  <!-- 배경지도 탭 -->
-                  <div class="tab-pane active" id="background-tab">
+                  <!-- 길찾기 탭 -->
+                  <div class="tab-pane active" id="route-tab">
+                    <div class="route-form">
+                      <div class="input-group">
+                        <label for="startPoint">출발지</label>
+                        <input
+                          type="text"
+                          id="startPoint"
+                          placeholder="출발지를 입력하세요"
+                        />
+                      </div>
+                      <div class="input-group">
+                        <label for="endPoint">도착지</label>
+                        <input
+                          type="text"
+                          id="endPoint"
+                          placeholder="도착지를 입력하세요"
+                        />
+                      </div>
+                      <div class="route-options">
+                        <h4>경로 옵션</h4>
+                        <div class="option-item">
+                          <input
+                            type="radio"
+                            id="fastest"
+                            name="routeType"
+                            value="fastest"
+                            checked
+                          />
+                          <label for="fastest">최단 경로</label>
+                        </div>
+                        <div class="option-item">
+                          <input
+                            type="radio"
+                            id="shortest"
+                            name="routeType"
+                            value="shortest"
+                          />
+                          <label for="shortest">최단 거리</label>
+                        </div>
+                        <div class="option-item">
+                          <input
+                            type="radio"
+                            id="avoidToll"
+                            name="routeType"
+                            value="avoidToll"
+                          />
+                          <label for="avoidToll">유료도로 회피</label>
+                        </div>
+                      </div>
+                      <button class="route-btn">경로 찾기</button>
+                    </div>
+                  </div>
+
+                  <!-- 레이어 탭 -->
+                  <div class="tab-pane" id="layers-tab">
                     <div class="layer-category">
-                      <h4>배경지도</h4>
-                      <div class="layer-list">
+                      <div class="category-header" data-category="background">
+                        <h4>배경지도</h4>
+                        <span class="category-toggle">▼</span>
+                      </div>
+                      <div class="layer-list" id="background-layers">
                         <div class="layer-item">
                           <input
                             type="radio"
@@ -92,30 +175,201 @@
                         </div>
                         <div class="layer-item">
                           <input
-                            type="radio"
+                            type="checkbox"
                             id="hybrid"
-                            name="background"
+                            name="overlay"
                             value="hybrid"
                           />
-                          <label for="hybrid">하이브리드</label>
+                          <label for="hybrid">하이브리드 (오버레이)</label>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="layer-category">
+                      <div class="category-header" data-category="overlay">
+                        <h4>오버레이 레이어</h4>
+                        <span class="category-toggle">▼</span>
+                      </div>
+                      <div class="layer-list" id="overlay-layers">
+                        <p class="empty-message">추가 예정</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 검색 탭 -->
+                  <div class="tab-pane" id="search-tab">
+                    <div class="search-form">
+                      <div class="search-input">
+                        <input
+                          type="text"
+                          placeholder="장소, 주소, 업체명을 검색하세요"
+                        />
+                        <button class="search-btn">🔍</button>
+                      </div>
+                      <div class="search-filters">
+                        <h4>검색 필터</h4>
+                        <div class="filter-item">
+                          <input type="checkbox" id="restaurant" checked />
+                          <label for="restaurant">음식점</label>
+                        </div>
+                        <div class="filter-item">
+                          <input type="checkbox" id="cafe" checked />
+                          <label for="cafe">카페</label>
+                        </div>
+                        <div class="filter-item">
+                          <input type="checkbox" id="gas" checked />
+                          <label for="gas">주유소</label>
+                        </div>
+                        <div class="filter-item">
+                          <input type="checkbox" id="parking" checked />
+                          <label for="parking">주차장</label>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <!-- 오버레이 탭 -->
-                  <div class="tab-pane" id="overlay-tab">
-                    <div class="layer-category">
-                      <h4>오버레이 레이어</h4>
-                      <p class="empty-message">추가 예정</p>
+                  <!-- 즐겨찾기 탭 -->
+                  <div class="tab-pane" id="bookmark-tab">
+                    <div class="bookmark-list">
+                      <h4>내 즐겨찾기</h4>
+                      <div class="bookmark-item">
+                        <span class="bookmark-name">집</span>
+                        <span class="bookmark-address">서울시 강남구...</span>
+                        <button class="bookmark-delete">삭제</button>
+                      </div>
+                      <div class="bookmark-item">
+                        <span class="bookmark-name">회사</span>
+                        <span class="bookmark-address">서울시 서초구...</span>
+                        <button class="bookmark-delete">삭제</button>
+                      </div>
+                      <button class="add-bookmark-btn">+ 즐겨찾기 추가</button>
                     </div>
                   </div>
 
-                  <!-- 사용자 레이어 탭 -->
-                  <div class="tab-pane" id="custom-tab">
-                    <div class="layer-category">
-                      <h4>사용자 레이어</h4>
-                      <p class="empty-message">추가 예정</p>
+                  <!-- 측정 탭 -->
+                  <div class="tab-pane" id="measure-tab">
+                    <div class="measure-tools">
+                      <h4>측정 도구</h4>
+                      <div class="measure-option">
+                        <input
+                          type="radio"
+                          id="distance"
+                          name="measureType"
+                          value="distance"
+                          checked
+                        />
+                        <label for="distance">거리 측정</label>
+                      </div>
+                      <div class="measure-option">
+                        <input
+                          type="radio"
+                          id="area"
+                          name="measureType"
+                          value="area"
+                        />
+                        <label for="area">면적 측정</label>
+                      </div>
+                      <div class="measure-option">
+                        <input
+                          type="radio"
+                          id="angle"
+                          name="measureType"
+                          value="angle"
+                        />
+                        <label for="angle">각도 측정</label>
+                      </div>
+                      <button class="measure-btn">측정 시작</button>
+                      <button class="clear-measure-btn">측정 초기화</button>
+                    </div>
+                  </div>
+
+                  <!-- 그리기 탭 -->
+                  <div class="tab-pane" id="draw-tab">
+                    <div class="draw-tools">
+                      <h4>그리기 도구</h4>
+                      <div class="draw-option">
+                        <input
+                          type="radio"
+                          id="point"
+                          name="drawType"
+                          value="point"
+                          checked
+                        />
+                        <label for="point">점</label>
+                      </div>
+                      <div class="draw-option">
+                        <input
+                          type="radio"
+                          id="line"
+                          name="drawType"
+                          value="line"
+                        />
+                        <label for="line">선</label>
+                      </div>
+                      <div class="draw-option">
+                        <input
+                          type="radio"
+                          id="polygon"
+                          name="drawType"
+                          value="polygon"
+                        />
+                        <label for="polygon">다각형</label>
+                      </div>
+                      <div class="draw-option">
+                        <input
+                          type="radio"
+                          id="circle"
+                          name="drawType"
+                          value="circle"
+                        />
+                        <label for="circle">원</label>
+                      </div>
+                      <button class="draw-btn">그리기 시작</button>
+                      <button class="clear-draw-btn">그리기 초기화</button>
+                    </div>
+                  </div>
+
+                  <!-- 내보내기 탭 -->
+                  <div class="tab-pane" id="export-tab">
+                    <div class="export-options">
+                      <h4>내보내기 옵션</h4>
+                      <div class="export-option">
+                        <input
+                          type="radio"
+                          id="image"
+                          name="exportType"
+                          value="image"
+                          checked
+                        />
+                        <label for="image">이미지로 저장</label>
+                      </div>
+                      <div class="export-option">
+                        <input
+                          type="radio"
+                          id="pdf"
+                          name="exportType"
+                          value="pdf"
+                        />
+                        <label for="pdf">PDF로 저장</label>
+                      </div>
+                      <div class="export-option">
+                        <input
+                          type="radio"
+                          id="kml"
+                          name="exportType"
+                          value="kml"
+                        />
+                        <label for="kml">KML 파일로 저장</label>
+                      </div>
+                      <div class="export-option">
+                        <input
+                          type="radio"
+                          id="geojson"
+                          name="exportType"
+                          value="geojson"
+                        />
+                        <label for="geojson">GeoJSON으로 저장</label>
+                      </div>
+                      <button class="export-btn">내보내기</button>
                     </div>
                   </div>
                 </div>
@@ -179,6 +433,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/ol@v7.4.0/dist/ol.js"></script>
-    <script src="js/app.js"></script>
+    <script type="module" src="js/app.js"></script>
   </body>
 </html>
