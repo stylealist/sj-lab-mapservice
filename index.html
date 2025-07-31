@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SJ Lab Map Service</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/ol@v7.4.0/ol.css"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- 헤더 -->
+      <header class="header">
+        <div class="header-content">
+          <h1 class="logo">SJ Lab Map Service</h1>
+          <nav class="nav">
+            <button class="nav-btn active" data-page="map">지도</button>
+            <button class="nav-btn" data-page="about">소개</button>
+            <button class="nav-btn" data-page="contact">연락처</button>
+          </nav>
+        </div>
+      </header>
+
+      <!-- 메인 컨텐츠 -->
+      <main class="main-content">
+        <!-- 지도 페이지 -->
+        <div id="map-page" class="page active">
+          <div class="map-container">
+            <div id="map" class="map"></div>
+
+            <!-- 왼쪽 레이어 패널 -->
+            <div class="layer-panel" id="layerPanel">
+              <div class="panel-header">
+                <h3>레이어 관리</h3>
+                <button class="panel-toggle" id="panelToggle">
+                  <svg
+                    class="toggle-icon"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                  >
+                    <path
+                      d="M10 12L6 8L10 4"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div class="panel-content">
+                <div class="layer-tabs">
+                  <button class="tab-btn active" data-tab="background">
+                    배경지도
+                  </button>
+                  <button class="tab-btn" data-tab="overlay">오버레이</button>
+                  <button class="tab-btn" data-tab="custom">
+                    사용자 레이어
+                  </button>
+                </div>
+
+                <div class="tab-content">
+                  <!-- 배경지도 탭 -->
+                  <div class="tab-pane active" id="background-tab">
+                    <div class="layer-category">
+                      <h4>배경지도</h4>
+                      <div class="layer-list">
+                        <div class="layer-item">
+                          <input
+                            type="radio"
+                            id="common"
+                            name="background"
+                            value="common"
+                            checked
+                          />
+                          <label for="common">일반지도</label>
+                        </div>
+                        <div class="layer-item">
+                          <input
+                            type="radio"
+                            id="satellite"
+                            name="background"
+                            value="satellite"
+                          />
+                          <label for="satellite">위성영상</label>
+                        </div>
+                        <div class="layer-item">
+                          <input
+                            type="radio"
+                            id="hybrid"
+                            name="background"
+                            value="hybrid"
+                          />
+                          <label for="hybrid">하이브리드</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 오버레이 탭 -->
+                  <div class="tab-pane" id="overlay-tab">
+                    <div class="layer-category">
+                      <h4>오버레이 레이어</h4>
+                      <p class="empty-message">추가 예정</p>
+                    </div>
+                  </div>
+
+                  <!-- 사용자 레이어 탭 -->
+                  <div class="tab-pane" id="custom-tab">
+                    <div class="layer-category">
+                      <h4>사용자 레이어</h4>
+                      <p class="empty-message">추가 예정</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 소개 페이지 -->
+        <div id="about-page" class="page">
+          <div class="content-container">
+            <h2>서비스 소개</h2>
+            <p>
+              이 서비스는 OpenLayers와 VWorld를 활용한 인터랙티브 맵
+              서비스입니다.
+            </p>
+            <div class="features">
+              <div class="feature">
+                <h3>다양한 배경지도</h3>
+                <p>일반지도, 위성영상, 하이브리드 지도를 제공합니다.</p>
+              </div>
+              <div class="feature">
+                <h3>반응형 디자인</h3>
+                <p>모바일과 데스크톱에서 최적화된 사용자 경험을 제공합니다.</p>
+              </div>
+              <div class="feature">
+                <h3>SPA 구조</h3>
+                <p>페이지 새로고침 없이 부드러운 네비게이션을 제공합니다.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 연락처 페이지 -->
+        <div id="contact-page" class="page">
+          <div class="content-container">
+            <h2>연락처</h2>
+            <div class="contact-info">
+              <div class="contact-item">
+                <h3>이메일</h3>
+                <p>contact@sjlab.com</p>
+              </div>
+              <div class="contact-item">
+                <h3>전화번호</h3>
+                <p>02-1234-5678</p>
+              </div>
+              <div class="contact-item">
+                <h3>주소</h3>
+                <p>서울특별시 강남구 테헤란로 123</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 로딩 인디케이터 -->
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>지도를 불러오는 중...</p>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@v7.4.0/dist/ol.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
