@@ -19,8 +19,6 @@
 }
 
 .header-content {
-  max-width: 1200px;
-  margin: 0 auto;
   padding: 0 2rem;
   display: flex;
   justify-content: space-between;
@@ -28,6 +26,7 @@
 }
 
 .logo {
+  flex-shrink: 0;
   font-size: 1.4rem;
   font-weight: 700;
   background: linear-gradient(45deg, #f8fafc, #e2e8f0);
@@ -39,6 +38,7 @@
 }
 
 .nav {
+  flex-shrink: 0;
   display: flex;
   gap: 0.3rem;
   background: rgba(255, 255, 255, 0.08);
@@ -99,23 +99,35 @@
 /* 반응형 헤더 */
 @media (max-width: 768px) {
   .header-content {
-    flex-direction: column;
-    gap: 0.5rem;
-    text-align: center;
+    padding: 0 1rem;
+  }
+
+  .logo {
+    font-size: 1.2rem;
   }
 
   .nav {
-    justify-content: center;
+    gap: 0.2rem;
+    padding: 0.15rem;
+  }
+
+  .nav-btn {
+    padding: 0.4rem 1rem;
+    font-size: 0.8rem;
   }
 }
 
 @media (max-width: 480px) {
-  .nav-btn {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.75rem;
+  .header-content {
+    padding: 0 0.75rem;
   }
 
   .logo {
     font-size: 1.1rem;
+  }
+
+  .nav-btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
   }
 }
