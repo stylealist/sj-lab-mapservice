@@ -165,7 +165,7 @@ function initializeLayerPanel() {
   panelToggle.addEventListener("click", function () {
     layerPanel.classList.toggle("collapsed");
   });
-
+  //
   // 탭 기능
   tabButtons.forEach((button) => {
     button.addEventListener("click", function () {
