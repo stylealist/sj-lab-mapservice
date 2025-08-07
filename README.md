@@ -1,4 +1,4 @@
-# SJ Lab Map Service
+# SJ Map Platform
 
 VWorld 지도 API를 활용한 웹 기반 지도 서비스입니다.
 

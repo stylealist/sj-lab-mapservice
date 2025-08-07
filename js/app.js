@@ -16,7 +16,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 // 개발자 도구용 디버그 정보
-console.log("SJ Lab Map Service 초기화 완료");
+console.log("SJ Map Platform 초기화 완료");
 console.log("사용 가능한 도구들:", {
   mapUtils: "좌표 변환, 거리 계산 등의 유틸리티 함수",
   mapTools: "맵 조작 도구들",
