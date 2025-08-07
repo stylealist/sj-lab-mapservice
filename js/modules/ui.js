@@ -139,6 +139,17 @@ function initializeLayerPanel() {
     });
   });
 
+  // 홈 버튼 이벤트
+  const homeBtn = document.getElementById("homeBtn");
+  if (homeBtn) {
+    homeBtn.addEventListener("click", function () {
+      // 현재 URL에서 /map을 제거한 URL로 이동
+      const currentUrl = window.location.href;
+      const homeUrl = currentUrl.replace(/\/map.*$/, "");
+      window.location.href = homeUrl;
+    });
+  }
+
   // 우측 상단 배경지도 선택 버튼 이벤트
   const mapTypeButtons = document.querySelectorAll(".map-type-btn");
 

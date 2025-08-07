@@ -31,7 +31,6 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: 0.5rem;
   z-index: 1002;
   background: rgba(255, 255, 255, 0.95);
@@ -67,6 +66,20 @@
   color: white;
   border-color: rgb(30, 41, 59);
   box-shadow: 0 4px 12px rgba(30, 41, 59, 0.3);
+}
+
+.home-tab {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.home-tab:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  transform: translateX(2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
 }
 
 .tab-icon {
