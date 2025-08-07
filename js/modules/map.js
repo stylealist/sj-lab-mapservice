@@ -104,6 +104,18 @@ function setupMapEventListeners() {
         mapContainer.classList.add("loaded");
       }
 
+      // 헤더를 보이게 함
+      const header = document.getElementById("header");
+      if (header) {
+        header.classList.add("loaded");
+      }
+
+      // 메인 컨텐츠를 보이게 함
+      const mainContent = document.querySelector(".main-content");
+      if (mainContent) {
+        mainContent.classList.add("loaded");
+      }
+
       // 로딩 숨기기
       if (window.hideLoading) {
         window.hideLoading();

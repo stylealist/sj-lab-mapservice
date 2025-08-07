@@ -34,10 +34,15 @@ body {
   overflow: hidden;
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
     height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    min-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease-in-out;
   transform: translateY(0);
   height: 100vh;
   min-height: 100vh;
+  opacity: 0;
+}
+
+.main-content.loaded {
+  opacity: 1;
 }
 
 /* 메인 컨텐츠 애니메이션 */
