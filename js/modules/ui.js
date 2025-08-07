@@ -138,6 +138,34 @@ function initializeLayerPanel() {
       }
     });
   });
+
+  // 우측 상단 배경지도 선택 버튼 이벤트
+  const mapTypeButtons = document.querySelectorAll(".map-type-btn");
+
+  mapTypeButtons.forEach((button) => {
+    button.addEventListener("click", function () {
+      const mapType = this.getAttribute("data-type");
+
+      // 모든 버튼 비활성화
+      mapTypeButtons.forEach((btn) => btn.classList.remove("active"));
+
+      // 선택된 버튼 활성화
+      this.classList.add("active");
+
+      // 맵 레이어 전환
+      if (window.switchLayer) {
+        window.switchLayer(mapType);
+      }
+
+      // 위성 지도 선택 시 하이브리드도 함께 켜기
+      if (mapType === "satellite" && window.toggleOverlay) {
+        window.toggleOverlay("hybrid");
+      } else if (mapType === "common" && window.toggleOverlay) {
+        // 일반 지도 선택 시 하이브리드 끄기
+        window.toggleOverlay("hybrid");
+      }
+    });
+  });
 }
 
 // 탭 전환

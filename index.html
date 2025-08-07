@@ -24,6 +24,15 @@
             <button class="nav-btn active" data-page="map">지도</button>
             <button class="nav-btn" data-page="about">소개</button>
             <button class="nav-btn" data-page="contact">연락처</button>
+            <button class="nav-btn coming-soon" data-page="3d-map" disabled>
+              3D 지도
+            </button>
+            <button class="nav-btn coming-soon" data-page="lab" disabled>
+              Lab
+            </button>
+            <button class="nav-btn coming-soon" data-page="portfolio" disabled>
+              Portfolio
+            </button>
           </nav>
         </div>
       </header>
@@ -34,6 +43,18 @@
         <div id="map-page" class="page active">
           <div class="map-container">
             <div id="map" class="map"></div>
+
+            <!-- 우측 상단 배경지도 선택 -->
+            <div class="map-type-selector">
+              <button class="map-type-btn active" data-type="common">
+                <div class="map-preview common-preview"></div>
+                <span class="map-label">일반 지도</span>
+              </button>
+              <button class="map-type-btn" data-type="satellite">
+                <div class="map-preview satellite-preview"></div>
+                <span class="map-label">위성 지도</span>
+              </button>
+            </div>
 
             <!-- 왼쪽 고정 탭 영역 -->
             <div class="fixed-tabs">
@@ -148,42 +169,6 @@
 
                   <!-- 레이어 탭 -->
                   <div class="tab-pane" id="layers-tab">
-                    <div class="layer-category">
-                      <div class="category-header" data-category="background">
-                        <h4>배경지도</h4>
-                        <span class="category-toggle">▼</span>
-                      </div>
-                      <div class="layer-list" id="background-layers">
-                        <div class="layer-item">
-                          <input
-                            type="radio"
-                            id="common"
-                            name="background"
-                            value="common"
-                            checked
-                          />
-                          <label for="common">일반지도</label>
-                        </div>
-                        <div class="layer-item">
-                          <input
-                            type="radio"
-                            id="satellite"
-                            name="background"
-                            value="satellite"
-                          />
-                          <label for="satellite">위성영상</label>
-                        </div>
-                        <div class="layer-item">
-                          <input
-                            type="checkbox"
-                            id="hybrid"
-                            name="overlay"
-                            value="hybrid"
-                          />
-                          <label for="hybrid">하이브리드 (오버레이)</label>
-                        </div>
-                      </div>
-                    </div>
                     <div class="layer-category">
                       <div class="category-header" data-category="overlay">
                         <h4>오버레이 레이어</h4>
