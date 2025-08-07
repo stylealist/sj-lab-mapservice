@@ -16,6 +16,17 @@
   z-index: 1000;
   backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(0);
+  min-height: 60px; /* 최소 높이 설정 */
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+
+/* 헤더 숨김 상태 */
+.header.header-hidden {
+  transform: translateY(-100%);
 }
 
 .header-content {
@@ -23,6 +34,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+  height: 100%;
 }
 
 .logo {
@@ -129,6 +142,49 @@
   box-shadow: none;
 }
 
+/* 헤더 토글 버튼 */
+.header-toggle-btn {
+  position: absolute;
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, rgb(30, 41, 59), rgb(51, 65, 85));
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1001;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.header-toggle-btn:hover {
+  transform: translateX(-50%) scale(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.header-toggle-btn .toggle-icon {
+  color: white;
+  transition: transform 0.3s ease;
+}
+
+/* 헤더가 숨겨졌을 때 토글 버튼 위치 */
+.header.header-hidden .header-toggle-btn {
+  bottom: -20px;
+  transform: translateX(-50%);
+}
+
+/* 헤더가 숨겨졌을 때 토글 버튼 스타일 */
+.header.header-hidden .header-toggle-btn:hover {
+  transform: translateX(-50%) scale(1.1);
+}
+
 /* 반응형 헤더 */
 @media (max-width: 768px) {
   .header-content {
@@ -162,5 +218,17 @@
   .nav-btn {
     padding: 0.3rem 0.6rem;
     font-size: 0.75rem;
+  }
+
+  /* 모바일에서 토글 버튼 크기 조정 */
+  .header-toggle-btn {
+    width: 28px;
+    height: 28px;
+    bottom: -10px;
+  }
+
+  .header-toggle-btn .toggle-icon {
+    width: 16px;
+    height: 16px;
   }
 }

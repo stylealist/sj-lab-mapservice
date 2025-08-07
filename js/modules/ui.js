@@ -1,5 +1,117 @@
 // UI 관련 모듈
 
+// 헤더 토글 기능 초기화
+function initializeHeaderToggle() {
+  const header = document.getElementById("header");
+  const headerToggleBtn = document.getElementById("headerToggleBtn");
+  const mainContent = document.querySelector(".main-content");
+  const app = document.getElementById("app");
+
+  if (header && headerToggleBtn) {
+    headerToggleBtn.addEventListener("click", function () {
+      const isHidden = header.classList.contains("header-hidden");
+      header.classList.toggle("header-hidden");
+
+      // 메인 컨텐츠도 함께 이동 (헤더 높이만큼)
+      if (mainContent) {
+        const headerHeight = header.offsetHeight;
+        if (!isHidden) {
+          // 헤더가 숨겨지는 경우
+          mainContent.style.transform = `translateY(-${headerHeight}px)`;
+          // 메인 컨텐츠 높이를 늘려서 아래쪽 빈 공간을 완전히 채움
+          mainContent.style.height = `calc(100vh + ${headerHeight}px)`;
+          mainContent.style.minHeight = `calc(100vh + ${headerHeight}px)`;
+          // 앱 컨테이너 높이도 조정
+          if (app) {
+            app.style.height = `calc(100vh + ${headerHeight}px)`;
+          }
+        } else {
+          // 헤더가 나타나는 경우
+          mainContent.style.transform = "translateY(0)";
+          // 메인 컨텐츠 높이를 원래대로 복원
+          mainContent.style.height = "100vh";
+          mainContent.style.minHeight = "100vh";
+          // 앱 컨테이너 높이도 원래대로 복원
+          if (app) {
+            app.style.height = "100vh";
+          }
+        }
+      }
+
+      // 지도 컨테이너도 부드럽게 애니메이션
+      const mapContainer = document.querySelector(".map-container");
+      if (mapContainer) {
+        const headerHeight = header.offsetHeight;
+        if (!isHidden) {
+          // 헤더가 숨겨지는 경우
+          mapContainer.style.height = `calc(100vh + ${headerHeight}px)`;
+        } else {
+          // 헤더가 나타나는 경우
+          mapContainer.style.height = "100vh";
+        }
+      }
+
+      // 지도 내부 요소들도 부드럽게 애니메이션
+      const map = document.getElementById("map");
+      if (map) {
+        const headerHeight = header.offsetHeight;
+        if (!isHidden) {
+          // 헤더가 숨겨지는 경우
+          map.style.height = `calc(100vh + ${headerHeight}px)`;
+        } else {
+          // 헤더가 나타나는 경우
+          map.style.height = "100vh";
+        }
+      }
+
+      // 애니메이션 완료 후 아이콘 변경
+      setTimeout(() => {
+        const toggleIcon = headerToggleBtn.querySelector(".toggle-icon");
+        if (toggleIcon) {
+          if (!isHidden) {
+            // 헤더가 숨겨진 경우
+            // 아래쪽 화살표로 변경
+            toggleIcon.innerHTML = `
+              <path
+                d="M5 8L10 13L15 8"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            `;
+          } else {
+            // 헤더가 나타난 경우
+            // 위쪽 화살표로 변경
+            toggleIcon.innerHTML = `
+              <path
+                d="M5 12L10 7L15 12"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            `;
+          }
+        }
+      }, 400); // 애니메이션 완료 후 아이콘 변경
+
+      // 지도가 있는 경우 리사이즈 (애니메이션 중간에 한 번, 완료 후 한 번)
+      setTimeout(() => {
+        if (window.mapInstance) {
+          window.mapInstance.updateSize();
+        }
+      }, 200); // 애니메이션 중간에 리사이즈
+
+      setTimeout(() => {
+        if (window.mapInstance) {
+          window.mapInstance.updateSize();
+        }
+      }, 400); // 애니메이션 완료 후 최종 리사이즈
+    });
+  }
+}
+
 // 네비게이션 초기화
 function initializeNavigation() {
   const navButtons = document.querySelectorAll(".nav-btn");
@@ -221,4 +333,9 @@ function hideLoading() {
   }, 1000);
 }
 
-export { initializeNavigation, initializeLayerPanel, hideLoading };
+export {
+  initializeNavigation,
+  initializeLayerPanel,
+  hideLoading,
+  initializeHeaderToggle,
+};

@@ -4,6 +4,7 @@ import {
   initializeNavigation,
   initializeLayerPanel,
   hideLoading,
+  initializeHeaderToggle,
 } from "./modules/ui.js";
 import { makeAjaxRequest, utils } from "./utils/helpers.js";
 
@@ -12,6 +13,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeMap();
   initializeNavigation();
   initializeLayerPanel();
+  initializeHeaderToggle();
   hideLoading();
 });
 

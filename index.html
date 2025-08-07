@@ -17,7 +17,7 @@
   <body>
     <div id="app">
       <!-- 헤더 -->
-      <header class="header">
+      <header class="header" id="header">
         <div class="header-content">
           <h1 class="logo" id="logoHome">SJ Map Platform</h1>
           <nav class="nav">
@@ -26,6 +26,24 @@
             <button class="nav-btn" data-page="contact">연락처</button>
           </nav>
         </div>
+        <!-- 헤더 토글 버튼 -->
+        <button class="header-toggle-btn" id="headerToggleBtn">
+          <svg
+            class="toggle-icon"
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+          >
+            <path
+              d="M5 12L10 7L15 12"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
       </header>
 
       <!-- 메인 컨텐츠 -->
