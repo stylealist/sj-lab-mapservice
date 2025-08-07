@@ -333,6 +333,9 @@ function hideLoading() {
   }, 1000);
 }
 
+// 전역 객체에 hideLoading 함수 추가
+window.hideLoading = hideLoading;
+
 export {
   initializeNavigation,
   initializeLayerPanel,

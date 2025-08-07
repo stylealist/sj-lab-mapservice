@@ -96,6 +96,19 @@ function setupMapEventListeners() {
   // 맵 로드 완료 이벤트
   map.once("postrender", function () {
     console.log("맵 로드 완료");
+    // 맵 로드 완료 후 로딩 숨기기
+    setTimeout(() => {
+      // 맵 컨테이너를 보이게 함
+      const mapContainer = document.querySelector(".map-container");
+      if (mapContainer) {
+        mapContainer.classList.add("loaded");
+      }
+
+      // 로딩 숨기기
+      if (window.hideLoading) {
+        window.hideLoading();
+      }
+    }, 500); // 맵 렌더링 완료 후 0.5초 대기
   });
 }
 

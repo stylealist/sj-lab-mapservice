@@ -14,7 +14,7 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeNavigation();
   initializeLayerPanel();
   initializeHeaderToggle();
-  hideLoading();
+  // hideLoading() 제거 - 맵 로드 완료 후 자동으로 호출됨
 });
 
 // 개발자 도구용 디버그 정보
