@@ -80,6 +80,19 @@ body {
   transition: height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
   transition: opacity 0.5s ease-in-out;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
+.map-container * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 .map-container.loaded {

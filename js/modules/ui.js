@@ -218,6 +218,27 @@ function initializeLayerPanel() {
     });
   });
 
+  // 초기 활성 고정 탭에 맞춰 패널 초기 상태 동기화
+  const initialActiveFixed = document.querySelector(".fixed-tab.active");
+  let initialTab = initialActiveFixed
+    ? initialActiveFixed.getAttribute("data-tab")
+    : "route";
+
+  const panelTitle = document.getElementById("panelTitle");
+  const tabLabels = {
+    route: "길찾기",
+    layers: "레이어",
+    search: "검색",
+    bookmark: "즐겨찾기",
+    measure: "측정",
+    draw: "그리기",
+    export: "내보내기",
+  };
+  if (panelTitle && tabLabels[initialTab]) {
+    panelTitle.textContent = tabLabels[initialTab];
+  }
+  switchTab(initialTab, tabButtons, tabPanes);
+
   // 배경지도 라디오 버튼 이벤트
   backgroundRadios.forEach((radio) => {
     radio.addEventListener("change", function () {
@@ -274,6 +295,79 @@ function initializeLayerPanel() {
   if (logoHome) {
     logoHome.addEventListener("click", goToMap);
   }
+
+  // 지적 기능 버튼 이벤트
+  const cadastralBtn = document.getElementById("cadastralBtn");
+  const cadastralSubmenu = document.getElementById("cadastralSubmenu");
+
+  if (cadastralBtn) {
+    cadastralBtn.addEventListener("click", function () {
+      // 버튼 활성화/비활성화 토글
+      this.classList.toggle("active");
+
+      // 서브메뉴 토글
+      if (cadastralSubmenu) {
+        cadastralSubmenu.classList.toggle("show");
+      }
+
+      // 지적 기능 비활성화 시 측정 초기화
+      const isActive = this.classList.contains("active");
+      console.log("지적 기능:", isActive ? "활성화" : "비활성화");
+
+      if (!isActive) {
+        // 지적 기능이 비활성화되면 측정 초기화
+        if (window.clearMeasurements) {
+          window.clearMeasurements();
+        }
+        // 모든 서브메뉴 버튼 비활성화
+        const submenuBtns = document.querySelectorAll(".submenu-btn");
+        submenuBtns.forEach((btn) => btn.classList.remove("active"));
+      }
+
+      // 여기에 실제 지적 레이어 토글 로직을 추가할 수 있습니다
+      if (window.toggleCadastralLayer) {
+        window.toggleCadastralLayer(isActive);
+      }
+    });
+  }
+
+  // 지적 서브메뉴 버튼 이벤트
+  const submenuBtns = document.querySelectorAll(".submenu-btn");
+  submenuBtns.forEach((btn) => {
+    btn.addEventListener("click", function () {
+      const cadastralType = this.getAttribute("data-cadastral");
+
+      // 모든 서브메뉴 버튼 비활성화
+      submenuBtns.forEach((b) => b.classList.remove("active"));
+
+      // 클릭된 버튼 활성화
+      this.classList.add("active");
+
+      console.log("지적 기능 선택:", cadastralType);
+
+      // 각 기능별 측정 도구 활성화
+      switch (cadastralType) {
+        case "radius":
+          console.log("반경 기능 활성화");
+          if (window.measureRadius) {
+            window.measureRadius();
+          }
+          break;
+        case "area":
+          console.log("면적 기능 활성화");
+          if (window.measureArea) {
+            window.measureArea();
+          }
+          break;
+        case "distance":
+          console.log("거리 기능 활성화");
+          if (window.measureDistance) {
+            window.measureDistance();
+          }
+          break;
+      }
+    });
+  });
 
   // 우측 상단 배경지도 선택 버튼 이벤트
   const mapTypeButtons = document.querySelectorAll(".map-type-btn");
