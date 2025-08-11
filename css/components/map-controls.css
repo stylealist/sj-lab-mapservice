@@ -136,6 +136,7 @@
   transition: all 0.2s ease;
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  width: 56px; /* 고정 폭으로 라벨 길이에 따른 버튼 너비 차이 제거 */
   min-width: 56px;
   min-height: 56px;
 }
@@ -155,12 +156,24 @@
   font-size: 22px;
   line-height: 1;
   margin-bottom: 4px;
+  width: 26px; /* 아이콘 컨테이너 고정 크기 */
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* 이미지 아이콘 사용 시 크기 일관화 */
 .cadastral-icon img {
-  width: 26px;
-  height: 26px;
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+/* SVG 아이콘 사용 시 크기 일관화 */
+.cadastral-icon svg {
+  width: 100% !important;
+  height: 100% !important;
   display: block;
 }
 
@@ -170,6 +183,9 @@
   color: #374151;
   text-align: center;
   line-height: 1;
+  white-space: nowrap; /* 줄바꿈 방지로 버튼 폭 유지 */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cadastral-btn.active .cadastral-label {

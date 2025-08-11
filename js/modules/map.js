@@ -11,6 +11,7 @@ let currentMeasureType = null;
 let measureSource = null;
 let measureOverlays = []; // 여러 팝업 오버레이를 관리
 let measureFeatures = []; // 측정된 피처들을 관리
+var road_view_location;
 
 // 맵 초기화
 function initializeMap() {
@@ -1464,6 +1465,110 @@ function formatRadius(geometry) {
   return output;
 }
 
+/**
+ * 로드뷰 태그를 추가해주는 기능
+ *
+ * @param tag 로드뷰를 추가 할 id값
+ */
+function drawRoadView(tag, options = {}) {
+  try {
+    // 현 지도 중심 좌표를 위경도로 변환해 저장
+    const center3857 = map.getView().getCenter();
+    let [lon, lat] = ol.proj.toLonLat(center3857);
+    if (
+      options.coordinate &&
+      Array.isArray(options.coordinate) &&
+      options.coordinate.length === 2
+    ) {
+      // options.coordinate는 [lon, lat] (EPSG:4326) 기대
+      lon = Number(options.coordinate[0]);
+      lat = Number(options.coordinate[1]);
+    }
+    road_view_location = { lon, lat };
+
+    const appkey =
+      options.appkey ||
+      (typeof window !== "undefined" ? window.KAKAO_APP_KEY : undefined);
+    const radius = typeof options.radius === "number" ? options.radius : 200; // m
+
+    // 컨테이너 탐색 또는 생성
+    let container = document.getElementById(tag);
+    if (!container) {
+      container = document.createElement("div");
+      container.id = tag;
+      document.body.appendChild(container);
+    }
+
+    // 패널 스타일 구성 (전체화면)
+    container.style.position = "fixed";
+    container.style.inset = "0";
+    container.style.width = "100vw";
+    container.style.height = "100vh";
+    container.style.background = "rgba(0,0,0,0.9)";
+    container.style.border = "none";
+    container.style.borderRadius = "0";
+    container.style.boxShadow = "none";
+    container.style.overflow = "hidden";
+    container.style.zIndex = "3000";
+
+    // 기존 내용 초기화
+    container.innerHTML = "";
+
+    // 헤더 영역
+    const header = document.createElement("div");
+    header.style.cssText =
+      "position:absolute;top:12px;right:12px;display:flex;align-items:center;justify-content:center;padding:6px 8px;background:rgba(17,24,39,0.9);color:#fff;font-weight:600;border-radius:8px;z-index:1;";
+    header.innerHTML = "";
+
+    // 닫기 버튼
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "×";
+    closeBtn.style.cssText =
+      "background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;padding:0 4px;";
+    closeBtn.onclick = function (e) {
+      e.stopPropagation();
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
+    };
+    header.appendChild(closeBtn);
+
+    // 아이프레임 영역
+    const iframe = document.createElement("iframe");
+    const query = new URLSearchParams({
+      lat: String(lat),
+      lng: String(lon),
+      radius: String(radius),
+    });
+    if (appkey) {
+      query.set("appkey", String(appkey));
+    }
+    iframe.src = `html/loadview/load-view.html?${query.toString()}`;
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
+    iframe.style.border = "0";
+    iframe.allowFullscreen = true;
+
+    container.appendChild(iframe);
+    container.appendChild(header);
+
+    // ESC로 닫기 지원
+    const escCloseListener = function (event) {
+      if (event.key === "Escape") {
+        closeBtn.click();
+      }
+    };
+    document.addEventListener("keydown", escCloseListener);
+    const origClose = closeBtn.onclick;
+    closeBtn.onclick = function (e) {
+      if (typeof origClose === "function") origClose(e);
+      document.removeEventListener("keydown", escCloseListener);
+    };
+  } catch (error) {
+    console.error("로드뷰 표시 중 오류:", error);
+  }
+}
+
 // 전역 객체에 맵 관련 함수들 추가
 window.mapInstance = map;
 window.mapTools = mapTools;
@@ -1477,5 +1582,6 @@ window.clearMeasurements = clearMeasurements;
 window.createMeasurePopup = createMeasurePopup;
 window.closeMeasurePopup = closeMeasurePopup;
 window.deleteMeasure = deleteMeasure;
+window.drawRoadView = drawRoadView;
 
 export { initializeMap, mapTools, switchLayer, toggleOverlay };

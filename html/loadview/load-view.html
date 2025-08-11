@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>로드뷰</title>
+    <style>
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+        }
+
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #roadview {
+            position: absolute;
+            inset: 0;
+        }
+
+        /* 좌측 하단 미니맵 */
+        #miniMapWrap {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            width: 340px;
+            height: 240px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            z-index: 2;
+        }
+
+        #miniMap {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 미니맵 위 컨트롤 제거 */
+
+        .fallback {
+            display: none;
+            height: 100%;
+            align-items: center;
+            justify-content: center;
+            color: #111827;
+            background: #f9fafb;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="roadview"></div>
+        <div id="miniMapWrap">
+            <div id="miniMap"></div>
+        </div>
+    </div>
+    <div id="fallback" class="fallback">로드뷰를 불러오는 중 오류가 발생했습니다.</div>
+
+    <script>
+        (function () {
+            const params = new URLSearchParams(location.search);
+            const lat = parseFloat(params.get('lat'));
+            const lng = parseFloat(params.get('lng'));
+            // Kakao Developers에서 발급받은 APP KEY를 환경에 맞춰 삽입하세요
+            // 예: load-view.html?lat=..&lng=..&appkey=YOUR_APP_KEY
+            const appkey = params.get('appkey') || 'b45c962cc0c0c492309ed19539227c9c';
+
+            function showFallback(message) {
+                var rv = document.getElementById('roadview');
+                var fb = document.getElementById('fallback');
+                if (rv) rv.style.display = 'none';
+                if (fb) {
+                    fb.style.display = 'flex';
+                    if (message) fb.textContent = message;
+                }
+            }
+
+            if (!isFinite(lat) || !isFinite(lng)) {
+                return showFallback('잘못된 좌표입니다.');
+            }
+
+            // Kakao SDK 로드 (services 라이브러리 포함, autoload=false)
+            const script = document.createElement('script');
+            script.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + encodeURIComponent(appkey) + '&libraries=services&autoload=false';
+            script.async = true;
+            script.onload = function () {
+                if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
+                    window.kakao.maps.load(init);
+                } else {
+                    init();
+                }
+            };
+            script.onerror = function () { showFallback('Kakao SDK를 불러오지 못했습니다.'); };
+            document.head.appendChild(script);
+
+            function init() {
+                if (!window.kakao || !window.kakao.maps) {
+                    return showFallback('Kakao SDK 초기화 실패');
+                }
+                const position = new kakao.maps.LatLng(lat, lng);
+                const roadviewContainer = document.getElementById('roadview');
+                const roadview = new kakao.maps.Roadview(roadviewContainer);
+                const roadviewClient = new kakao.maps.RoadviewClient();
+
+                // 가장 가까운 파노라마를 찾아 표시
+                roadviewClient.getNearestPanoId(position, 50, function (panoId) {
+                    if (!panoId) {
+                        return showFallback('근처 로드뷰를 찾을 수 없습니다.');
+                    }
+                    roadview.setPanoId(panoId, position);
+                });
+
+                // 좌측 하단 미니맵 생성
+                const miniMap = new kakao.maps.Map(document.getElementById('miniMap'), {
+                    center: position,
+                    level: 4,
+                    mapTypeId: kakao.maps.MapTypeId.ROADMAP,
+                });
+
+                // 로드뷰 커버리지(파란 영역) 표시
+                miniMap.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+                // 필요 시 기본 지도 타입 컨트롤 추가
+                const mapTypeControl = new kakao.maps.MapTypeControl();
+                miniMap.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
+
+                // 제공된 스프라이트 마커 이미지 사용
+                var markImage = new kakao.maps.MarkerImage(
+                    'https://t1.daumcdn.net/localimg/localimages/07/2018/pc/roadview_minimap_wk_2018.png',
+                    new kakao.maps.Size(26, 46),
+                    {
+                        spriteSize: new kakao.maps.Size(1666, 168),
+                        spriteOrigin: new kakao.maps.Point(705, 114),
+                        offset: new kakao.maps.Point(13, 46)
+                    }
+                );
+                const marker = new kakao.maps.Marker({ position, image: markImage, draggable: true });
+                marker.setMap(miniMap);
+
+                // 미니맵 클릭 시 로드뷰 이동 및 마커/중심 동기화
+                kakao.maps.event.addListener(miniMap, 'click', function (mouseEvent) {
+                    const newPos = mouseEvent.latLng;
+                    marker.setPosition(newPos);
+                    miniMap.setCenter(newPos);
+                    roadviewClient.getNearestPanoId(newPos, 50, function (panoId) {
+                        if (panoId) {
+                            roadview.setPanoId(panoId, newPos);
+                        }
+                    });
+                });
+
+                // 마커 드래그 종료 시 로드뷰 이동
+                kakao.maps.event.addListener(marker, 'dragend', function () {
+                    const newPos = marker.getPosition();
+                    miniMap.setCenter(newPos);
+                    roadviewClient.getNearestPanoId(newPos, 50, function (panoId) {
+                        if (panoId) {
+                            roadview.setPanoId(panoId, newPos);
+                        }
+                    });
+                });
+
+                // 로드뷰 이동 시 마커/미니맵 동기화
+                kakao.maps.event.addListener(roadview, 'position_changed', function () {
+                    const pos = roadview.getPosition();
+                    marker.setPosition(pos);
+                    miniMap.setCenter(pos);
+                });
+
+                // 중심 맞추기 버튼
+                document.getElementById('miniRecenter').addEventListener('click', function () {
+                    miniMap.setCenter(roadview.getPosition());
+                    marker.setPosition(roadview.getPosition());
+                });
+            }
+        })();
+    </script>
+</body>
+
+</html>

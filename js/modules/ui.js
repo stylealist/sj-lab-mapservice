@@ -331,6 +331,17 @@ function initializeLayerPanel() {
     });
   }
 
+  // 로드뷰 메인 버튼
+  const roadviewBtn = document.getElementById("roadviewBtn");
+  if (roadviewBtn) {
+    roadviewBtn.addEventListener("click", function () {
+      if (window.drawRoadView) {
+        const appkey = window.KAKAO_APP_KEY || undefined;
+        window.drawRoadView("roadviewPanel", { appkey, radius: 300 });
+      }
+    });
+  }
+
   // 지적 서브메뉴 버튼 이벤트
   const submenuBtns = document.querySelectorAll(".submenu-btn");
   submenuBtns.forEach((btn) => {
@@ -369,6 +380,13 @@ function initializeLayerPanel() {
           console.log("각도 기능 활성화");
           if (window.measureAngle) {
             window.measureAngle();
+          }
+          break;
+        case "roadview":
+          console.log("로드뷰 실행");
+          if (window.drawRoadView) {
+            const appkey = window.KAKAO_APP_KEY || undefined;
+            window.drawRoadView("roadviewPanel", { appkey, radius: 300 });
           }
           break;
       }
