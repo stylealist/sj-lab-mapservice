@@ -572,6 +572,245 @@ function measureDistance() {
   currentMeasureType = "distance";
 }
 
+// 각도 측정
+function measureAngle() {
+  clearMeasurements();
+
+  let pointA = null; // 첫 번째 점 (첫 클릭)
+  let pointB = null; // 꼭짓점 (두 번째 클릭)
+  let angleFeature = null; // A-B-C를 잇는 LineString
+  let isCompleted = false;
+  let hoverFeature = null; // 시작 전 마우스 위치 표시용 점
+  let tempLineFeature = null; // A에서 마우스까지 임시 선 (B 확정 전)
+
+  // 각도 계산 헬퍼 (단위: 도)
+  function calculateAngleDegrees(aCoord, bCoord, cCoord) {
+    if (!aCoord || !bCoord || !cCoord) return 0;
+    const ux = aCoord[0] - bCoord[0];
+    const uy = aCoord[1] - bCoord[1];
+    const vx = cCoord[0] - bCoord[0];
+    const vy = cCoord[1] - bCoord[1];
+    const dot = ux * vx + uy * vy;
+    const nu = Math.hypot(ux, uy);
+    const nv = Math.hypot(vx, vy);
+    if (nu === 0 || nv === 0) return 0;
+    let cosTheta = dot / (nu * nv);
+    // 수치 오차 보정
+    cosTheta = Math.max(-1, Math.min(1, cosTheta));
+    const rad = Math.acos(cosTheta);
+    const deg = (rad * 180) / Math.PI;
+    // 0~180도로 제한
+    return Math.round(deg * 10) / 10;
+  }
+
+  function formatAngleValue(deg) {
+    return `${deg.toFixed ? deg.toFixed(1) : deg} °`;
+  }
+
+  // 피처 스타일 함수 (라인 + 꼭짓점 텍스트)
+  function getAngleStyle(feature) {
+    const coords = feature.getGeometry().getCoordinates();
+    const a = coords[0];
+    const b = coords[1];
+    const c = coords[coords.length - 1];
+    const deg = calculateAngleDegrees(a, b, c);
+
+    const strokeStyle = new ol.style.Style({
+      stroke: new ol.style.Stroke({ color: "#ff0000", width: 2 }),
+    });
+    const textStyle = new ol.style.Style({
+      geometry: new ol.geom.Point(b),
+      text: new ol.style.Text({
+        text: formatAngleValue(deg),
+        font: "14px Arial",
+        fill: new ol.style.Fill({ color: "#333" }),
+        stroke: new ol.style.Stroke({ color: "#fff", width: 3 }),
+        offsetY: -10,
+      }),
+    });
+    return [strokeStyle, textStyle];
+  }
+
+  // 취소 처리 (ESC/우클릭)
+  const cancelMeasurement = function () {
+    try {
+      map.un("click", clickListener);
+      map.un("click", finishAngle);
+      map.un("pointermove", moveListener);
+      map.un("pointermove", preMoveListener);
+      map.un("contextmenu", cancelMeasurement);
+      document.removeEventListener("keydown", escKeyListener);
+
+      if (angleFeature && pointA && pointB) {
+        const coords = angleFeature.getGeometry().getCoordinates();
+        const a = coords[0];
+        const b = coords[1];
+        const c = coords[coords.length - 1];
+        const deg = calculateAngleDegrees(a, b, c);
+        const value = formatAngleValue(deg);
+        createMeasurePopup(angleFeature, "angle", value);
+      }
+
+      pointA = null;
+      pointB = null;
+      angleFeature = null;
+      if (hoverFeature) {
+        measureSource.removeFeature(hoverFeature);
+        hoverFeature = null;
+      }
+      if (tempLineFeature) {
+        measureSource.removeFeature(tempLineFeature);
+        tempLineFeature = null;
+      }
+      isCompleted = false;
+      currentMeasureType = null;
+      console.log("각도 측정이 취소되었습니다.");
+    } catch (error) {
+      console.error("각도 측정 취소 오류:", error);
+    }
+  };
+
+  const escKeyListener = function (event) {
+    if (event.key === "Escape") {
+      cancelMeasurement();
+    }
+  };
+
+  const clickListener = function (event) {
+    try {
+      if (!pointA) {
+        pointA = event.coordinate;
+        // 호버 점은 제거
+        if (hoverFeature) {
+          measureSource.removeFeature(hoverFeature);
+          hoverFeature = null;
+        }
+        return;
+      }
+      if (!pointB) {
+        pointB = event.coordinate;
+        // A-B-B로 시작하여 포인터 이동에 따라 C 업데이트
+        angleFeature = new ol.Feature({
+          geometry: new ol.geom.LineString([pointA, pointB, pointB]),
+        });
+        angleFeature.setStyle(getAngleStyle);
+        measureSource.addFeature(angleFeature);
+
+        // 임시 선 제거 및 리스너 전환
+        if (tempLineFeature) {
+          measureSource.removeFeature(tempLineFeature);
+          tempLineFeature = null;
+        }
+        map.un("pointermove", preMoveListener);
+        map.on("pointermove", moveListener);
+        map.un("click", clickListener);
+        map.on("click", finishAngle);
+        map.on("contextmenu", cancelMeasurement);
+        document.addEventListener("keydown", escKeyListener);
+        return;
+      }
+    } catch (error) {
+      console.error("각도 측정 시작 오류:", error);
+    }
+  };
+
+  // 시작 전 마우스 이동 시: 호버 점 표시, A 확정 후에는 A-마우스 임시 선 표시
+  const preMoveListener = function (event) {
+    try {
+      const coord = event.coordinate;
+      if (!pointA) {
+        if (!hoverFeature) {
+          hoverFeature = new ol.Feature({ geometry: new ol.geom.Point(coord) });
+          measureSource.addFeature(hoverFeature);
+        } else if (hoverFeature.getGeometry()) {
+          hoverFeature.getGeometry().setCoordinates(coord);
+        }
+      } else if (pointA && !pointB) {
+        if (!tempLineFeature) {
+          tempLineFeature = new ol.Feature({
+            geometry: new ol.geom.LineString([pointA, coord]),
+          });
+          measureSource.addFeature(tempLineFeature);
+        } else if (tempLineFeature.getGeometry()) {
+          tempLineFeature.getGeometry().setCoordinates([pointA, coord]);
+        }
+        map.render();
+      }
+    } catch (error) {
+      console.error("각도 측정 호버/임시선 표시 오류:", error);
+    }
+  };
+
+  const moveListener = function (event) {
+    try {
+      if (pointA && pointB && angleFeature && !isCompleted) {
+        const c = event.coordinate;
+        const geom = angleFeature.getGeometry();
+        const coords = geom.getCoordinates();
+        coords[2] = c;
+        geom.setCoordinates(coords);
+        map.render();
+      }
+    } catch (error) {
+      console.error("각도 측정 업데이트 오류:", error);
+    }
+  };
+
+  const finishAngle = function (event) {
+    try {
+      if (pointA && pointB && angleFeature) {
+        const c = event.coordinate;
+        const geom = angleFeature.getGeometry();
+        const coords = geom.getCoordinates();
+        coords[2] = c;
+        geom.setCoordinates(coords);
+
+        const deg = calculateAngleDegrees(coords[0], coords[1], coords[2]);
+        const value = formatAngleValue(deg);
+        console.log("측정된 각도:", value);
+        createMeasurePopup(angleFeature, "angle", value);
+
+        map.un("pointermove", moveListener);
+        map.un("click", finishAngle);
+        map.un("contextmenu", cancelMeasurement);
+        document.removeEventListener("keydown", escKeyListener);
+
+        pointA = null;
+        pointB = null;
+        isCompleted = true;
+
+        // 완료 후 취소 리스너 등록
+        const completedCancelMeasurement = function () {
+          try {
+            map.un("contextmenu", completedCancelMeasurement);
+            document.removeEventListener("keydown", completedEscKeyListener);
+            currentMeasureType = null;
+            console.log("완료된 각도 측정이 취소되었습니다.");
+          } catch (error) {
+            console.error("완료된 각도 측정 취소 오류:", error);
+          }
+        };
+        const completedEscKeyListener = function (event) {
+          if (event.key === "Escape") {
+            completedCancelMeasurement();
+          }
+        };
+        map.on("contextmenu", completedCancelMeasurement);
+        document.addEventListener("keydown", completedEscKeyListener);
+      }
+    } catch (error) {
+      console.error("각도 측정 완료 오류:", error);
+    }
+  };
+
+  map.on("click", clickListener);
+  map.on("pointermove", preMoveListener);
+  // 각도 측정 전 단계에서도 ESC/우클릭으로 취소 가능하도록 리스너 등록
+  map.on("contextmenu", cancelMeasurement);
+  document.addEventListener("keydown", escKeyListener);
+  currentMeasureType = "angle";
+}
+
 // 면적 측정
 function measureArea() {
   clearMeasurements();
@@ -940,6 +1179,8 @@ function createMeasurePopup(feature, measureType, value) {
           ? "거리 측정"
           : measureType === "radius"
           ? "반경 측정"
+          : measureType === "angle"
+          ? "각도 측정"
           : "면적 측정"
       }</span>
       <button class="popup-close" onclick="closeMeasurePopup('${
@@ -1231,6 +1472,7 @@ window.toggleOverlay = toggleOverlay;
 window.measureDistance = measureDistance;
 window.measureArea = measureArea;
 window.measureRadius = measureRadius;
+window.measureAngle = measureAngle;
 window.clearMeasurements = clearMeasurements;
 window.createMeasurePopup = createMeasurePopup;
 window.closeMeasurePopup = closeMeasurePopup;

@@ -365,6 +365,12 @@ function initializeLayerPanel() {
             window.measureDistance();
           }
           break;
+        case "angle":
+          console.log("각도 기능 활성화");
+          if (window.measureAngle) {
+            window.measureAngle();
+          }
+          break;
       }
     });
   });
