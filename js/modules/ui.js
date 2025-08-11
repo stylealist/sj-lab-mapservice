@@ -253,8 +253,13 @@ function initializeLayerPanel() {
 
   // 홈 이동 함수
   function goToHome() {
-    // 현재 URL에서 /map을 제거한 URL로 이동
-    const homeUrl = window.location.href;
+    const homeUrl = window.location.origin;
+    window.location.href = homeUrl;
+  }
+
+  // 홈 이동 함수
+  function goToMap() {
+    const homeUrl = window.location.origin + "/map";
     window.location.href = homeUrl;
   }
 
@@ -267,7 +272,7 @@ function initializeLayerPanel() {
   // 로고 클릭 이벤트
   const logoHome = document.getElementById("logoHome");
   if (logoHome) {
-    logoHome.addEventListener("click", goToHome);
+    logoHome.addEventListener("click", goToMap);
   }
 
   // 우측 상단 배경지도 선택 버튼 이벤트
