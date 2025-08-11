@@ -254,8 +254,7 @@ function initializeLayerPanel() {
   // 홈 이동 함수
   function goToHome() {
     // 현재 URL에서 /map을 제거한 URL로 이동
-    const currentUrl = window.location.href;
-    const homeUrl = currentUrl.replace(/\/map.*$/, "");
+    const homeUrl = window.location.href;
     window.location.href = homeUrl;
   }
 
