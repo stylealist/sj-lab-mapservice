@@ -9,7 +9,7 @@
   height: 100vh;
   background: #ffffff;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
+  z-index: 1600;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateX(0);
   border-right: 1px solid #e2e8f0;
@@ -32,7 +32,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  z-index: 1002;
+  z-index: 1602;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   padding: 0.5rem;

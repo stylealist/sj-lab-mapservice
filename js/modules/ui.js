@@ -332,12 +332,19 @@ function initializeLayerPanel() {
   }
 
   // 로드뷰 메인 버튼
-  const roadviewBtn = document.getElementById("roadviewBtn");
+  const roadviewBtn =
+    document.getElementById("roadviewBtn") ||
+    document.getElementById("loadviewBtn");
   if (roadviewBtn) {
+    // 인라인 onclick이 있을 수 있으니 제거하고 통일
+    roadviewBtn.onclick = null;
     roadviewBtn.addEventListener("click", function () {
-      if (window.drawRoadView) {
-        const appkey = window.KAKAO_APP_KEY || undefined;
-        window.drawRoadView("roadviewPanel", { appkey, radius: 300 });
+      const appkey = window.KAKAO_APP_KEY || undefined;
+      // 의도: 버튼은 로드뷰 가능영역 토글 → 영역 클릭 시 전체 화면 로드뷰 실행
+      if (window.enableRoadviewPicker && !window.roadviewPickerActive) {
+        window.enableRoadviewPicker({ appkey });
+      } else if (window.disableRoadviewPicker) {
+        window.disableRoadviewPicker();
       }
     });
   }

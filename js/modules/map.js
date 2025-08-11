@@ -12,6 +12,15 @@ let measureSource = null;
 let measureOverlays = []; // 여러 팝업 오버레이를 관리
 let measureFeatures = []; // 측정된 피처들을 관리
 var road_view_location;
+let roadviewPickerActive = false;
+let kakaoOverlayDiv = null;
+let kakaoOverlayMap = null;
+let kakaoRoadviewClient = null;
+let olViewListenersForKakao = [];
+let isSyncingFromOL = false;
+let isSyncingFromKakao = false;
+let roadviewEscKeyListener = null;
+let kakaoLevelOffset = 0; // 동적 보정 오프셋
 
 // 맵 초기화
 function initializeMap() {
@@ -1583,5 +1592,217 @@ window.createMeasurePopup = createMeasurePopup;
 window.closeMeasurePopup = closeMeasurePopup;
 window.deleteMeasure = deleteMeasure;
 window.drawRoadView = drawRoadView;
+window.enableRoadviewPicker = enableRoadviewPicker;
+window.disableRoadviewPicker = disableRoadviewPicker;
 
 export { initializeMap, mapTools, switchLayer, toggleOverlay };
+
+// Kakao SDK 로더
+function ensureKakaoSdkLoaded(appkey, onReady, onError) {
+  try {
+    if (window.kakao && window.kakao.maps) {
+      if (window.kakao.maps.load) {
+        window.kakao.maps.load(onReady);
+      } else {
+        onReady();
+      }
+      return;
+    }
+    const key =
+      appkey || (typeof window !== "undefined" ? window.KAKAO_APP_KEY : "");
+    const script = document.createElement("script");
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
+      key
+    )}&libraries=services&autoload=false`;
+    script.async = true;
+    script.onload = function () {
+      if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
+        window.kakao.maps.load(onReady);
+      } else {
+        onReady();
+      }
+    };
+    script.onerror = function () {
+      if (onError) onError(new Error("Kakao SDK load failed"));
+    };
+    document.head.appendChild(script);
+  } catch (e) {
+    if (onError) onError(e);
+  }
+}
+
+// OL 줌 -> Kakao level 대략 변환 (경험적 매핑)
+function olZoomToKakaoLevel(olZoom) {
+  const z = Number(olZoom || 10);
+  // OL z 19(가까움) ~ 7(멀리) → Kakao level 1(가까움) ~ 10(멀리)
+  const level = Math.round(14 - z);
+  return Math.max(1, Math.min(12, level));
+}
+
+function syncKakaoMapWithOL() {
+  if (!kakaoOverlayMap || isSyncingFromKakao) return;
+  isSyncingFromOL = true;
+  const center3857 = map.getView().getCenter();
+  const [lon, lat] = ol.proj.toLonLat(center3857);
+  const kz = olZoomToKakaoLevel(map.getView().getZoom()) + kakaoLevelOffset;
+  const kCenter = kakaoOverlayMap.getCenter();
+  if (
+    !kCenter ||
+    Math.abs(kCenter.getLat() - lat) > 1e-9 ||
+    Math.abs(kCenter.getLng() - lon) > 1e-9
+  ) {
+    kakaoOverlayMap.setCenter(new kakao.maps.LatLng(lat, lon));
+  }
+  // 보정된 레벨을 반영
+  if (kakaoOverlayMap.getLevel() !== kz) {
+    kakaoOverlayMap.setLevel(kz);
+  }
+  isSyncingFromOL = false;
+}
+
+function enableRoadviewPicker(options = {}) {
+  if (roadviewPickerActive) return;
+  const appkey =
+    options.appkey ||
+    (typeof window !== "undefined" ? window.KAKAO_APP_KEY : undefined);
+  ensureKakaoSdkLoaded(
+    appkey,
+    () => {
+      try {
+        // 오버레이 컨테이너 생성
+        if (!kakaoOverlayDiv) {
+          kakaoOverlayDiv = document.createElement("div");
+          kakaoOverlayDiv.id = "kakaoCoverageOverlay";
+          kakaoOverlayDiv.style.position = "absolute";
+          kakaoOverlayDiv.style.inset = "0";
+          kakaoOverlayDiv.style.zIndex = "1500";
+          kakaoOverlayDiv.style.pointerEvents = "auto";
+          // 마우스 커서를 로드뷰 아이콘으로 표시하여 선택 모드임을 강조
+          kakaoOverlayDiv.style.cursor =
+            "url('images/icon/icon-loadview-remove.png') 13 13, crosshair";
+          const mapEl = document.getElementById("map");
+          mapEl && mapEl.appendChild(kakaoOverlayDiv);
+        }
+
+        // Kakao 맵 생성 및 커버리지 오버레이 추가
+        const center3857 = map.getView().getCenter();
+        const [lon, lat] = ol.proj.toLonLat(center3857);
+        kakaoOverlayMap = new kakao.maps.Map(kakaoOverlayDiv, {
+          center: new kakao.maps.LatLng(lat, lon),
+          level: olZoomToKakaoLevel(map.getView().getZoom()),
+          draggable: true, // 오버레이 지도에서도 드래그 허용
+          disableDoubleClick: false,
+          scrollwheel: true,
+          keyboardShortcuts: true,
+        });
+        kakaoOverlayMap.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
+        kakaoRoadviewClient = new kakao.maps.RoadviewClient();
+
+        // 클릭 시 로드뷰 실행
+        kakao.maps.event.addListener(
+          kakaoOverlayMap,
+          "click",
+          function (mouseEvt) {
+            const pos = mouseEvt.latLng;
+            kakaoRoadviewClient.getNearestPanoId(pos, 100, function (panoId) {
+              if (panoId) {
+                if (window.drawRoadView) {
+                  window.drawRoadView("roadviewPanel", {
+                    coordinate: [pos.getLng(), pos.getLat()],
+                    appkey,
+                    radius: 300,
+                    fullscreen: true,
+                  });
+                }
+              }
+            });
+          }
+        );
+
+        // ESC로 종료 지원 (닫기 버튼 대신)
+        roadviewEscKeyListener = function (e) {
+          if (e.key === "Escape") {
+            disableRoadviewPicker();
+          }
+        };
+        document.addEventListener("keydown", roadviewEscKeyListener);
+
+        // 오버레이 맵 조작 시 OL 맵도 동기화
+        const syncFromKakaoCenter = function () {
+          if (isSyncingFromOL) return;
+          isSyncingFromKakao = true;
+          const c = kakaoOverlayMap.getCenter();
+          const olCenter = ol.proj.fromLonLat([c.getLng(), c.getLat()]);
+          map.getView().setCenter(olCenter);
+          isSyncingFromKakao = false;
+        };
+        const syncFromKakaoZoom = function () {
+          // 로드뷰 선택 모드에서는 카카오 줌 변경이 OL 줌을 강제로 바꾸지 않도록 무시
+          return;
+        };
+        kakao.maps.event.addListener(
+          kakaoOverlayMap,
+          "center_changed",
+          syncFromKakaoCenter
+        );
+        kakao.maps.event.addListener(
+          kakaoOverlayMap,
+          "zoom_changed",
+          syncFromKakaoZoom
+        );
+
+        // OL 뷰 변화 동기화 및 초기 오프셋 보정
+        const view = map.getView();
+        const c1 = view.on("change:center", syncKakaoMapWithOL);
+        const c2 = view.on("change:resolution", syncKakaoMapWithOL);
+        olViewListenersForKakao.push(c1, c2);
+        // 현재 카카오 레벨과 변환 기대값의 차이를 offset으로 저장
+        kakaoLevelOffset =
+          kakaoOverlayMap.getLevel() - olZoomToKakaoLevel(view.getZoom());
+        syncKakaoMapWithOL();
+
+        roadviewPickerActive = true;
+        if (typeof window !== "undefined") window.roadviewPickerActive = true;
+      } catch (e) {
+        console.error("로드뷰 픽커 활성화 실패:", e);
+      }
+    },
+    (err) => console.error(err)
+  );
+}
+
+function disableRoadviewPicker() {
+  try {
+    if (!roadviewPickerActive) return;
+    // 이벤트 해제
+    if (olViewListenersForKakao && olViewListenersForKakao.length) {
+      const view = map.getView();
+      olViewListenersForKakao.forEach((key) => {
+        if (key && view && view.un) {
+          try {
+            view.un("change:center", syncKakaoMapWithOL);
+          } catch {}
+          try {
+            view.un("change:resolution", syncKakaoMapWithOL);
+          } catch {}
+        }
+      });
+      olViewListenersForKakao = [];
+    }
+    // DOM 제거
+    if (kakaoOverlayDiv && kakaoOverlayDiv.parentNode) {
+      kakaoOverlayDiv.parentNode.removeChild(kakaoOverlayDiv);
+    }
+    if (roadviewEscKeyListener) {
+      document.removeEventListener("keydown", roadviewEscKeyListener);
+      roadviewEscKeyListener = null;
+    }
+    kakaoOverlayDiv = null;
+    kakaoOverlayMap = null;
+    kakaoRoadviewClient = null;
+    roadviewPickerActive = false;
+    if (typeof window !== "undefined") window.roadviewPickerActive = false;
+  } catch (e) {
+    console.error("로드뷰 픽커 비활성화 실패:", e);
+  }
+}
