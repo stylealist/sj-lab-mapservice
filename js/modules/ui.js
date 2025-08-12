@@ -330,6 +330,15 @@ function initializeLayerPanel() {
       }
     });
   }
+  // 로드뷰 버튼 이벤트
+  const loadviewBtn = document.getElementById("loadviewBtn");
+
+  if (loadviewBtn) {
+    loadviewBtn.addEventListener("click", function () {
+      // 버튼 활성화/비활성화 토글
+      this.classList.toggle("active");
+    });
+  }
 
   // 로드뷰 메인 버튼
   const roadviewBtn =

@@ -21,6 +21,7 @@ let isSyncingFromOL = false;
 let isSyncingFromKakao = false;
 let roadviewEscKeyListener = null;
 let kakaoLevelOffset = 0; // 동적 보정 오프셋
+let roadviewBtnActive = false; // 로드뷰 버튼 활성화 상태
 
 // 맵 초기화
 function initializeMap() {
@@ -1480,10 +1481,17 @@ function formatRadius(geometry) {
  * @param tag 로드뷰를 추가 할 id값
  */
 function drawRoadView(tag, options = {}) {
+  console.log("=== drawRoadView 함수 시작 ===");
+  console.log("tag:", tag);
+  console.log("options:", options);
+
   try {
+    console.log("drawRoadView 실행 중...");
     // 현 지도 중심 좌표를 위경도로 변환해 저장
     const center3857 = map.getView().getCenter();
+    console.log("center3857:", center3857);
     let [lon, lat] = ol.proj.toLonLat(center3857);
+    console.log("변환된 좌표 - lon:", lon, "lat:", lat);
     if (
       options.coordinate &&
       Array.isArray(options.coordinate) &&
@@ -1494,6 +1502,14 @@ function drawRoadView(tag, options = {}) {
       lat = Number(options.coordinate[1]);
     }
     road_view_location = { lon, lat };
+
+    // 현재 줌 레벨 가져오기
+    const currentZoom = map.getView().getZoom();
+    console.log("현재 줌 레벨:", currentZoom);
+
+    // OpenLayers 줌을 카카오맵 레벨로 변환
+    const kakaoLevel = olZoomToKakaoLevel(currentZoom);
+    console.log("변환된 카카오 레벨:", kakaoLevel);
 
     const appkey =
       options.appkey ||
@@ -1539,6 +1555,7 @@ function drawRoadView(tag, options = {}) {
       if (container && container.parentNode) {
         container.parentNode.removeChild(container);
       }
+      roadviewBtnActive = false;
     };
     header.appendChild(closeBtn);
 
@@ -1548,11 +1565,13 @@ function drawRoadView(tag, options = {}) {
       lat: String(lat),
       lng: String(lon),
       radius: String(radius),
+      zoom: String(kakaoLevel), // 줌 레벨 추가
     });
     if (appkey) {
       query.set("appkey", String(appkey));
     }
     iframe.src = `html/loadview/load-view.html?${query.toString()}`;
+    console.log("iframe src:", iframe.src);
     iframe.style.width = "100%";
     iframe.style.height = "100%";
     iframe.style.border = "0";
@@ -1568,13 +1587,23 @@ function drawRoadView(tag, options = {}) {
       }
     };
     document.addEventListener("keydown", escCloseListener);
-    const origClose = closeBtn.onclick;
+
+    // 기존 onclick 핸들러를 보존하면서 ESC 리스너 제거 추가
+    const originalOnClick = closeBtn.onclick;
     closeBtn.onclick = function (e) {
-      if (typeof origClose === "function") origClose(e);
+      // 기존 핸들러 실행 (버튼 상태 초기화 포함)
+      if (typeof originalOnClick === "function") {
+        originalOnClick(e);
+      }
+      // ESC 리스너 제거
       document.removeEventListener("keydown", escCloseListener);
     };
+
+    console.log("=== drawRoadView 함수 완료 ===");
   } catch (error) {
     console.error("로드뷰 표시 중 오류:", error);
+    console.error("에러 상세:", error.message);
+    console.error("에러 스택:", error.stack);
   }
 }
 
@@ -1594,6 +1623,44 @@ window.deleteMeasure = deleteMeasure;
 window.drawRoadView = drawRoadView;
 window.enableRoadviewPicker = enableRoadviewPicker;
 window.disableRoadviewPicker = disableRoadviewPicker;
+window.toggleRoadviewBtn = toggleRoadviewBtn;
+
+// 로드뷰 버튼 토글 함수
+function toggleRoadviewBtn() {
+  console.log("=== toggleRoadviewBtn 함수 시작 ===");
+
+  const loadviewBtn = document.getElementById("loadviewBtn");
+  console.log("loadviewBtn 요소:", loadviewBtn);
+
+  if (!loadviewBtn) {
+    console.error("loadviewBtn을 찾을 수 없습니다!");
+    return;
+  }
+
+  roadviewBtnActive = !roadviewBtnActive;
+  console.log("roadviewBtnActive 상태:", roadviewBtnActive);
+
+  if (roadviewBtnActive) {
+    // 버튼 활성화
+    console.log("버튼 활성화 중...");
+    loadviewBtn.classList.add("active");
+    console.log("active 클래스 추가됨. 현재 클래스:", loadviewBtn.className);
+    // 로드뷰 실행
+    drawRoadView("roadviewPanel");
+  } else {
+    // 버튼 비활성화
+    console.log("버튼 비활성화 중...");
+    loadviewBtn.classList.remove("active");
+    console.log("active 클래스 제거됨. 현재 클래스:", loadviewBtn.className);
+    // 로드뷰 패널 닫기
+    const roadviewPanel = document.getElementById("roadviewPanel");
+    if (roadviewPanel && roadviewPanel.parentNode) {
+      roadviewPanel.parentNode.removeChild(roadviewPanel);
+    }
+  }
+
+  console.log("=== toggleRoadviewBtn 함수 완료 ===");
+}
 
 export { initializeMap, mapTools, switchLayer, toggleOverlay };
 
@@ -1631,12 +1698,42 @@ function ensureKakaoSdkLoaded(appkey, onReady, onError) {
   }
 }
 
-// OL 줌 -> Kakao level 대략 변환 (경험적 매핑)
-function olZoomToKakaoLevel(olZoom) {
-  const z = Number(olZoom || 10);
-  // OL z 19(가까움) ~ 7(멀리) → Kakao level 1(가까움) ~ 10(멀리)
-  const level = Math.round(14 - z);
-  return Math.max(1, Math.min(12, level));
+// OL 줌 -> Kakao level 변환
+function olZoomToKakaoLevel(vworldZoom) {
+  // VWorld 줌 레벨이 0보다 작은 값이 들어올 경우를 대비해 0으로 보정합니다.
+  const z = Math.max(0, Number(vworldZoom || 10));
+  console.log("vworldZoomToKakaoLevel 입력값:", z);
+
+  // VWorld 줌 레벨 범위: 2(멀리) ~ 21(가까움)
+  const vworldMinZoom = 2;
+  const vworldMaxZoom = 21;
+  const vworldZoomRange = vworldMaxZoom - vworldMinZoom; // 19
+
+  // 카카오맵 줌 레벨 범위: 14(멀리) ~ 1(가까움)
+  const kakaoMinLevel = 1;
+  const kakaoMaxLevel = 14;
+  const kakaoLevelRange = kakaoMaxLevel - kakaoMinLevel; // 13
+
+  let level;
+
+  // 1. 줌 레벨이 VWorld의 최소/최대 범위를 벗어날 경우 고정값 반환
+  if (z <= vworldMinZoom) {
+    level = kakaoMaxLevel; // 카카오맵의 가장 먼 레벨(14)
+  } else if (z >= vworldMaxZoom) {
+    level = kakaoMinLevel; // 카카오맵의 가장 가까운 레벨(1)
+  } else {
+    // 2. VWorld 줌 레벨 범위를 카카오맵 레벨 범위로 선형 변환
+    // 공식: 카카오맵_시작레벨 - ((VWorld_현재줌 - VWorld_시작줌) * 카카오맵_레벨범위) / VWorld_줌범위
+    level = Math.round(
+      kakaoMaxLevel - ((z - vworldMinZoom) * kakaoLevelRange) / vworldZoomRange
+    );
+  }
+
+  // 3. 카카오맵 레벨 범위(1~14)를 벗어나지 않도록 보정
+  level = Math.max(kakaoMinLevel, Math.min(kakaoMaxLevel, level));
+
+  console.log("vworldZoomToKakaoLevel 결과:", level);
+  return level;
 }
 
 function syncKakaoMapWithOL() {
@@ -1661,6 +1758,7 @@ function syncKakaoMapWithOL() {
 }
 
 function enableRoadviewPicker(options = {}) {
+  console.log("enableRoadviewPicker");
   if (roadviewPickerActive) return;
   const appkey =
     options.appkey ||

@@ -46,6 +46,22 @@
 
         /* 미니맵 위 컨트롤 제거 */
 
+        /* 줌 레벨 표시 */
+        #zoomLevelDisplay {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 3;
+        }
+
+
+
         .fallback {
             display: none;
             height: 100%;
@@ -64,6 +80,7 @@
         <div id="miniMapWrap">
             <div id="miniMap"></div>
         </div>
+        <div id="zoomLevelDisplay">줌 레벨: <span id="zoomLevelValue">-</span></div>
     </div>
     <div id="fallback" class="fallback">로드뷰를 불러오는 중 오류가 발생했습니다.</div>
 
@@ -121,10 +138,13 @@
                     roadview.setPanoId(panoId, position);
                 });
 
-                // 좌측 하단 미니맵 생성
+                // URL에서 줌 레벨 가져오기 (기본값: 4)
+                const zoomLevel = parseInt(params.get('zoom')) || 4;
+
+                // 좌측 하단 미니맵 생성 (전달받은 줌 레벨 적용)
                 const miniMap = new kakao.maps.Map(document.getElementById('miniMap'), {
                     center: position,
-                    level: 4,
+                    level: zoomLevel,
                     mapTypeId: kakao.maps.MapTypeId.ROADMAP,
                 });
 
@@ -147,11 +167,13 @@
                 const marker = new kakao.maps.Marker({ position, image: markImage, draggable: true });
                 marker.setMap(miniMap);
 
-                // 미니맵 클릭 시 로드뷰 이동 및 마커/중심 동기화
+                // 미니맵 클릭 시 로드뷰 이동 및 마커/중심 동기화 (줌 레벨 유지)
                 kakao.maps.event.addListener(miniMap, 'click', function (mouseEvent) {
                     const newPos = mouseEvent.latLng;
                     marker.setPosition(newPos);
                     miniMap.setCenter(newPos);
+                    // 줌 레벨 유지
+                    miniMap.setLevel(zoomLevel);
                     roadviewClient.getNearestPanoId(newPos, 50, function (panoId) {
                         if (panoId) {
                             roadview.setPanoId(panoId, newPos);
@@ -159,10 +181,12 @@
                     });
                 });
 
-                // 마커 드래그 종료 시 로드뷰 이동
+                // 마커 드래그 종료 시 로드뷰 이동 (줌 레벨 유지)
                 kakao.maps.event.addListener(marker, 'dragend', function () {
                     const newPos = marker.getPosition();
                     miniMap.setCenter(newPos);
+                    // 줌 레벨 유지
+                    miniMap.setLevel(zoomLevel);
                     roadviewClient.getNearestPanoId(newPos, 50, function (panoId) {
                         if (panoId) {
                             roadview.setPanoId(panoId, newPos);
@@ -170,18 +194,25 @@
                     });
                 });
 
-                // 로드뷰 이동 시 마커/미니맵 동기화
+                // 로드뷰 이동 시 마커/미니맵 동기화 (줌 레벨 유지)
                 kakao.maps.event.addListener(roadview, 'position_changed', function () {
                     const pos = roadview.getPosition();
                     marker.setPosition(pos);
                     miniMap.setCenter(pos);
+                    // 줌 레벨 유지
+                    miniMap.setLevel(zoomLevel);
                 });
 
-                // 중심 맞추기 버튼
-                document.getElementById('miniRecenter').addEventListener('click', function () {
-                    miniMap.setCenter(roadview.getPosition());
-                    marker.setPosition(roadview.getPosition());
+                // 줌 레벨 변경 이벤트 리스너 (디버깅용)
+                kakao.maps.event.addListener(miniMap, 'zoom_changed', function () {
+                    const currentLevel = miniMap.getLevel();
+                    console.log('현재 카카오맵 줌 레벨:', currentLevel);
+                    // UI에 줌 레벨 표시
+                    document.getElementById('zoomLevelValue').textContent = currentLevel;
                 });
+
+                // 초기 줌 레벨 표시
+                document.getElementById('zoomLevelValue').textContent = zoomLevel;
             }
         })();
     </script>
