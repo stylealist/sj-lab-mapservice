@@ -46,30 +46,31 @@
 
         /* 미니맵 위 컨트롤 제거 */
 
-        /* 줌 레벨 표시 */
-        #zoomLevelDisplay {
+        /* 위치 정보 표시 */
+        #locationDisplay {
             position: absolute;
             top: 12px;
             left: 12px;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-family: monospace;
-            font-size: 14px;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            font-size: 13px;
             z-index: 3;
+            min-width: 200px;
         }
 
+        .location-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: #3b82f6;
+        }
 
-
-        .fallback {
-            display: none;
-            height: 100%;
-            align-items: center;
-            justify-content: center;
-            color: #111827;
-            background: #f9fafb;
-            font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+        .location-coords {
+            font-size: 12px;
+            color: #fff;
+            line-height: 1.4;
         }
     </style>
 </head>
@@ -80,9 +81,12 @@
         <div id="miniMapWrap">
             <div id="miniMap"></div>
         </div>
-        <div id="zoomLevelDisplay">줌 레벨: <span id="zoomLevelValue">-</span></div>
+        <div id="locationDisplay">
+            <div class="location-title">현재 위치</div>
+            <div class="location-coords" id="currentCoords">-</div>
+        </div>
     </div>
-    <div id="fallback" class="fallback">로드뷰를 불러오는 중 오류가 발생했습니다.</div>
+
 
     <script>
         (function () {
@@ -93,18 +97,9 @@
             // 예: load-view.html?lat=..&lng=..&appkey=YOUR_APP_KEY
             const appkey = params.get('appkey') || 'b45c962cc0c0c492309ed19539227c9c';
 
-            function showFallback(message) {
-                var rv = document.getElementById('roadview');
-                var fb = document.getElementById('fallback');
-                if (rv) rv.style.display = 'none';
-                if (fb) {
-                    fb.style.display = 'flex';
-                    if (message) fb.textContent = message;
-                }
-            }
-
             if (!isFinite(lat) || !isFinite(lng)) {
-                return showFallback('잘못된 좌표입니다.');
+                console.error('잘못된 좌표입니다.');
+                return;
             }
 
             // Kakao SDK 로드 (services 라이브러리 포함, autoload=false)
@@ -118,24 +113,80 @@
                     init();
                 }
             };
-            script.onerror = function () { showFallback('Kakao SDK를 불러오지 못했습니다.'); };
+            script.onerror = function () { console.error('Kakao SDK를 불러오지 못했습니다.'); };
             document.head.appendChild(script);
 
             function init() {
                 if (!window.kakao || !window.kakao.maps) {
-                    return showFallback('Kakao SDK 초기화 실패');
+                    console.error('Kakao SDK 초기화 실패');
+                    return;
                 }
                 const position = new kakao.maps.LatLng(lat, lng);
                 const roadviewContainer = document.getElementById('roadview');
                 const roadview = new kakao.maps.Roadview(roadviewContainer);
                 const roadviewClient = new kakao.maps.RoadviewClient();
 
-                // 가장 가까운 파노라마를 찾아 표시
-                roadviewClient.getNearestPanoId(position, 50, function (panoId) {
-                    if (!panoId) {
-                        return showFallback('근처 로드뷰를 찾을 수 없습니다.');
+
+
+                // 좌표를 주소로 변환하는 함수
+                function getAddressFromCoords(pos, callback) {
+                    const geocoder = new kakao.maps.services.Geocoder();
+                    geocoder.coord2Address(pos.getLng(), pos.getLat(), function (result, status) {
+                        if (status === kakao.maps.services.Status.OK) {
+                            const address = result[0].address.address_name;
+                            callback(address);
+                        } else {
+                            // 주소 변환 실패 시 좌표 표시
+                            const coords = `${pos.getLat().toFixed(6)}, ${pos.getLng().toFixed(6)}`;
+                            callback(coords);
+                        }
+                    });
+                }
+
+                // 점진적으로 검색 범위를 늘려가며 로드뷰 찾기
+                function findRoadviewWithProgressiveSearch(position, callback) {
+                    const searchRanges = [50, 100, 200, 500, 1000]; // 점진적으로 검색 범위 증가
+
+                    function searchWithRange(index) {
+                        if (index >= searchRanges.length) {
+                            console.error('근처 로드뷰를 찾을 수 없습니다.');
+                            callback(null);
+                            return;
+                        }
+
+                        const range = searchRanges[index];
+                        console.log(`로드뷰 검색 중... (범위: ${range}m)`);
+
+                        roadviewClient.getNearestPanoId(position, range, function (panoId) {
+                            if (panoId) {
+                                console.log(`로드뷰 발견! (범위: ${range}m)`);
+                                callback(panoId);
+                            } else {
+                                // 다음 범위로 검색
+                                searchWithRange(index + 1);
+                            }
+                        });
                     }
-                    roadview.setPanoId(panoId, position);
+
+                    searchWithRange(0);
+                }
+
+                // 위치 정보 업데이트 함수
+                function updateLocationDisplay(pos) {
+                    getAddressFromCoords(pos, function (address) {
+                        document.getElementById('currentCoords').textContent = address;
+                    });
+                }
+
+
+
+                // 가장 가까운 파노라마를 찾아 표시 (점진적 검색)
+                findRoadviewWithProgressiveSearch(position, function (panoId) {
+                    if (panoId) {
+                        roadview.setPanoId(panoId, position);
+                        // 초기 위치 표시
+                        updateLocationDisplay(position);
+                    }
                 });
 
                 // URL에서 줌 레벨 가져오기 (기본값: 4)
@@ -174,9 +225,11 @@
                     miniMap.setCenter(newPos);
                     // 줌 레벨 유지
                     miniMap.setLevel(zoomLevel);
-                    roadviewClient.getNearestPanoId(newPos, 50, function (panoId) {
+                    findRoadviewWithProgressiveSearch(newPos, function (panoId) {
                         if (panoId) {
                             roadview.setPanoId(panoId, newPos);
+                            // 현재 위치 표시 업데이트
+                            updateLocationDisplay(newPos);
                         }
                     });
                 });
@@ -187,9 +240,11 @@
                     miniMap.setCenter(newPos);
                     // 줌 레벨 유지
                     miniMap.setLevel(zoomLevel);
-                    roadviewClient.getNearestPanoId(newPos, 50, function (panoId) {
+                    findRoadviewWithProgressiveSearch(newPos, function (panoId) {
                         if (panoId) {
                             roadview.setPanoId(panoId, newPos);
+                            // 현재 위치 표시 업데이트
+                            updateLocationDisplay(newPos);
                         }
                     });
                 });
@@ -201,18 +256,11 @@
                     miniMap.setCenter(pos);
                     // 줌 레벨 유지
                     miniMap.setLevel(zoomLevel);
+                    // 현재 위치 표시 업데이트
+                    updateLocationDisplay(pos);
                 });
 
-                // 줌 레벨 변경 이벤트 리스너 (디버깅용)
-                kakao.maps.event.addListener(miniMap, 'zoom_changed', function () {
-                    const currentLevel = miniMap.getLevel();
-                    console.log('현재 카카오맵 줌 레벨:', currentLevel);
-                    // UI에 줌 레벨 표시
-                    document.getElementById('zoomLevelValue').textContent = currentLevel;
-                });
 
-                // 초기 줌 레벨 표시
-                document.getElementById('zoomLevelValue').textContent = zoomLevel;
             }
         })();
     </script>
