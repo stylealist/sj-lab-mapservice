@@ -69,6 +69,60 @@
               <span class="cadastral-label">로드뷰</span>
             </button>
 
+            <button class="cadastral-btn" id="wfsAmenitiesBtn" title="편의시설 레이어 켜기" style="margin-top:10px;"
+              onclick="toggleAmenitiesSubmenu();">
+              <span class="cadastral-icon">
+                <img src="images/icon/amenities_icon.png" alt="편의시설" width="26" height="26" />
+              </span>
+              <span class="cadastral-label">편의시설</span>
+            </button>
+
+            <!-- 편의시설 서브메뉴 -->
+            <div class="cadastral-submenu" id="amenitiesSubmenu">
+              <button class="submenu-btn" data-amenities="nearbyConvenience" title="편의점">
+                <span class="submenu-icon">
+                  <img src="images/icon/convenienceStore.png" alt="편의점" width="22" height="22" />
+                </span>
+                <span class="submenu-label">편의점</span>
+              </button>
+              <button class="submenu-btn" data-amenities="restroom" title="화장실">
+                <span class="submenu-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8 2H16V4H8V2Z" stroke="currentColor" stroke-width="2" />
+                    <path d="M6 4H18V22H6V4Z" stroke="currentColor" stroke-width="2" />
+                    <path d="M10 8H14" stroke="currentColor" stroke-width="2" />
+                    <path d="M10 12H14" stroke="currentColor" stroke-width="2" />
+                    <path d="M10 16H14" stroke="currentColor" stroke-width="2" />
+                  </svg>
+                </span>
+                <span class="submenu-label">화장실</span>
+              </button>
+              <button class="submenu-btn" data-amenities="wifi" title="WiFi">
+                <span class="submenu-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2C8.13 2 5 5.13 5 9" stroke="currentColor" stroke-width="2" />
+                    <path d="M12 6C10.34 6 9 7.34 9 9" stroke="currentColor" stroke-width="2" />
+                    <path d="M12 10C11.45 10 11 10.45 11 11" stroke="currentColor" stroke-width="2" />
+                    <circle cx="12" cy="13" r="1" fill="currentColor" />
+                  </svg>
+                </span>
+                <span class="submenu-label">WiFi</span>
+              </button>
+              <button class="submenu-btn" data-amenities="atm" title="ATM">
+                <span class="submenu-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2" />
+                    <path d="M8 8H16V16H8V8Z" stroke="currentColor" stroke-width="2" />
+                    <path d="M10 10H14V12H10V10Z" fill="currentColor" />
+                    <path d="M10 14H14V16H10V14Z" fill="currentColor" />
+                  </svg>
+                </span>
+                <span class="submenu-label">ATM</span>
+              </button>
+            </div>
+
+
+
             <!-- 측정 도구 서브메뉴 -->
             <div class="cadastral-submenu" id="cadastralSubmenu">
               <button class="submenu-btn" data-cadastral="radius" title="반경 측정">

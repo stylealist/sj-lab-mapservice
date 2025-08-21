@@ -358,53 +358,179 @@ function initializeLayerPanel() {
     });
   }
 
+  // 편의시설 서브메뉴 토글 함수
+  window.toggleAmenitiesSubmenu = function () {
+    const amenitiesBtn = document.getElementById("wfsAmenitiesBtn");
+    const amenitiesSubmenu = document.getElementById("amenitiesSubmenu");
+
+    if (amenitiesBtn && amenitiesSubmenu) {
+      // 버튼 활성화/비활성화 토글
+      amenitiesBtn.classList.toggle("active");
+
+      // 서브메뉴 토글
+      amenitiesSubmenu.classList.toggle("show");
+
+      console.log(
+        "편의시설 서브메뉴:",
+        amenitiesSubmenu.classList.contains("show") ? "표시" : "숨김"
+      );
+    }
+  };
+
+  // 편의점 서브메뉴 토글 함수
+  window.toggleConvenienceSubmenu = function () {
+    const convenienceBtn = document.getElementById("wfsConvenienceBtn");
+    const convenienceSubmenu = document.getElementById("convenienceSubmenu");
+
+    if (convenienceBtn && convenienceSubmenu) {
+      // 버튼 활성화/비활성화 토글
+      convenienceBtn.classList.toggle("active");
+
+      // 서브메뉴 토글
+      convenienceSubmenu.classList.toggle("show");
+
+      // 편의점 레이어 토글
+      if (window.toggleConvenienceStore) {
+        window.toggleConvenienceStore();
+      }
+
+      console.log(
+        "편의점 서브메뉴:",
+        convenienceSubmenu.classList.contains("show") ? "표시" : "숨김"
+      );
+    }
+  };
+
   // 지적 서브메뉴 버튼 이벤트
   const submenuBtns = document.querySelectorAll(".submenu-btn");
   submenuBtns.forEach((btn) => {
     btn.addEventListener("click", function () {
       const cadastralType = this.getAttribute("data-cadastral");
+      const convenienceType = this.getAttribute("data-convenience");
+      const amenitiesType = this.getAttribute("data-amenities");
 
       // 모든 서브메뉴 버튼 비활성화
       submenuBtns.forEach((b) => b.classList.remove("active"));
 
-      // 클릭된 버튼 활성화
+      // 기본적으로 클릭된 버튼 활성화 (특정 항목에서 토글 결과에 따라 다시 조정)
       this.classList.add("active");
 
-      console.log("지적 기능 선택:", cadastralType);
+      // 편의시설 서브메뉴 버튼 처리
+      if (amenitiesType) {
+        console.log("편의시설 기능 선택:", amenitiesType);
 
-      // 각 기능별 측정 도구 활성화
-      switch (cadastralType) {
-        case "radius":
-          console.log("반경 기능 활성화");
-          if (window.measureRadius) {
-            window.measureRadius();
+        // 각 기능별 편의시설 도구 활성화
+        switch (amenitiesType) {
+          case "nearbyConvenience": {
+            // 편의점 WFS 토글
+            let isActive = false;
+            if (window.toggleConvenienceStore) {
+              isActive = window.toggleConvenienceStore();
+            }
+            // 토글 결과에 따라 active 정확히 반영
+            this.classList.toggle("active", !!isActive);
+            break;
           }
-          break;
-        case "area":
-          console.log("면적 기능 활성화");
-          if (window.measureArea) {
-            window.measureArea();
-          }
-          break;
-        case "distance":
-          console.log("거리 기능 활성화");
-          if (window.measureDistance) {
-            window.measureDistance();
-          }
-          break;
-        case "angle":
-          console.log("각도 기능 활성화");
-          if (window.measureAngle) {
-            window.measureAngle();
-          }
-          break;
-        case "roadview":
-          console.log("로드뷰 실행");
-          if (window.drawRoadView) {
-            const appkey = window.KAKAO_APP_KEY || undefined;
-            window.drawRoadView("roadviewPanel", { appkey, radius: 300 });
-          }
-          break;
+          case "parking":
+            console.log("주차장 기능 활성화");
+            if (window.showParkingInfo) {
+              window.showParkingInfo();
+            }
+            break;
+          case "restroom":
+            console.log("화장실 기능 활성화");
+            if (window.showRestroomInfo) {
+              window.showRestroomInfo();
+            }
+            break;
+          case "wifi":
+            console.log("WiFi 기능 활성화");
+            if (window.showWifiInfo) {
+              window.showWifiInfo();
+            }
+            break;
+          case "atm":
+            console.log("ATM 기능 활성화");
+            if (window.showAtmInfo) {
+              window.showAtmInfo();
+            }
+            break;
+        }
+        return;
+      }
+
+      // 편의점 서브메뉴 버튼 처리
+      if (convenienceType) {
+        console.log("편의점 기능 선택:", convenienceType);
+
+        // 각 기능별 편의점 도구 활성화
+        switch (convenienceType) {
+          case "nearby":
+            console.log("주변 편의점 기능 활성화");
+            if (window.showNearbyConvenienceStores) {
+              window.showNearbyConvenienceStores();
+            }
+            break;
+          case "search":
+            console.log("편의점 검색 기능 활성화");
+            if (window.showConvenienceStoreSearch) {
+              window.showConvenienceStoreSearch();
+            }
+            break;
+          case "filter":
+            console.log("편의점 필터 기능 활성화");
+            if (window.showConvenienceStoreFilter) {
+              window.showConvenienceStoreFilter();
+            }
+            break;
+          case "info":
+            console.log("편의점 정보 기능 활성화");
+            if (window.showConvenienceStoreInfo) {
+              window.showConvenienceStoreInfo();
+            }
+            break;
+        }
+        return;
+      }
+
+      // 지적 서브메뉴 버튼 처리
+      if (cadastralType) {
+        console.log("지적 기능 선택:", cadastralType);
+
+        // 각 기능별 측정 도구 활성화
+        switch (cadastralType) {
+          case "radius":
+            console.log("반경 기능 활성화");
+            if (window.measureRadius) {
+              window.measureRadius();
+            }
+            break;
+          case "area":
+            console.log("면적 기능 활성화");
+            if (window.measureArea) {
+              window.measureArea();
+            }
+            break;
+          case "distance":
+            console.log("거리 기능 활성화");
+            if (window.measureDistance) {
+              window.measureDistance();
+            }
+            break;
+          case "angle":
+            console.log("각도 기능 활성화");
+            if (window.measureAngle) {
+              window.measureAngle();
+            }
+            break;
+          case "roadview":
+            console.log("로드뷰 실행");
+            if (window.drawRoadView) {
+              const appkey = window.KAKAO_APP_KEY || undefined;
+              window.drawRoadView("roadviewPanel", { appkey, radius: 300 });
+            }
+            break;
+        }
       }
     });
   });

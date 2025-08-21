@@ -1,8 +1,5 @@
-// 맵 관련 모듈
-let map;
-let baseLayers = {};
-let overlayLayers = {};
-let currentLayer = "common";
+// 맵 측정 도구 모듈
+import { getMap } from "./map-core.js";
 
 // 측정 도구 관련 변수들
 let measureInteraction = null;
@@ -11,56 +8,10 @@ let currentMeasureType = null;
 let measureSource = null;
 let measureOverlays = []; // 여러 팝업 오버레이를 관리
 let measureFeatures = []; // 측정된 피처들을 관리
-var road_view_location;
-let roadviewPickerActive = false;
-let kakaoOverlayDiv = null;
-let kakaoOverlayMap = null;
-let kakaoRoadviewClient = null;
-let olViewListenersForKakao = [];
-let isSyncingFromOL = false;
-let isSyncingFromKakao = false;
-let roadviewEscKeyListener = null;
-let kakaoLevelOffset = 0; // 동적 보정 오프셋
-let roadviewBtnActive = false; // 로드뷰 버튼 활성화 상태
 
-// 맵 초기화
-function initializeMap() {
-  // VWorld 배경지도 레이어들 생성
-  baseLayers = {
-    common: new ol.layer.Tile({
-      title: "일반 지도",
-      visible: true,
-      type: "base",
-      name: "common_map",
-      source: new ol.source.XYZ({
-        url: "https://xdworld.vworld.kr/2d/Base/service/{z}/{x}/{y}.png",
-        crossOrigin: "anonymous",
-      }),
-    }),
-    satellite: new ol.layer.Tile({
-      title: "위성 영상",
-      visible: false,
-      type: "base",
-      source: new ol.source.XYZ({
-        url: "https://xdworld.vworld.kr/2d/Satellite/service/{z}/{x}/{y}.jpeg",
-        crossOrigin: "anonymous",
-      }),
-    }),
-  };
-
-  // 오버레이 레이어들 생성
-  overlayLayers = {
-    hybrid: new ol.layer.Tile({
-      title: "하이브리드 오버레이",
-      visible: false,
-      type: "overlay",
-      name: "hybrid_overlay",
-      source: new ol.source.XYZ({
-        url: "https://xdworld.vworld.kr/2d/Hybrid/service/{z}/{x}/{y}.png",
-        crossOrigin: "anonymous",
-      }),
-    }),
-  };
+// 측정 도구 초기화
+function initializeMeasureTools() {
+  const map = getMap();
 
   // 측정용 벡터 레이어 생성
   measureSource = new ol.source.Vector();
@@ -87,186 +38,14 @@ function initializeMap() {
     }),
   });
 
-  // 맵 생성
-  map = new ol.Map({
-    target: "map",
-    layers: [
-      ...Object.values(baseLayers),
-      ...Object.values(overlayLayers),
-      measureLayer,
-    ],
-    view: new ol.View({
-      center: ol.proj.fromLonLat([127.0, 37.5]), // 서울 중심
-      zoom: 10,
-      maxZoom: 19,
-      minZoom: 7,
-    }),
-    controls: [
-      new ol.control.Zoom(),
-      new ol.control.Attribution({
-        collapsible: false,
-      }),
-    ],
-    interactions: [
-      new ol.interaction.DragPan(),
-      new ol.interaction.DoubleClickZoom(),
-      new ol.interaction.MouseWheelZoom(),
-    ],
-  });
+  // 맵에 측정 레이어 추가
+  map.addLayer(measureLayer);
 
-  // 측정 도구 초기화
-  initializeMeasureTools();
-
-  // 측정 팝업 오버레이들은 필요할 때마다 생성
-
-  // 맵 이벤트 리스너 등록
-  setupMapEventListeners();
-
-  // 지도에서 우클릭 시 브라우저 컨텍스트 메뉴 방지
-  const mapElement = document.getElementById("map");
-  const mapContainer = document.querySelector(".map-container");
-
-  if (mapElement) {
-    mapElement.addEventListener("contextmenu", function (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    });
+  // 전역 측정 레이어 배열에 추가
+  if (window.measureLayers) {
+    window.measureLayers.push(measureLayer);
   }
 
-  if (mapContainer) {
-    mapContainer.addEventListener("contextmenu", function (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-  }
-}
-
-// 맵 이벤트 리스너 설정
-function setupMapEventListeners() {
-  // 포인터 이동 이벤트 (선택적)
-  map.on("pointermove", function (evt) {
-    const coordinate = evt.coordinate;
-    const lonLat = ol.proj.toLonLat(coordinate);
-    // coordinatesElement가 존재할 때만 업데이트
-    if (window.coordinatesElement) {
-      window.coordinatesElement.textContent = `경도: ${lonLat[0].toFixed(
-        6
-      )}, 위도: ${lonLat[1].toFixed(6)}`;
-    }
-  });
-
-  // 줌 레벨 변경 이벤트 (선택적)
-  map.getView().on("change:resolution", function () {
-    const zoom = Math.round(map.getView().getZoom());
-    // zoomLevelElement가 존재할 때만 업데이트
-    if (window.zoomLevelElement) {
-      window.zoomLevelElement.textContent = zoom;
-    }
-  });
-
-  // 맵 로드 완료 이벤트
-  map.once("postrender", function () {
-    console.log("맵 로드 완료");
-    // 맵 로드 완료 후 로딩 숨기기
-    setTimeout(() => {
-      // 맵 컨테이너를 보이게 함
-      const mapContainer = document.querySelector(".map-container");
-      if (mapContainer) {
-        mapContainer.classList.add("loaded");
-      }
-
-      // 헤더를 보이게 함
-      const header = document.getElementById("header");
-      if (header) {
-        header.classList.add("loaded");
-      }
-
-      // 메인 컨텐츠를 보이게 함
-      const mainContent = document.querySelector(".main-content");
-      if (mainContent) {
-        mainContent.classList.add("loaded");
-      }
-
-      // 로딩 숨기기
-      if (window.hideLoading) {
-        window.hideLoading();
-      }
-    }, 500); // 맵 렌더링 완료 후 0.5초 대기
-  });
-}
-
-// 레이어 전환
-function switchLayer(layerType) {
-  // 모든 배경 레이어 비활성화
-  Object.values(baseLayers).forEach((layer) => {
-    layer.setVisible(false);
-  });
-
-  // 선택된 배경 레이어 활성화
-  if (baseLayers[layerType]) {
-    baseLayers[layerType].setVisible(true);
-    currentLayer = layerType;
-  }
-}
-
-// 오버레이 레이어 토글
-function toggleOverlay(overlayType) {
-  if (overlayLayers[overlayType]) {
-    const isVisible = overlayLayers[overlayType].getVisible();
-    overlayLayers[overlayType].setVisible(!isVisible);
-  }
-}
-
-// 맵 도구 함수들
-const mapTools = {
-  // 현재 뷰포트 정보 가져오기
-  getViewportInfo: function () {
-    const view = map.getView();
-    const extent = view.calculateExtent(map.getSize());
-    const center = view.getCenter();
-    const zoom = view.getZoom();
-
-    return {
-      center: ol.proj.toLonLat(center),
-      zoom: zoom,
-      extent: ol.proj.transformExtent(extent, "EPSG:3857", "EPSG:4326"),
-    };
-  },
-
-  // 특정 좌표로 이동
-  flyTo: function (coordinate, zoom = 15) {
-    const transformedCoord = ol.proj.fromLonLat(coordinate);
-    const view = map.getView();
-
-    view.animate({
-      center: transformedCoord,
-      zoom: zoom,
-      duration: 1000,
-    });
-  },
-
-  // 줌 레벨 설정
-  setZoom: function (zoom) {
-    const view = map.getView();
-    view.animate({
-      zoom: zoom,
-      duration: 500,
-    });
-  },
-
-  // 맵 리셋
-  resetMap: function () {
-    const view = map.getView();
-    view.animate({
-      center: ol.proj.fromLonLat([127.0, 37.5]),
-      zoom: 10,
-      duration: 1000,
-    });
-  },
-};
-
-// 측정 도구 초기화
-function initializeMeasureTools() {
   // 측정 완료 시 스타일 적용
   const measureStyle = function (feature) {
     const geometry = feature.getGeometry();
@@ -428,6 +207,7 @@ function initializeMeasureTools() {
 // 거리 측정
 function measureDistance() {
   clearMeasurements();
+  const map = getMap();
 
   let drawInteraction = null;
   let isDrawingCompleted = false; // 측정 완료 상태 추적
@@ -586,6 +366,7 @@ function measureDistance() {
 // 각도 측정
 function measureAngle() {
   clearMeasurements();
+  const map = getMap();
 
   let pointA = null; // 첫 번째 점 (첫 클릭)
   let pointB = null; // 꼭짓점 (두 번째 클릭)
@@ -825,6 +606,7 @@ function measureAngle() {
 // 면적 측정
 function measureArea() {
   clearMeasurements();
+  const map = getMap();
 
   let drawInteraction = null;
 
@@ -930,6 +712,7 @@ function measureArea() {
 // 반경 측정
 function measureRadius() {
   clearMeasurements();
+  const map = getMap();
 
   // Circle 대신 Point로 시작점을 찍고, 그 다음 클릭으로 반경을 결정하는 방식으로 변경
   let startPoint = null;
@@ -1170,6 +953,7 @@ function measureRadius() {
 
 // 측정 팝업 생성
 function createMeasurePopup(feature, measureType, value) {
+  const map = getMap();
   const geometry = feature.getGeometry();
 
   // 새로운 오버레이 생성
@@ -1353,6 +1137,8 @@ function createMeasurePopup(feature, measureType, value) {
 
 // 측정 팝업 닫기 (도형도 함께 삭제)
 function closeMeasurePopup(featureId) {
+  const map = getMap();
+
   // 이벤트 전파 방지
   if (event) {
     event.stopPropagation();
@@ -1405,6 +1191,8 @@ function deleteMeasure(featureId) {
 
 // 측정 초기화
 function clearMeasurements() {
+  const map = getMap();
+
   if (measureInteraction) {
     map.removeInteraction(measureInteraction);
     measureInteraction = null;
@@ -1475,143 +1263,7 @@ function formatRadius(geometry) {
   return output;
 }
 
-/**
- * 로드뷰 태그를 추가해주는 기능
- *
- * @param tag 로드뷰를 추가 할 id값
- */
-function drawRoadView(tag, options = {}) {
-  console.log("=== drawRoadView 함수 시작 ===");
-  console.log("tag:", tag);
-  console.log("options:", options);
-
-  try {
-    console.log("drawRoadView 실행 중...");
-    // 현 지도 중심 좌표를 위경도로 변환해 저장
-    const center3857 = map.getView().getCenter();
-    console.log("center3857:", center3857);
-    let [lon, lat] = ol.proj.toLonLat(center3857);
-    console.log("변환된 좌표 - lon:", lon, "lat:", lat);
-    if (
-      options.coordinate &&
-      Array.isArray(options.coordinate) &&
-      options.coordinate.length === 2
-    ) {
-      // options.coordinate는 [lon, lat] (EPSG:4326) 기대
-      lon = Number(options.coordinate[0]);
-      lat = Number(options.coordinate[1]);
-    }
-    road_view_location = { lon, lat };
-
-    // 현재 줌 레벨 가져오기
-    const currentZoom = map.getView().getZoom();
-    console.log("현재 줌 레벨:", currentZoom);
-
-    // OpenLayers 줌을 카카오맵 레벨로 변환
-    const kakaoLevel = olZoomToKakaoLevel(currentZoom);
-    console.log("변환된 카카오 레벨:", kakaoLevel);
-
-    const appkey =
-      options.appkey ||
-      (typeof window !== "undefined" ? window.KAKAO_APP_KEY : undefined);
-    const radius = typeof options.radius === "number" ? options.radius : 200; // m
-
-    // 컨테이너 탐색 또는 생성
-    let container = document.getElementById(tag);
-    if (!container) {
-      container = document.createElement("div");
-      container.id = tag;
-      document.body.appendChild(container);
-    }
-
-    // 패널 스타일 구성 (전체화면)
-    container.style.position = "fixed";
-    container.style.inset = "0";
-    container.style.width = "100vw";
-    container.style.height = "100vh";
-    container.style.background = "rgba(0,0,0,0.9)";
-    container.style.border = "none";
-    container.style.borderRadius = "0";
-    container.style.boxShadow = "none";
-    container.style.overflow = "hidden";
-    container.style.zIndex = "3000";
-
-    // 기존 내용 초기화
-    container.innerHTML = "";
-
-    // 헤더 영역
-    const header = document.createElement("div");
-    header.style.cssText =
-      "position:absolute;top:12px;right:12px;display:flex;align-items:center;justify-content:center;padding:6px 8px;background:rgba(17,24,39,0.9);color:#fff;font-weight:600;border-radius:8px;z-index:1;";
-    header.innerHTML = "";
-
-    // 닫기 버튼
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "×";
-    closeBtn.style.cssText =
-      "background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;padding:0 4px;";
-    closeBtn.onclick = function (e) {
-      e.stopPropagation();
-      if (container && container.parentNode) {
-        container.parentNode.removeChild(container);
-      }
-      roadviewBtnActive = false;
-    };
-    header.appendChild(closeBtn);
-
-    // 아이프레임 영역
-    const iframe = document.createElement("iframe");
-    const query = new URLSearchParams({
-      lat: String(lat),
-      lng: String(lon),
-      radius: String(radius),
-      zoom: String(kakaoLevel), // 줌 레벨 추가
-    });
-    if (appkey) {
-      query.set("appkey", String(appkey));
-    }
-    iframe.src = `html/loadview/load-view.html?${query.toString()}`;
-    console.log("iframe src:", iframe.src);
-    iframe.style.width = "100%";
-    iframe.style.height = "100%";
-    iframe.style.border = "0";
-    iframe.allowFullscreen = true;
-
-    container.appendChild(iframe);
-    container.appendChild(header);
-
-    // ESC로 닫기 지원
-    const escCloseListener = function (event) {
-      if (event.key === "Escape") {
-        closeBtn.click();
-      }
-    };
-    document.addEventListener("keydown", escCloseListener);
-
-    // 기존 onclick 핸들러를 보존하면서 ESC 리스너 제거 추가
-    const originalOnClick = closeBtn.onclick;
-    closeBtn.onclick = function (e) {
-      // 기존 핸들러 실행 (버튼 상태 초기화 포함)
-      if (typeof originalOnClick === "function") {
-        originalOnClick(e);
-      }
-      // ESC 리스너 제거
-      document.removeEventListener("keydown", escCloseListener);
-    };
-
-    console.log("=== drawRoadView 함수 완료 ===");
-  } catch (error) {
-    console.error("로드뷰 표시 중 오류:", error);
-    console.error("에러 상세:", error.message);
-    console.error("에러 스택:", error.stack);
-  }
-}
-
-// 전역 객체에 맵 관련 함수들 추가
-window.mapInstance = map;
-window.mapTools = mapTools;
-window.switchLayer = switchLayer;
-window.toggleOverlay = toggleOverlay;
+// 전역 객체에 측정 함수들 추가
 window.measureDistance = measureDistance;
 window.measureArea = measureArea;
 window.measureRadius = measureRadius;
@@ -1620,287 +1272,15 @@ window.clearMeasurements = clearMeasurements;
 window.createMeasurePopup = createMeasurePopup;
 window.closeMeasurePopup = closeMeasurePopup;
 window.deleteMeasure = deleteMeasure;
-window.drawRoadView = drawRoadView;
-window.enableRoadviewPicker = enableRoadviewPicker;
-window.disableRoadviewPicker = disableRoadviewPicker;
-window.toggleRoadviewBtn = toggleRoadviewBtn;
 
-// 로드뷰 버튼 토글 함수
-function toggleRoadviewBtn() {
-  console.log("=== toggleRoadviewBtn 함수 시작 ===");
-
-  const loadviewBtn = document.getElementById("loadviewBtn");
-  console.log("loadviewBtn 요소:", loadviewBtn);
-
-  if (!loadviewBtn) {
-    console.error("loadviewBtn을 찾을 수 없습니다!");
-    return;
-  }
-
-  roadviewBtnActive = !roadviewBtnActive;
-  console.log("roadviewBtnActive 상태:", roadviewBtnActive);
-
-  if (roadviewBtnActive) {
-    // 버튼 활성화
-    console.log("버튼 활성화 중...");
-    loadviewBtn.classList.add("active");
-    console.log("active 클래스 추가됨. 현재 클래스:", loadviewBtn.className);
-    // 로드뷰 실행
-    drawRoadView("roadviewPanel");
-  } else {
-    // 버튼 비활성화
-    console.log("버튼 비활성화 중...");
-    loadviewBtn.classList.remove("active");
-    console.log("active 클래스 제거됨. 현재 클래스:", loadviewBtn.className);
-    // 로드뷰 패널 닫기
-    const roadviewPanel = document.getElementById("roadviewPanel");
-    if (roadviewPanel && roadviewPanel.parentNode) {
-      roadviewPanel.parentNode.removeChild(roadviewPanel);
-    }
-  }
-
-  console.log("=== toggleRoadviewBtn 함수 완료 ===");
-}
-
-export { initializeMap, mapTools, switchLayer, toggleOverlay };
-
-// Kakao SDK 로더
-function ensureKakaoSdkLoaded(appkey, onReady, onError) {
-  try {
-    if (window.kakao && window.kakao.maps) {
-      if (window.kakao.maps.load) {
-        window.kakao.maps.load(onReady);
-      } else {
-        onReady();
-      }
-      return;
-    }
-    const key =
-      appkey || (typeof window !== "undefined" ? window.KAKAO_APP_KEY : "");
-    const script = document.createElement("script");
-    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${encodeURIComponent(
-      key
-    )}&libraries=services&autoload=false`;
-    script.async = true;
-    script.onload = function () {
-      if (window.kakao && window.kakao.maps && window.kakao.maps.load) {
-        window.kakao.maps.load(onReady);
-      } else {
-        onReady();
-      }
-    };
-    script.onerror = function () {
-      if (onError) onError(new Error("Kakao SDK load failed"));
-    };
-    document.head.appendChild(script);
-  } catch (e) {
-    if (onError) onError(e);
-  }
-}
-
-// OL 줌 -> Kakao level 변환
-function olZoomToKakaoLevel(vworldZoom) {
-  // VWorld 줌 레벨이 0보다 작은 값이 들어올 경우를 대비해 0으로 보정합니다.
-  const z = Math.max(0, Number(vworldZoom || 10));
-  console.log("vworldZoomToKakaoLevel 입력값:", z);
-
-  // VWorld 줌 레벨 범위: 2(멀리) ~ 21(가까움)
-  const vworldMinZoom = 2;
-  const vworldMaxZoom = 21;
-  const vworldZoomRange = vworldMaxZoom - vworldMinZoom; // 19
-
-  // 카카오맵 줌 레벨 범위: 14(멀리) ~ 1(가까움)
-  const kakaoMinLevel = 1;
-  const kakaoMaxLevel = 14;
-  const kakaoLevelRange = kakaoMaxLevel - kakaoMinLevel; // 13
-
-  let level;
-
-  // 1. 줌 레벨이 VWorld의 최소/최대 범위를 벗어날 경우 고정값 반환
-  if (z <= vworldMinZoom) {
-    level = kakaoMaxLevel; // 카카오맵의 가장 먼 레벨(14)
-  } else if (z >= vworldMaxZoom) {
-    level = kakaoMinLevel; // 카카오맵의 가장 가까운 레벨(1)
-  } else {
-    // 2. VWorld 줌 레벨 범위를 카카오맵 레벨 범위로 선형 변환
-    // 공식: 카카오맵_시작레벨 - ((VWorld_현재줌 - VWorld_시작줌) * 카카오맵_레벨범위) / VWorld_줌범위
-    level = Math.round(
-      kakaoMaxLevel - ((z - vworldMinZoom) * kakaoLevelRange) / vworldZoomRange
-    );
-  }
-
-  // 3. 카카오맵 레벨 범위(1~14)를 벗어나지 않도록 보정
-  level = Math.max(kakaoMinLevel, Math.min(kakaoMaxLevel, level));
-
-  console.log("vworldZoomToKakaoLevel 결과:", level);
-  return level;
-}
-
-function syncKakaoMapWithOL() {
-  if (!kakaoOverlayMap || isSyncingFromKakao) return;
-  isSyncingFromOL = true;
-  const center3857 = map.getView().getCenter();
-  const [lon, lat] = ol.proj.toLonLat(center3857);
-  const kz = olZoomToKakaoLevel(map.getView().getZoom()) + kakaoLevelOffset;
-  const kCenter = kakaoOverlayMap.getCenter();
-  if (
-    !kCenter ||
-    Math.abs(kCenter.getLat() - lat) > 1e-9 ||
-    Math.abs(kCenter.getLng() - lon) > 1e-9
-  ) {
-    kakaoOverlayMap.setCenter(new kakao.maps.LatLng(lat, lon));
-  }
-  // 보정된 레벨을 반영
-  if (kakaoOverlayMap.getLevel() !== kz) {
-    kakaoOverlayMap.setLevel(kz);
-  }
-  isSyncingFromOL = false;
-}
-
-function enableRoadviewPicker(options = {}) {
-  console.log("enableRoadviewPicker");
-  if (roadviewPickerActive) return;
-  const appkey =
-    options.appkey ||
-    (typeof window !== "undefined" ? window.KAKAO_APP_KEY : undefined);
-  ensureKakaoSdkLoaded(
-    appkey,
-    () => {
-      try {
-        // 오버레이 컨테이너 생성
-        if (!kakaoOverlayDiv) {
-          kakaoOverlayDiv = document.createElement("div");
-          kakaoOverlayDiv.id = "kakaoCoverageOverlay";
-          kakaoOverlayDiv.style.position = "absolute";
-          kakaoOverlayDiv.style.inset = "0";
-          kakaoOverlayDiv.style.zIndex = "1500";
-          kakaoOverlayDiv.style.pointerEvents = "auto";
-          // 마우스 커서를 로드뷰 아이콘으로 표시하여 선택 모드임을 강조
-          kakaoOverlayDiv.style.cursor =
-            "url('images/icon/icon-loadview-remove.png') 13 13, crosshair";
-          const mapEl = document.getElementById("map");
-          mapEl && mapEl.appendChild(kakaoOverlayDiv);
-        }
-
-        // Kakao 맵 생성 및 커버리지 오버레이 추가
-        const center3857 = map.getView().getCenter();
-        const [lon, lat] = ol.proj.toLonLat(center3857);
-        kakaoOverlayMap = new kakao.maps.Map(kakaoOverlayDiv, {
-          center: new kakao.maps.LatLng(lat, lon),
-          level: olZoomToKakaoLevel(map.getView().getZoom()),
-          draggable: true, // 오버레이 지도에서도 드래그 허용
-          disableDoubleClick: false,
-          scrollwheel: true,
-          keyboardShortcuts: true,
-        });
-        kakaoOverlayMap.addOverlayMapTypeId(kakao.maps.MapTypeId.ROADVIEW);
-        kakaoRoadviewClient = new kakao.maps.RoadviewClient();
-
-        // 클릭 시 로드뷰 실행
-        kakao.maps.event.addListener(
-          kakaoOverlayMap,
-          "click",
-          function (mouseEvt) {
-            const pos = mouseEvt.latLng;
-            kakaoRoadviewClient.getNearestPanoId(pos, 100, function (panoId) {
-              if (panoId) {
-                if (window.drawRoadView) {
-                  window.drawRoadView("roadviewPanel", {
-                    coordinate: [pos.getLng(), pos.getLat()],
-                    appkey,
-                    radius: 300,
-                    fullscreen: true,
-                  });
-                }
-              }
-            });
-          }
-        );
-
-        // ESC로 종료 지원 (닫기 버튼 대신)
-        roadviewEscKeyListener = function (e) {
-          if (e.key === "Escape") {
-            disableRoadviewPicker();
-          }
-        };
-        document.addEventListener("keydown", roadviewEscKeyListener);
-
-        // 오버레이 맵 조작 시 OL 맵도 동기화
-        const syncFromKakaoCenter = function () {
-          if (isSyncingFromOL) return;
-          isSyncingFromKakao = true;
-          const c = kakaoOverlayMap.getCenter();
-          const olCenter = ol.proj.fromLonLat([c.getLng(), c.getLat()]);
-          map.getView().setCenter(olCenter);
-          isSyncingFromKakao = false;
-        };
-        const syncFromKakaoZoom = function () {
-          // 로드뷰 선택 모드에서는 카카오 줌 변경이 OL 줌을 강제로 바꾸지 않도록 무시
-          return;
-        };
-        kakao.maps.event.addListener(
-          kakaoOverlayMap,
-          "center_changed",
-          syncFromKakaoCenter
-        );
-        kakao.maps.event.addListener(
-          kakaoOverlayMap,
-          "zoom_changed",
-          syncFromKakaoZoom
-        );
-
-        // OL 뷰 변화 동기화 및 초기 오프셋 보정
-        const view = map.getView();
-        const c1 = view.on("change:center", syncKakaoMapWithOL);
-        const c2 = view.on("change:resolution", syncKakaoMapWithOL);
-        olViewListenersForKakao.push(c1, c2);
-        // 현재 카카오 레벨과 변환 기대값의 차이를 offset으로 저장
-        kakaoLevelOffset =
-          kakaoOverlayMap.getLevel() - olZoomToKakaoLevel(view.getZoom());
-        syncKakaoMapWithOL();
-
-        roadviewPickerActive = true;
-        if (typeof window !== "undefined") window.roadviewPickerActive = true;
-      } catch (e) {
-        console.error("로드뷰 픽커 활성화 실패:", e);
-      }
-    },
-    (err) => console.error(err)
-  );
-}
-
-function disableRoadviewPicker() {
-  try {
-    if (!roadviewPickerActive) return;
-    // 이벤트 해제
-    if (olViewListenersForKakao && olViewListenersForKakao.length) {
-      const view = map.getView();
-      olViewListenersForKakao.forEach((key) => {
-        if (key && view && view.un) {
-          try {
-            view.un("change:center", syncKakaoMapWithOL);
-          } catch {}
-          try {
-            view.un("change:resolution", syncKakaoMapWithOL);
-          } catch {}
-        }
-      });
-      olViewListenersForKakao = [];
-    }
-    // DOM 제거
-    if (kakaoOverlayDiv && kakaoOverlayDiv.parentNode) {
-      kakaoOverlayDiv.parentNode.removeChild(kakaoOverlayDiv);
-    }
-    if (roadviewEscKeyListener) {
-      document.removeEventListener("keydown", roadviewEscKeyListener);
-      roadviewEscKeyListener = null;
-    }
-    kakaoOverlayDiv = null;
-    kakaoOverlayMap = null;
-    kakaoRoadviewClient = null;
-    roadviewPickerActive = false;
-    if (typeof window !== "undefined") window.roadviewPickerActive = false;
-  } catch (e) {
-    console.error("로드뷰 픽커 비활성화 실패:", e);
-  }
-}
+export {
+  initializeMeasureTools,
+  measureDistance,
+  measureArea,
+  measureRadius,
+  measureAngle,
+  clearMeasurements,
+  createMeasurePopup,
+  closeMeasurePopup,
+  deleteMeasure,
+};

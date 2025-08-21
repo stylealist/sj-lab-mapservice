@@ -1,5 +1,5 @@
 // 메인 애플리케이션 파일
-import { initializeMap } from "./modules/map.js";
+import { initializeMapWithModules } from "./modules/map/map.js";
 import {
   initializeNavigation,
   initializeLayerPanel,
@@ -10,7 +10,7 @@ import { makeAjaxRequest, utils } from "./utils/helpers.js";
 
 // 앱 초기화
 document.addEventListener("DOMContentLoaded", function () {
-  initializeMap();
+  initializeMapWithModules();
   initializeNavigation();
   initializeLayerPanel();
   initializeHeaderToggle();
