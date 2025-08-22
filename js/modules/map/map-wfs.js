@@ -4,11 +4,24 @@ import { getMap } from "./map-core.js";
 // WFS 관련 변수들
 let wfsLayers = {};
 let wfsActive = {};
+let wfsDataCache = {}; // 캐시된 데이터 저장
+let wfsVectorSources = {}; // 벡터 소스 저장
+let wfsDataLoaded = {}; // 데이터 로드 상태 저장
+
+// 환경별 API URL 설정
+const getApiUrl = (endpoint) => {
+  const hostname = window.location.hostname;
+  if (hostname === "localhost" || hostname === "127.0.0.1") {
+    return `http://localhost:8100${endpoint}`;
+  } else {
+    return `https://api.sj-lab.co.kr${endpoint}`;
+  }
+};
 
 // WFS 서비스 설정
 const WFS_CONFIG = {
   convenience_store: {
-    url: "https://geoserver.sj-lab.co.kr/geoserver/ne/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=ne%3Aconvenience_store&maxFeatures=100000&outputFormat=application%2Fjson",
+    url: getApiUrl("/map/convenience-store"),
     name: "편의점",
     style: {
       image: new ol.style.Icon({
@@ -24,100 +37,89 @@ const WFS_CONFIG = {
 function initializeWfsLayers() {
   const map = getMap();
 
+  if (!map || !map.getView) {
+    console.error(
+      "맵 인스턴스를 찾을 수 없습니다. WFS 레이어 초기화를 건너뜁니다."
+    );
+    return;
+  }
+
   // 각 WFS 서비스에 대한 레이어 생성
   Object.keys(WFS_CONFIG).forEach((layerName) => {
     const config = WFS_CONFIG[layerName];
 
-    // 벡터 소스 생성
+    // 벡터 소스 생성 (빈 상태로 시작)
     const vectorSource = new ol.source.Vector({
-      url: config.url,
       format: new ol.format.GeoJSON({
         dataProjection: "EPSG:4326",
         featureProjection: map.getView().getProjection(),
       }),
-      strategy: ol.loadingstrategy.bbox, // 현재 화면 영역의 데이터만 로드
       wrapX: false, // 경계선을 넘어가지 않도록 설정
     });
 
-    // 데이터 로드 시작 이벤트
-    vectorSource.on("featuresloadstart", function () {
-      console.log(`${config.name} 데이터 로드 시작...`);
-      showLoadingMessage(`${config.name} 데이터 로딩 중...`);
-      updateLoadingProgress(10);
-    });
+    // 벡터 소스 저장
+    wfsVectorSources[layerName] = vectorSource;
+    wfsDataLoaded[layerName] = false; // 초기 로드 상태는 false
 
-    // 데이터 로드 진행 이벤트
-    vectorSource.on("featuresloadprogress", function (event) {
-      if (event.loaded && event.total) {
-        const percent = Math.min((event.loaded / event.total) * 100, 90);
-        updateLoadingProgress(percent);
-        showLoadingMessage(
-          `${config.name} 데이터 로딩 중... ${Math.round(percent)}%`
-        );
-      }
-    });
-
-    // 데이터 로드 완료 이벤트 추가
-    vectorSource.on("featuresloadend", function () {
-      console.log(
-        `${config.name} 데이터 로드 완료:`,
-        vectorSource.getFeatures().length,
-        "개 피처"
-      );
-      updateLoadingProgress(100);
-      setTimeout(() => {
-        hideLoadingMessage();
-      }, 500);
-
-      // 피처가 0개인 경우 URL을 직접 테스트
-      if (vectorSource.getFeatures().length === 0) {
-        console.warn(
-          `${config.name} 피처가 0개입니다. URL을 확인해주세요:`,
-          config.url
-        );
-        testWfsUrl(config.url);
-      }
-    });
-
-    vectorSource.on("featuresloaderror", function (error) {
-      console.error(`${config.name} 데이터 로드 실패:`, error);
-      hideLoadingMessage();
-    });
-
-    // 클러스터 소스 생성
+    // 클러스터 소스 생성 (줌 레벨에 따른 동적 거리 설정)
     const clusterSource = new ol.source.Cluster({
-      distance: 40, // 클러스터링 거리를 늘려서 성능 향상
+      distance: 80, // 초기 거리 설정 (더 넓게 시작하여 성능 향상)
       source: vectorSource,
     });
 
-    // 클러스터 스타일 함수
+    // 줌 레벨에 따른 클러스터 스타일 함수
     const clusterStyle = function (feature) {
       const size = feature.get("features").length;
-      if (size === 1) {
-        // 단일 피처인 경우 원본 스타일 사용
-        return new ol.style.Style(config.style);
-      } else {
-        // 클러스터인 경우 원형 스타일 사용
-        const radius = Math.min(Math.max(size * 2 + 8, 12), 40); // 최소 12, 최대 40
+      const currentMap = getMap();
+      const zoomLevel =
+        currentMap && currentMap.getView ? currentMap.getView().getZoom() : 10;
+      const clusterZoomThreshold = 12; // 클러스터 표시할 줌 레벨 임계값
+
+      // 줌 레벨이 임계값 이하이거나 클러스터 크기가 1보다 큰 경우 클러스터 표시
+      if (zoomLevel <= clusterZoomThreshold || size > 1) {
+        // 클러스터 크기에 따른 반지름 계산 (텍스트 가독성을 위해 조정)
+        const radius = Math.min(Math.max(size * 1.2 + 10, 14), 32);
+
+        // 색상 그라데이션 개선
+        let fillColor;
+        if (size > 500) fillColor = "#dc2626"; // 매우 큰 클러스터 (빨강)
+        else if (size > 200) fillColor = "#ea580c"; // 큰 클러스터 (주황)
+        else if (size > 100) fillColor = "#f97316"; // 중간 클러스터 (밝은 주황)
+        else if (size > 50) fillColor = "#fb923c"; // 작은 클러스터 (연한 주황)
+        else fillColor = "#fdba74"; // 매우 작은 클러스터 (매우 연한 주황)
+
         return new ol.style.Style({
           image: new ol.style.Circle({
             radius: radius,
             fill: new ol.style.Fill({
-              color: size > 100 ? "#ff4444" : size > 50 ? "#ff6b35" : "#ff8c42", // 크기에 따라 색상 변경
+              color: fillColor,
             }),
             stroke: new ol.style.Stroke({
               color: "#ffffff",
-              width: 2,
+              width: 1.5,
             }),
           }),
           text: new ol.style.Text({
-            text: size > 999 ? (size / 1000).toFixed(1) + "k" : size.toString(), // 1000개 이상이면 k 단위로 표시
+            text: size > 999 ? Math.floor(size / 1000) + "k" : size.toString(),
             fill: new ol.style.Fill({
-              color: "#ffffff",
+              color: "#000000", // 모든 텍스트를 검은색으로 통일
             }),
-            font: size > 999 ? "bold 12px Arial" : "bold 14px Arial",
+            font:
+              size > 999
+                ? "bold 13px 'Segoe UI', Arial, sans-serif"
+                : "bold 14px 'Segoe UI', Arial, sans-serif",
+            stroke: new ol.style.Stroke({
+              color: "#ffffff", // 모든 텍스트를 흰색 테두리로 통일
+              width: 1.5,
+            }),
+            offsetY: 0, // 수직 오프셋 제거
+            textAlign: "center",
+            textBaseline: "middle",
           }),
         });
+      } else {
+        // 줌 레벨이 높고 단일 피처인 경우 개별 아이콘 표시
+        return new ol.style.Style(config.style);
       }
     };
 
@@ -126,8 +128,45 @@ function initializeWfsLayers() {
       source: clusterSource,
       style: clusterStyle,
       visible: false, // 초기에는 비활성화
+      renderBuffer: 50, // 렌더링 버퍼 증가
+      updateWhileAnimating: false, // 애니메이션 중 업데이트 비활성화
+      updateWhileInteracting: false, // 상호작용 중 업데이트 비활성화
     });
     clusterLayer.setZIndex(1000);
+
+    // 줌 변경 시 스타일 및 클러스터 거리 업데이트 (디바운싱 적용)
+    let zoomUpdateTimeout;
+    map.getView().on("change:resolution", function () {
+      if (wfsActive[layerName]) {
+        // 이전 타임아웃 클리어
+        if (zoomUpdateTimeout) {
+          clearTimeout(zoomUpdateTimeout);
+        }
+
+        // 200ms 후에 업데이트 실행 (디바운싱)
+        zoomUpdateTimeout = setTimeout(() => {
+          // 클러스터 거리 재계산 (더 보수적으로 조정)
+          const newDistance = (function () {
+            const currentMap = getMap();
+            if (!currentMap || !currentMap.getView) {
+              return 80; // 기본값을 더 크게 설정
+            }
+            const zoomLevel = currentMap.getView().getZoom();
+            if (zoomLevel <= 8) return 150; // 더 넓게
+            if (zoomLevel <= 10) return 100; // 더 넓게
+            if (zoomLevel <= 12) return 80; // 더 넓게
+            if (zoomLevel <= 14) return 60; // 더 넓게
+            return 40; // 더 넓게
+          })();
+
+          // 클러스터 소스 거리 업데이트
+          clusterSource.setDistance(newDistance);
+
+          // 레이어 스타일 업데이트
+          clusterLayer.changed();
+        }, 200);
+      }
+    });
 
     // 맵에 레이어 추가
     map.addLayer(clusterLayer);
@@ -136,7 +175,9 @@ function initializeWfsLayers() {
     wfsLayers[layerName] = clusterLayer;
     wfsActive[layerName] = false;
 
-    console.log(`WFS 클러스터 레이어 생성됨: ${config.name}`);
+    console.log(
+      `WFS 클러스터 레이어 생성됨: ${config.name} (데이터 로드 대기 중)`
+    );
   });
 
   // 맵 클릭 이벤트 추가 (WFS 피처 정보 표시 및 클러스터 확대)
@@ -157,6 +198,14 @@ function initializeWfsLayers() {
           duration: 500,
           padding: [50, 50, 50, 50],
         });
+        return;
+      } else if (features && features.length === 1) {
+        // 단일 피처인 경우 팝업 표시
+        console.log(
+          "클러스터에서 단일 피처 클릭:",
+          features[0].getProperties()
+        );
+        displayWfsFeatureInfo(evt);
         return;
       }
     }
@@ -190,6 +239,9 @@ function initializeWfsLayers() {
   // 전역 변수로 저장
   window.wfsLayers = wfsLayers;
   window.wfsActive = wfsActive;
+  window.wfsDataCache = wfsDataCache;
+  window.wfsVectorSources = wfsVectorSources;
+  window.wfsDataLoaded = wfsDataLoaded;
 }
 
 // WFS 레이어 토글
@@ -212,38 +264,169 @@ function toggleWfsLayer(layerName) {
   return !isVisible;
 }
 
-// 편의점 레이어 토글 (UI에서 사용) - WMS 전용
-function toggleConvenienceStore() {
-  // WMS 레이어가 있으면 WMS 사용
-  if (window.wmsLayers && window.wmsLayers.convenience_store) {
-    const isActive = window.toggleWmsLayer("convenience_store");
+// WFS 데이터 로드 함수
+function loadWfsData(layerName) {
+  const config = WFS_CONFIG[layerName];
+  const vectorSource = wfsVectorSources[layerName];
 
-    // WFS 레이어가 활성화되어 있다면 비활성화
-    if (wfsLayers.convenience_store && wfsActive.convenience_store) {
-      toggleWfsLayer("convenience_store");
+  // 이미 로드된 경우 캐시된 데이터 사용
+  if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
+    console.log(
+      `${config.name} 캐시된 데이터 사용: ${wfsDataCache[layerName].length} 개 피처`
+    );
+    vectorSource.addFeatures(wfsDataCache[layerName]);
+    return Promise.resolve();
+  }
+
+  // 로딩 시작 표시
+  showLoadingMessage(`${config.name} 데이터 로딩 중...`);
+  updateLoadingProgress(10);
+
+  // 점진적 로딩 진행을 위한 타이머
+  let progressInterval = setInterval(() => {
+    const currentProgress = parseInt(
+      document.querySelector(".loading-progress")?.style.width || "10%"
+    );
+    if (currentProgress < 80) {
+      updateLoadingProgress(currentProgress + 2);
     }
+  }, 200);
 
-    // 버튼 상태 업데이트
-    const button = document.getElementById("wfsConvenienceBtn");
-    if (button) {
-      if (isActive) {
-        button.classList.add("active");
-        button.title = "편의점 레이어 끄기 (WMS)";
+  return fetch(config.url)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      // 점진적 로딩 타이머 정리
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+
+      const features = vectorSource.getFormat().readFeatures(data, {
+        dataProjection: "EPSG:4326",
+        featureProjection: vectorSource.getProjection(),
+      });
+
+      // 데이터를 캐시에 저장
+      wfsDataCache[layerName] = features;
+      wfsDataLoaded[layerName] = true;
+
+      // 벡터 소스에 피처 추가
+      vectorSource.addFeatures(features);
+
+      console.log(
+        `${config.name} 데이터 로드 완료: ${features.length} 개 피처`
+      );
+
+      // 첫 번째 피처의 속성 확인 (디버깅용)
+      if (features.length > 0) {
+        const firstFeature = features[0];
+        console.log("첫 번째 피처 속성:", firstFeature.getProperties());
+      }
+
+      // 데이터 로드 완료 후 클러스터 거리 설정
+      const clusterSource = wfsLayers[layerName].getSource();
+      const map = getMap();
+
+      if (map && map.getView) {
+        const zoomLevel = map.getView().getZoom();
+        let clusterDistance = 80; // 기본값을 더 크게 설정
+
+        if (zoomLevel <= 8) clusterDistance = 150;
+        else if (zoomLevel <= 10) clusterDistance = 100;
+        else if (zoomLevel <= 12) clusterDistance = 80;
+        else if (zoomLevel <= 14) clusterDistance = 60;
+        else clusterDistance = 40;
+
+        clusterSource.setDistance(clusterDistance);
+        console.log(
+          `${config.name} 클러스터 거리 설정: ${clusterDistance} (줌 레벨: ${zoomLevel})`
+        );
       } else {
+        console.warn(
+          "맵 인스턴스를 찾을 수 없어 기본 클러스터 거리를 사용합니다."
+        );
+        clusterSource.setDistance(60);
+      }
+
+      // 로딩 완료 처리
+      updateLoadingProgress(100);
+      setTimeout(() => {
+        hideLoadingMessage();
+      }, 500);
+    })
+    .catch((error) => {
+      // 점진적 로딩 타이머 정리
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+
+      console.error(`${config.name} 데이터 로드 실패:`, error);
+      hideLoadingMessage();
+      throw error;
+    });
+}
+
+// 편의점 레이어 토글 (UI에서 사용) - WFS 전용
+function toggleConvenienceStore() {
+  // WFS 레이어 사용
+  if (wfsLayers.convenience_store) {
+    const layer = wfsLayers.convenience_store;
+    const isVisible = layer.getVisible();
+
+    if (!isVisible) {
+      // 레이어를 활성화할 때 데이터 로드
+      loadWfsData("convenience_store")
+        .then(() => {
+          // 데이터 로드 완료 후 레이어 활성화
+          layer.setVisible(true);
+          wfsActive.convenience_store = true;
+
+          // 클러스터 강제 업데이트
+          const clusterSource = layer.getSource();
+          clusterSource.refresh();
+
+          // WMS 레이어가 활성화되어 있다면 비활성화
+          if (
+            window.wmsLayers &&
+            window.wmsLayers.convenience_store &&
+            window.wmsActive.convenience_store
+          ) {
+            window.toggleWmsLayer("convenience_store");
+          }
+
+          // 버튼 상태 업데이트
+          const button = document.getElementById("wfsConvenienceBtn");
+          if (button) {
+            button.classList.add("active");
+            button.title = "편의점 레이어 끄기 (WFS)";
+          }
+        })
+        .catch((error) => {
+          console.error("편의점 데이터 로드 실패:", error);
+          alert("편의점 데이터를 불러오는데 실패했습니다.");
+        });
+    } else {
+      // 레이어를 비활성화
+      layer.setVisible(false);
+      wfsActive.convenience_store = false;
+
+      // 버튼 상태 업데이트
+      const button = document.getElementById("wfsConvenienceBtn");
+      if (button) {
         button.classList.remove("active");
-        button.title = "편의점 레이어 켜기 (WMS)";
+        button.title = "편의점 레이어 켜기 (WFS)";
       }
     }
 
-    return isActive;
+    return !isVisible;
   } else {
-    // WMS가 없으면 오류 메시지
-    console.error(
-      "WMS 레이어를 찾을 수 없습니다. WMS 모듈이 초기화되었는지 확인하세요."
-    );
-    alert(
-      "WMS 레이어를 사용할 수 없습니다. WMS 모듈이 초기화되었는지 확인하세요."
-    );
+    // WFS 레이어가 없으면 오류 메시지
+    console.error("WFS 편의점 레이어를 찾을 수 없습니다.");
+    alert("편의점 레이어를 사용할 수 없습니다.");
     return false;
   }
 }
@@ -316,6 +499,7 @@ function displayWfsFeatureInfo(evt) {
 
     if (features.length > 0) {
       featureFound = true;
+      console.log("클릭된 피처:", features[0].getProperties());
       showWfsPopup(coordinate, features[0], layerName);
     }
   });
@@ -329,6 +513,10 @@ function showWfsPopup(coordinate, feature, layerName) {
   const config = WFS_CONFIG[layerName];
   const properties = feature.getProperties();
 
+  // 디버깅: 피처 속성 확인
+  console.log("WFS 팝업 - 피처 속성:", properties);
+  console.log("WFS 팝업 - 레이어명:", layerName);
+
   // 기존 팝업 제거
   const existingPopup = document.getElementById("wfs-popup");
   if (existingPopup) {
@@ -340,58 +528,96 @@ function showWfsPopup(coordinate, feature, layerName) {
   popup.id = "wfs-popup";
   popup.className = "wfs-popup";
 
+  // 중첩된 데이터 구조에서 실제 값 추출
+  const getPropertyValue = (properties, key) => {
+    if (
+      properties.features &&
+      properties.features[0] &&
+      properties.features[0].values_
+    ) {
+      return properties.features[0].values_[key] || "정보 없음";
+    }
+    // 기존 구조도 시도
+    return properties[key] || "정보 없음";
+  };
+
   let content = `<div class="wfs-popup-header">
-    <h4>${config.name} 정보</h4>
+    <div class="wfs-popup-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+      </svg>
+      편의점 정보
+    </div>
     <button class="wfs-popup-close" onclick="closeWfsPopup()">×</button>
   </div>
-  <div class="wfs-popup-content">`;
-
-  // 편의점 정보 표시
-  if (layerName === "convenience_store") {
-    content += `
-      <div class="wfs-info-item">
-        <strong>상호명:</strong> ${properties.fclty_nm || "N/A"}
-      </div>
-      <div class="wfs-info-item">
-        <strong>주소:</strong> ${properties.adres || "N/A"}
-      </div>
-      <div class="wfs-info-item">
-        <strong>도로명주소:</strong> ${properties.rn_adres || "N/A"}
-      </div>
-    `;
-  }
-
-  content += `</div>`;
+  <div class="wfs-popup-content">
+    <div class="wfs-info-item">
+      <span class="wfs-info-label">상호명</span>
+      <span class="wfs-info-value">${getPropertyValue(
+        properties,
+        "fclty_nm"
+      )}</span>
+    </div>
+    <div class="wfs-info-item">
+      <span class="wfs-info-label">주소</span>
+      <span class="wfs-info-value">${getPropertyValue(
+        properties,
+        "adres"
+      )}</span>
+    </div>
+    <div class="wfs-info-item">
+      <span class="wfs-info-label">도로명주소</span>
+      <span class="wfs-info-value">${getPropertyValue(
+        properties,
+        "rn_adres"
+      )}</span>
+    </div>
+  </div>`;
   popup.innerHTML = content;
 
   // 팝업 스타일 적용
   popup.style.cssText = `
     position: absolute;
     background: white;
-    border: 2px solid #3b82f6;
+    border: none;
     border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     padding: 0;
-    min-width: 250px;
-    max-width: 350px;
-    font-family: Arial, sans-serif;
+    min-width: 300px;
+    max-width: 400px;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     z-index: 2000;
     transform: translate(-50%, -100%);
-    margin-top: -10px;
+    margin-top: -8px;
+    overflow: hidden;
   `;
 
-  // 헤더 스타일
+  // 헤더 스타일 (사이트 헤더와 동일한 색상)
   const header = popup.querySelector(".wfs-popup-header");
   if (header) {
     header.style.cssText = `
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px;
-      background: #3b82f6;
+      padding: 12px 16px;
+      background: linear-gradient(135deg, rgb(30, 41, 59) 0%, rgb(51, 65, 85) 50%, rgb(71, 85, 105) 100%);
       color: white;
-      border-radius: 6px 6px 0 0;
       margin: 0;
+      font-weight: 600;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+  }
+
+  // 타이틀 스타일
+  const title = popup.querySelector(".wfs-popup-title");
+  if (title) {
+    title.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
     `;
   }
 
@@ -399,35 +625,80 @@ function showWfsPopup(coordinate, feature, layerName) {
   const closeBtn = popup.querySelector(".wfs-popup-close");
   if (closeBtn) {
     closeBtn.style.cssText = `
-      background: none;
+      background: rgba(255, 255, 255, 0.1);
       border: none;
       color: white;
-      font-size: 18px;
       cursor: pointer;
-      padding: 0;
-      width: 20px;
-      height: 20px;
+      padding: 4px 8px;
+      font-size: 18px;
+      font-weight: 300;
       display: flex;
       align-items: center;
       justify-content: center;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+      min-width: 24px;
+      height: 24px;
     `;
   }
+
+  // 닫기 버튼 호버 효과
+  closeBtn.addEventListener("mouseenter", function () {
+    this.style.background = "rgba(255, 255, 255, 0.2)";
+  });
+
+  closeBtn.addEventListener("mouseleave", function () {
+    this.style.background = "rgba(255, 255, 255, 0.1)";
+  });
 
   // 콘텐츠 스타일
   const content_el = popup.querySelector(".wfs-popup-content");
   if (content_el) {
     content_el.style.cssText = `
-      padding: 12px;
+      padding: 16px;
+      background: white;
     `;
   }
 
   // 정보 아이템 스타일
   const infoItems = popup.querySelectorAll(".wfs-info-item");
-  infoItems.forEach((item) => {
+  infoItems.forEach((item, index) => {
     item.style.cssText = `
-      margin-bottom: 8px;
-      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: ${index === infoItems.length - 1 ? "0" : "12px"};
+      padding: 8px 0;
+      border-bottom: ${
+        index === infoItems.length - 1 ? "none" : "1px solid #e2e8f0"
+      };
+    `;
+  });
+
+  // 라벨 스타일
+  const labels = popup.querySelectorAll(".wfs-info-label");
+  labels.forEach((label) => {
+    label.style.cssText = `
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+      flex-shrink: 0;
+      width: 80px;
+      margin-right: 12px;
+    `;
+  });
+
+  // 값 스타일
+  const values = popup.querySelectorAll(".wfs-info-value");
+  values.forEach((value) => {
+    value.style.cssText = `
+      font-size: 13px;
+      font-weight: 500;
+      color: #334155;
       line-height: 1.4;
+      word-break: break-word;
+      flex: 1;
+      text-align: right;
     `;
   });
 
@@ -627,6 +898,7 @@ export {
   initializeWfsLayers,
   toggleWfsLayer,
   toggleConvenienceStore,
+  loadWfsData,
   clearAllWfsLayers,
   queryWfsFeaturesAt,
   getWfsLayerInfo,
