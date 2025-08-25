@@ -61,110 +61,204 @@ function initializeWfsLayers() {
     wfsVectorSources[layerName] = vectorSource;
     wfsDataLoaded[layerName] = false; // 초기 로드 상태는 false
 
-    // 클러스터 소스 생성 (줌 레벨에 따른 동적 거리 설정)
+    // 클러스터 소스 생성 (성능 최적화된 거리 설정)
     const clusterSource = new ol.source.Cluster({
-      distance: 80, // 초기 거리 설정 (더 넓게 시작하여 성능 향상)
+      distance: 120, // 초기 거리를 더 크게 설정하여 성능 향상
       source: vectorSource,
+      geometryFunction: function (feature) {
+        // 성능 최적화: 피처의 geometry가 유효한지 확인
+        const geometry = feature.getGeometry();
+        return geometry && geometry.getType() === "Point" ? geometry : null;
+      },
+      // 성능 최적화 추가 옵션
+      wrapX: false, // 경계선을 넘어가지 않도록 설정
+      minDistance: 20, // 최소 클러스터 거리 설정
+      // 추가 성능 최적화 옵션
+      extent: undefined, // 전체 범위 클러스터링
+      maxZoom: 18, // 최대 줌 레벨 제한
     });
 
-    // 줌 레벨에 따른 클러스터 스타일 함수
+    // 성능 최적화된 클러스터 스타일 함수 (Canvas 이미지 기반)
+    const styleCache = {};
     const clusterStyle = function (feature) {
       const size = feature.get("features").length;
+
+      // 캐시된 스타일이 있으면 반환
+      if (styleCache[size]) {
+        return styleCache[size];
+      }
+
+      // 줌 레벨 확인 (성능 최적화: 맵 인스턴스 캐싱)
       const currentMap = getMap();
       const zoomLevel =
         currentMap && currentMap.getView ? currentMap.getView().getZoom() : 10;
-      const clusterZoomThreshold = 12; // 클러스터 표시할 줌 레벨 임계값
+      const clusterZoomThreshold = 13; // 클러스터 표시할 줌 레벨 임계값을 높임
 
       // 줌 레벨이 임계값 이하이거나 클러스터 크기가 1보다 큰 경우 클러스터 표시
       if (zoomLevel <= clusterZoomThreshold || size > 1) {
-        // 클러스터 크기에 따른 반지름 계산 (텍스트 가독성을 위해 조정)
-        const radius = Math.min(Math.max(size * 1.2 + 10, 14), 32);
+        // 클러스터 크기에 따른 캔버스 크기 계산 (더 작게 조정)
+        const canvasSize = Math.min(Math.max(size * 1.2 + 20, 30), 50);
+        const radius = canvasSize / 2;
 
-        // 색상 그라데이션 개선
+        // 색상 그라데이션 (성능 최적화: 조건 단순화)
         let fillColor;
-        if (size > 500) fillColor = "#dc2626"; // 매우 큰 클러스터 (빨강)
-        else if (size > 200) fillColor = "#ea580c"; // 큰 클러스터 (주황)
-        else if (size > 100) fillColor = "#f97316"; // 중간 클러스터 (밝은 주황)
-        else if (size > 50) fillColor = "#fb923c"; // 작은 클러스터 (연한 주황)
-        else fillColor = "#fdba74"; // 매우 작은 클러스터 (매우 연한 주황)
+        if (size > 200) fillColor = "#dc2626"; // 빨강
+        else if (size > 100) fillColor = "#ea580c"; // 주황
+        else if (size > 50) fillColor = "#f97316"; // 밝은 주황
+        else if (size > 20) fillColor = "#fb923c"; // 연한 주황
+        else fillColor = "#fdba74"; // 매우 연한 주황
 
-        return new ol.style.Style({
-          image: new ol.style.Circle({
-            radius: radius,
-            fill: new ol.style.Fill({
-              color: fillColor,
-            }),
-            stroke: new ol.style.Stroke({
-              color: "#ffffff",
-              width: 1.5,
-            }),
-          }),
-          text: new ol.style.Text({
-            text: size > 999 ? Math.floor(size / 1000) + "k" : size.toString(),
-            fill: new ol.style.Fill({
-              color: "#000000", // 모든 텍스트를 검은색으로 통일
-            }),
-            font:
-              size > 999
-                ? "bold 13px 'Segoe UI', Arial, sans-serif"
-                : "bold 14px 'Segoe UI', Arial, sans-serif",
-            stroke: new ol.style.Stroke({
-              color: "#ffffff", // 모든 텍스트를 흰색 테두리로 통일
-              width: 1.5,
-            }),
-            offsetY: 0, // 수직 오프셋 제거
-            textAlign: "center",
-            textBaseline: "middle",
+        // Canvas를 사용하여 클러스터 이미지 생성
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        canvas.width = canvasSize;
+        canvas.height = canvasSize;
+
+        // 배경 원 그리기
+        context.beginPath();
+        context.arc(radius, radius, radius - 1, 0, 2 * Math.PI, false);
+        context.fillStyle = fillColor;
+        context.fill();
+
+        // 테두리 그리기
+        context.lineWidth = 1.5;
+        context.strokeStyle = "#ffffff";
+        context.stroke();
+
+        // 텍스트(클러스터 개수) 추가 (적절한 폰트 크기)
+        context.fillStyle = "#000000";
+        context.font =
+          size > 999
+            ? `bold ${Math.max(
+                10,
+                canvasSize / 5
+              )}px 'Segoe UI', Arial, sans-serif`
+            : `bold ${Math.max(
+                12,
+                canvasSize / 4
+              )}px 'Segoe UI', Arial, sans-serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+
+        // 텍스트에 흰색 테두리 추가
+        context.strokeStyle = "#ffffff";
+        context.lineWidth = 1;
+        const text =
+          size > 999 ? Math.floor(size / 1000) + "k" : size.toString();
+        context.strokeText(text, radius, radius);
+        context.fillText(text, radius, radius);
+
+        // Canvas 이미지를 스타일로 설정
+        const style = new ol.style.Style({
+          image: new ol.style.Icon({
+            img: canvas,
+            imgSize: [canvasSize, canvasSize],
+            scale: 1.0,
+            anchor: [0.5, 0.5],
           }),
         });
+
+        // 스타일 캐싱 (성능 향상)
+        styleCache[size] = style;
+        return style;
       } else {
-        // 줌 레벨이 높고 단일 피처인 경우 개별 아이콘 표시
+        // 단일 피처인 경우 개별 아이콘 표시
         return new ol.style.Style(config.style);
       }
     };
 
-    // 클러스터 레이어 생성
+    // 클러스터 레이어 생성 (성능 최적화 옵션 추가)
     const clusterLayer = new ol.layer.Vector({
       source: clusterSource,
       style: clusterStyle,
       visible: false, // 초기에는 비활성화
-      renderBuffer: 50, // 렌더링 버퍼 증가
+      renderBuffer: 100, // 렌더링 버퍼 증가
       updateWhileAnimating: false, // 애니메이션 중 업데이트 비활성화
       updateWhileInteracting: false, // 상호작용 중 업데이트 비활성화
+      // 성능 최적화 추가 옵션
+      declutter: true, // 피처 겹침 방지
+      zIndex: 1000,
+      // 추가 성능 최적화 옵션
+      renderOrder: null, // 렌더링 순서 최적화
+      extent: undefined, // 전체 범위 렌더링
+      minResolution: 0, // 최소 해상도 제한 없음
+      maxResolution: Infinity, // 최대 해상도 제한 없음
     });
-    clusterLayer.setZIndex(1000);
 
-    // 줌 변경 시 스타일 및 클러스터 거리 업데이트 (디바운싱 적용)
+    // 성능 최적화된 줌 변경 이벤트 처리 (디바운싱 및 스로틀링 적용)
     let zoomUpdateTimeout;
+    let lastZoomLevel = -1;
+    let isUpdating = false;
+    let lastDistance = 120; // 마지막 설정된 거리 추적
+
     map.getView().on("change:resolution", function () {
-      if (wfsActive[layerName]) {
+      if (wfsActive[layerName] && !isUpdating) {
+        const currentZoom = Math.floor(map.getView().getZoom());
+
+        // 줌 레벨이 실제로 변경되었는지 확인 (성능 최적화)
+        if (currentZoom === lastZoomLevel) {
+          return;
+        }
+
+        lastZoomLevel = currentZoom;
+
         // 이전 타임아웃 클리어
         if (zoomUpdateTimeout) {
           clearTimeout(zoomUpdateTimeout);
         }
 
-        // 200ms 후에 업데이트 실행 (디바운싱)
+        // 300ms 후에 업데이트 실행 (디바운싱 시간 증가)
         zoomUpdateTimeout = setTimeout(() => {
-          // 클러스터 거리 재계산 (더 보수적으로 조정)
+          if (isUpdating) return;
+          isUpdating = true;
+
+          // 성능 최적화된 클러스터 거리 계산
           const newDistance = (function () {
-            const currentMap = getMap();
-            if (!currentMap || !currentMap.getView) {
-              return 80; // 기본값을 더 크게 설정
-            }
-            const zoomLevel = currentMap.getView().getZoom();
-            if (zoomLevel <= 8) return 150; // 더 넓게
-            if (zoomLevel <= 10) return 100; // 더 넓게
-            if (zoomLevel <= 12) return 80; // 더 넓게
-            if (zoomLevel <= 14) return 60; // 더 넓게
-            return 40; // 더 넓게
+            if (currentZoom <= 8) return 250; // 더 넓게
+            if (currentZoom <= 10) return 200; // 더 넓게
+            if (currentZoom <= 12) return 150; // 더 넓게
+            if (currentZoom <= 14) return 100; // 더 넓게
+            return 80; // 더 넓게
           })();
 
-          // 클러스터 소스 거리 업데이트
-          clusterSource.setDistance(newDistance);
+          // 거리가 실제로 변경된 경우에만 업데이트 (성능 최적화)
+          if (newDistance !== lastDistance) {
+            // 클러스터 소스 거리 업데이트
+            clusterSource.setDistance(newDistance);
+            lastDistance = newDistance;
 
-          // 레이어 스타일 업데이트
-          clusterLayer.changed();
-        }, 200);
+            // 줌 레벨 변경 시 데이터 재필터링 (성능 최적화)
+            if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
+              // 기존 피처 제거
+              vectorSource.clear();
+
+              // 새로운 줌 레벨에 맞는 데이터만 추가
+              const filteredFeatures = filterFeaturesByZoomAndViewport(
+                wfsDataCache[layerName],
+                layerName
+              );
+              vectorSource.addFeatures(filteredFeatures);
+
+              console.log(
+                `${config.name} 줌 변경으로 데이터 재필터링: ${filteredFeatures.length} 개 피처`
+              );
+            }
+
+            // 스타일 캐시 클리어 (줌 레벨 변경 시) - 선택적 클리어
+            if (Object.keys(styleCache).length > 10) {
+              // 캐시가 너무 많을 때만 클리어
+              Object.keys(styleCache).forEach((key) => delete styleCache[key]);
+            }
+
+            // 레이어 스타일 업데이트 (성능 최적화)
+            requestAnimationFrame(() => {
+              clusterLayer.changed();
+              isUpdating = false;
+            });
+          } else {
+            isUpdating = false;
+          }
+        }, 300);
       }
     });
 
@@ -180,60 +274,80 @@ function initializeWfsLayers() {
     );
   });
 
-  // 맵 클릭 이벤트 추가 (WFS 피처 정보 표시 및 클러스터 확대)
+  // 성능 최적화된 맵 클릭 이벤트 (디바운싱 적용)
+  let clickTimeout;
   map.on("click", function (evt) {
-    const feature = map.forEachFeatureAtPixel(evt.pixel, function (feature) {
-      return feature;
-    });
-
-    if (feature) {
-      // 클러스터인지 확인
-      const features = feature.get("features");
-      if (features && features.length > 1) {
-        // 클러스터인 경우 확대
-        const extent = new ol.source.Vector({
-          features: features,
-        }).getExtent();
-        map.getView().fit(extent, {
-          duration: 500,
-          padding: [50, 50, 50, 50],
-        });
-        return;
-      } else if (features && features.length === 1) {
-        // 단일 피처인 경우 팝업 표시
-        console.log(
-          "클러스터에서 단일 피처 클릭:",
-          features[0].getProperties()
-        );
-        displayWfsFeatureInfo(evt);
-        return;
-      }
+    if (clickTimeout) {
+      clearTimeout(clickTimeout);
     }
 
-    // 일반 피처 정보 표시
-    displayWfsFeatureInfo(evt);
+    clickTimeout = setTimeout(() => {
+      const feature = map.forEachFeatureAtPixel(evt.pixel, function (feature) {
+        return feature;
+      });
+
+      if (feature) {
+        // 클러스터인지 확인
+        const features = feature.get("features");
+        if (features && features.length > 1) {
+          // 클러스터인 경우 확대
+          const extent = new ol.source.Vector({
+            features: features,
+          }).getExtent();
+          map.getView().fit(extent, {
+            duration: 500,
+            padding: [50, 50, 50, 50],
+          });
+          return;
+        } else if (features && features.length === 1) {
+          // 단일 피처인 경우 팝업 표시
+          console.log(
+            "클러스터에서 단일 피처 클릭:",
+            features[0].getProperties()
+          );
+          displayWfsFeatureInfo(evt);
+          return;
+        }
+      }
+
+      // 일반 피처 정보 표시
+      displayWfsFeatureInfo(evt);
+    }, 50); // 50ms 디바운싱
   });
 
-  // 마우스 오버 이벤트 추가 (커서 변경)
-  map.on("pointermove", function (evt) {
-    const pixel = map.getEventPixel(evt.originalEvent);
-    const hit = map.hasFeatureAtPixel(pixel);
+  // 성능 최적화된 마우스 오버 이벤트 (스로틀링 적용)
+  let pointerMoveTimeout;
+  let lastCursorState = null;
 
-    // 활성화된 WFS 레이어에 피처가 있는지 확인
-    let hasWfsFeature = false;
-    if (hit) {
-      map.forEachFeatureAtPixel(pixel, function (feature, layer) {
-        // WFS 레이어인지 확인
-        Object.values(wfsLayers).forEach((wfsLayer) => {
-          if (layer === wfsLayer && wfsLayer.getVisible()) {
-            hasWfsFeature = true;
-          }
-        });
-      });
+  map.on("pointermove", function (evt) {
+    if (pointerMoveTimeout) {
+      clearTimeout(pointerMoveTimeout);
     }
 
-    // 커서 스타일 변경
-    map.getTargetElement().style.cursor = hasWfsFeature ? "pointer" : "";
+    pointerMoveTimeout = setTimeout(() => {
+      const pixel = map.getEventPixel(evt.originalEvent);
+      const hit = map.hasFeatureAtPixel(pixel);
+
+      // 활성화된 WFS 레이어에 피처가 있는지 확인
+      let hasWfsFeature = false;
+      if (hit) {
+        map.forEachFeatureAtPixel(pixel, function (feature, layer) {
+          // WFS 레이어인지 확인
+          Object.values(wfsLayers).forEach((wfsLayer) => {
+            if (layer === wfsLayer && wfsLayer.getVisible()) {
+              hasWfsFeature = true;
+            }
+          });
+        });
+      }
+
+      // 커서 상태가 변경된 경우에만 업데이트 (성능 최적화)
+      const newCursorState = hasWfsFeature ? "pointer" : "";
+      if (newCursorState !== lastCursorState) {
+        map.getTargetElement().style.cursor = newCursorState;
+        lastCursorState = newCursorState;
+      }
+    }, 16); // 약 60fps로 제한
   });
 
   // 전역 변수로 저장
@@ -274,7 +388,21 @@ function loadWfsData(layerName) {
     console.log(
       `${config.name} 캐시된 데이터 사용: ${wfsDataCache[layerName].length} 개 피처`
     );
-    vectorSource.addFeatures(wfsDataCache[layerName]);
+
+    // 벡터 소스가 비어있는 경우에만 피처 추가 (중복 방지)
+    const currentFeatures = vectorSource.getFeatures();
+    if (currentFeatures.length === 0) {
+      // 성능 최적화: 줌 레벨과 뷰포트 기반 필터링
+      const filteredFeatures = filterFeaturesByZoomAndViewport(
+        wfsDataCache[layerName],
+        layerName
+      );
+      vectorSource.addFeatures(filteredFeatures);
+      console.log(
+        `${config.name} 필터링된 데이터: ${filteredFeatures.length} 개 피처 (전체: ${wfsDataCache[layerName].length} 개)`
+      );
+    }
+
     return Promise.resolve();
   }
 
@@ -282,18 +410,79 @@ function loadWfsData(layerName) {
   showLoadingMessage(`${config.name} 데이터 로딩 중...`);
   updateLoadingProgress(10);
 
-  // 점진적 로딩 진행을 위한 타이머
+  // 점진적 로딩 진행을 위한 타이머 (더 자연스러운 진행률)
   let progressInterval = setInterval(() => {
     const currentProgress = parseInt(
-      document.querySelector(".loading-progress")?.style.width || "10%"
+      document.querySelector("#wfs-progress")?.style.width || "0%"
     );
-    if (currentProgress < 80) {
-      updateLoadingProgress(currentProgress + 2);
+
+    // 서버 응답을 기다리는 동안 10%에서 70%까지 천천히 증가
+    if (currentProgress < 70) {
+      // 진행률이 낮을 때는 빠르게, 높을 때는 천천히 증가
+      let increment = 0.5; // 기본 증가값
+
+      // 진행률 구간별 증가값 조정 (더 명확한 구간 설정)
+      if (currentProgress < 30) {
+        increment = 1.2; // 서버 연결 중 (10-30%) - 더 빠르게
+      } else if (currentProgress < 50) {
+        increment = 1.0; // 데이터 요청 중 (30-50%) - 확실히 진행
+      } else if (currentProgress < 70) {
+        increment = 0.8; // 서버 응답 대기 중 (50-70%) - 적당히
+      }
+
+      // 서버 응답 시간이 길어질수록 더 천천히 증가
+      const elapsedTime = Date.now() - startTime;
+      if (elapsedTime > 5000) {
+        // 5초 이상 걸리면 더 천천히
+        increment *= 0.4;
+      } else if (elapsedTime > 3000) {
+        // 3초 이상 걸리면 더 천천히
+        increment *= 0.6;
+      } else if (elapsedTime > 2000) {
+        // 2초 이상 걸리면 조금 천천히
+        increment *= 0.8;
+      }
+
+      // 최소 증가값 보장 (너무 느리지 않도록)
+      increment = Math.max(increment, 0.4);
+
+      updateLoadingProgress(currentProgress + increment);
+
+      // 디버깅용 로그 (개발 중에만 사용)
+      console.log(
+        `진행률: ${currentProgress.toFixed(1)}% → ${(
+          currentProgress + increment
+        ).toFixed(1)}% (${config.name}) - 구간: ${
+          currentProgress < 30
+            ? "서버 연결"
+            : currentProgress < 50
+            ? "데이터 요청"
+            : "서버 응답 대기"
+        }`
+      );
+
+      // 로딩 메시지 업데이트 (진행 상황에 따라)
+      if (currentProgress < 30) {
+        showLoadingMessage(`${config.name} 서버 연결 중...`);
+      } else if (currentProgress < 50) {
+        showLoadingMessage(`${config.name} 데이터 요청 중...`);
+      } else {
+        showLoadingMessage(`${config.name} 서버 응답 대기 중...`);
+      }
     }
-  }, 200);
+  }, 100); // 100ms마다 업데이트 (더 부드러운 진행)
+
+  // 서버 요청 시작 시간 기록
+  const startTime = Date.now();
+  let isServerResponded = false;
 
   return fetch(config.url)
     .then((response) => {
+      // 서버 응답 시작
+      isServerResponded = true;
+      const responseTime = Date.now() - startTime;
+      console.log(`${config.name} 서버 응답 시간: ${responseTime}ms`);
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -305,6 +494,26 @@ function loadWfsData(layerName) {
         clearInterval(progressInterval);
       }
 
+      // 서버 응답 후 데이터 처리 시작 (70%에서 90%로 점진적 증가)
+      let dataProcessInterval = setInterval(() => {
+        const currentProgress = parseInt(
+          document.querySelector("#wfs-progress")?.style.width || "70%"
+        );
+
+        if (currentProgress < 90) {
+          updateLoadingProgress(currentProgress + 1); // 더 작은 증가값
+
+          // 데이터 처리 단계 메시지 업데이트
+          if (currentProgress < 80) {
+            showLoadingMessage(`${config.name} 데이터 파싱 중...`);
+          } else {
+            showLoadingMessage(`${config.name} 지도에 표시 중...`);
+          }
+        } else {
+          clearInterval(dataProcessInterval);
+        }
+      }, 80); // 더 빠른 업데이트로 부드러운 진행
+
       const features = vectorSource.getFormat().readFeatures(data, {
         dataProjection: "EPSG:4326",
         featureProjection: vectorSource.getProjection(),
@@ -314,11 +523,15 @@ function loadWfsData(layerName) {
       wfsDataCache[layerName] = features;
       wfsDataLoaded[layerName] = true;
 
-      // 벡터 소스에 피처 추가
-      vectorSource.addFeatures(features);
+      // 성능 최적화: 줌 레벨과 뷰포트 기반 필터링 후 벡터 소스에 추가
+      const filteredFeatures = filterFeaturesByZoomAndViewport(
+        features,
+        layerName
+      );
+      vectorSource.addFeatures(filteredFeatures);
 
       console.log(
-        `${config.name} 데이터 로드 완료: ${features.length} 개 피처`
+        `${config.name} 데이터 로드 완료: ${filteredFeatures.length} 개 피처 (전체: ${features.length} 개)`
       );
 
       // 첫 번째 피처의 속성 확인 (디버깅용)
@@ -327,36 +540,50 @@ function loadWfsData(layerName) {
         console.log("첫 번째 피처 속성:", firstFeature.getProperties());
       }
 
-      // 데이터 로드 완료 후 클러스터 거리 설정
+      // 데이터 로드 완료 후 클러스터 거리 설정 (성능 최적화)
       const clusterSource = wfsLayers[layerName].getSource();
       const map = getMap();
 
       if (map && map.getView) {
         const zoomLevel = map.getView().getZoom();
-        let clusterDistance = 80; // 기본값을 더 크게 설정
+        let clusterDistance = 200; // 기본값을 더 크게 설정하여 성능 향상
 
-        if (zoomLevel <= 8) clusterDistance = 150;
-        else if (zoomLevel <= 10) clusterDistance = 100;
-        else if (zoomLevel <= 12) clusterDistance = 80;
-        else if (zoomLevel <= 14) clusterDistance = 60;
-        else clusterDistance = 40;
+        if (zoomLevel <= 8) clusterDistance = 250; // 더 넓게
+        else if (zoomLevel <= 10) clusterDistance = 200; // 더 넓게
+        else if (zoomLevel <= 12) clusterDistance = 150; // 더 넓게
+        else if (zoomLevel <= 14) clusterDistance = 100; // 더 넓게
+        else clusterDistance = 80; // 더 넓게
 
-        clusterSource.setDistance(clusterDistance);
-        console.log(
-          `${config.name} 클러스터 거리 설정: ${clusterDistance} (줌 레벨: ${zoomLevel})`
-        );
+        // 현재 설정된 거리와 다른 경우에만 업데이트 (성능 최적화)
+        const currentDistance = clusterSource.getDistance();
+        if (clusterDistance !== currentDistance) {
+          clusterSource.setDistance(clusterDistance);
+          console.log(
+            `${config.name} 클러스터 거리 설정: ${clusterDistance} (줌 레벨: ${zoomLevel})`
+          );
+        }
       } else {
         console.warn(
           "맵 인스턴스를 찾을 수 없어 기본 클러스터 거리를 사용합니다."
         );
-        clusterSource.setDistance(60);
+        // 기본값도 현재 설정과 다른 경우에만 업데이트
+        const currentDistance = clusterSource.getDistance();
+        if (200 !== currentDistance) {
+          clusterSource.setDistance(200); // 기본값을 더 크게 설정
+        }
       }
 
-      // 로딩 완료 처리
+      // 데이터 처리 완료 후 진행률을 100%로 설정
+      clearInterval(dataProcessInterval);
       updateLoadingProgress(100);
+
+      // 완료 메시지 표시
+      showLoadingMessage(`${config.name} 로딩 완료!`);
+
+      // 완료 후 잠시 대기 후 팝업 숨기기
       setTimeout(() => {
         hideLoadingMessage();
-      }, 500);
+      }, 800); // 완료 메시지를 더 오래 보여줌
     })
     .catch((error) => {
       // 점진적 로딩 타이머 정리
@@ -368,6 +595,28 @@ function loadWfsData(layerName) {
       hideLoadingMessage();
       throw error;
     });
+}
+
+// 줌 레벨과 뷰포트 기반 데이터 필터링 함수
+function filterFeaturesByZoomAndViewport(features, layerName) {
+  const map = getMap();
+  if (!map || !map.getView) {
+    return features; // 맵이 없으면 전체 데이터 반환
+  }
+
+  const zoomLevel = map.getView().getZoom();
+  const extent = map.getView().calculateExtent(map.getSize());
+
+  // 뷰포트 내 피처만 필터링 (데이터 수 제한 없음)
+  const viewportFeatures = features.filter((feature) => {
+    const geometry = feature.getGeometry();
+    if (!geometry) return false;
+
+    // 피처가 뷰포트 내에 있는지 확인
+    return geometry.intersectsExtent(extent);
+  });
+
+  return viewportFeatures;
 }
 
 // 편의점 레이어 토글 (UI에서 사용) - WFS 전용
@@ -385,9 +634,8 @@ function toggleConvenienceStore() {
           layer.setVisible(true);
           wfsActive.convenience_store = true;
 
-          // 클러스터 강제 업데이트
-          const clusterSource = layer.getSource();
-          clusterSource.refresh();
+          // 클러스터는 자동으로 업데이트되므로 별도 refresh 불필요
+          // (데이터가 이미 vectorSource에 추가되어 있음)
 
           // WMS 레이어가 활성화되어 있다면 비활성화
           if (
@@ -753,15 +1001,24 @@ function showLoadingMessage(message) {
       font-size: 14px;
       text-align: center;
       min-width: 200px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     `;
     document.body.appendChild(loadingDiv);
   }
-  loadingDiv.innerHTML = `
-    <div style="margin-bottom: 10px;">${message}</div>
-    <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px;">
-      <div id="wfs-progress" style="width: 0%; height: 100%; background: #ff6b35; border-radius: 2px; transition: width 0.3s;"></div>
-    </div>
-  `;
+
+  // 메시지만 업데이트하고 진행률 바는 유지
+  const messageDiv = loadingDiv.querySelector(".loading-message");
+  if (messageDiv) {
+    messageDiv.textContent = message;
+  } else {
+    loadingDiv.innerHTML = `
+      <div class="loading-message" style="margin-bottom: 10px;">${message}</div>
+      <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px;">
+        <div id="wfs-progress" style="width: 0%; height: 100%; background: #ff6b35; border-radius: 2px; transition: width 0.3s ease;"></div>
+      </div>
+    `;
+  }
+
   loadingDiv.style.display = "block";
 }
 
@@ -777,7 +1034,22 @@ function hideLoadingMessage() {
 function updateLoadingProgress(percent) {
   const progressBar = document.getElementById("wfs-progress");
   if (progressBar) {
-    progressBar.style.width = percent + "%";
+    // 진행률을 부드럽게 업데이트
+    progressBar.style.transition = "width 0.3s ease";
+    progressBar.style.width = Math.min(percent, 100) + "%";
+
+    // 진행률에 따라 색상 변경 (시각적 피드백)
+    if (percent < 30) {
+      progressBar.style.background = "#ff6b35"; // 주황색 (서버 연결 중)
+    } else if (percent < 50) {
+      progressBar.style.background = "#ffa726"; // 밝은 주황색 (데이터 요청 중)
+    } else if (percent < 70) {
+      progressBar.style.background = "#4CAF50"; // 초록색 (서버 응답 대기 중)
+    } else if (percent < 100) {
+      progressBar.style.background = "#2196F3"; // 파란색 (데이터 처리 중)
+    } else {
+      progressBar.style.background = "#4CAF50"; // 완료 시 초록색
+    }
   }
 }
 
