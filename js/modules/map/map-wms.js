@@ -1,5 +1,6 @@
 // 맵 WMS 레이어 모듈
 import { getMap } from "./map-core.js";
+import { MapEventManager } from "./map-events.js";
 
 // WMS 관련 변수들
 let wmsLayers = {};
@@ -65,68 +66,76 @@ function initializeWmsLayers() {
 
   // WMS 피처 정보 요청을 위한 클릭 이벤트 (성능 최적화)
   let clickTimeout = null;
-  map.on("singleclick", function (evt) {
-    // 연속 클릭 방지 (디바운싱)
-    if (clickTimeout) {
-      clearTimeout(clickTimeout);
-    }
-
-    clickTimeout = setTimeout(() => {
-      if (!wmsActive.convenience_store) return;
-
-      const viewResolution = map.getView().getResolution();
-      const url = wmsLayers.convenience_store
-        .getSource()
-        .getFeatureInfoUrl(evt.coordinate, viewResolution, "EPSG:3857", {
-          INFO_FORMAT: "application/json",
-          FEATURE_COUNT: 1, // 최소 피처 수로 제한
-          QUERY_LAYERS: WMS_CONFIG.convenience_store.layerName,
-          // 성능 최적화 파라미터
-          BUFFER: 5, // 클릭 반경 최소화
-          EXCEPTIONS: "XML", // 예외 처리 최소화
-        });
-
-      if (url) {
-        fetch(url)
-          .then((response) => {
-            if (!response.ok) throw new Error("Network response was not ok");
-            return response.json();
-          })
-          .then((data) => {
-            if (data.features && data.features.length > 0) {
-              const feature = data.features[0];
-              showWmsPopup(evt.coordinate, feature);
-            }
-          })
-          .catch((error) => {
-            console.error("WMS 피처 정보 요청 실패:", error);
-          });
+  MapEventManager.registerSingleClickHandler(
+    "wms-single-click",
+    function (evt) {
+      // 연속 클릭 방지 (디바운싱)
+      if (clickTimeout) {
+        clearTimeout(clickTimeout);
       }
-    }, 100); // 100ms 디바운싱
-  });
+
+      clickTimeout = setTimeout(() => {
+        const map = getMap();
+        if (!wmsActive.convenience_store) return;
+
+        const viewResolution = map.getView().getResolution();
+        const url = wmsLayers.convenience_store
+          .getSource()
+          .getFeatureInfoUrl(evt.coordinate, viewResolution, "EPSG:3857", {
+            INFO_FORMAT: "application/json",
+            FEATURE_COUNT: 1, // 최소 피처 수로 제한
+            QUERY_LAYERS: WMS_CONFIG.convenience_store.layerName,
+            // 성능 최적화 파라미터
+            BUFFER: 5, // 클릭 반경 최소화
+            EXCEPTIONS: "XML", // 예외 처리 최소화
+          });
+
+        if (url) {
+          fetch(url)
+            .then((response) => {
+              if (!response.ok) throw new Error("Network response was not ok");
+              return response.json();
+            })
+            .then((data) => {
+              if (data.features && data.features.length > 0) {
+                const feature = data.features[0];
+                showWmsPopup(evt.coordinate, feature);
+              }
+            })
+            .catch((error) => {
+              console.error("WMS 피처 정보 요청 실패:", error);
+            });
+        }
+      }, 100); // 100ms 디바운싱
+    }
+  );
 
   // WMS 마우스 오버 이벤트 (커서 변경)
-  map.on("pointermove", function (evt) {
-    if (wmsActive.convenience_store) {
-      const viewResolution = map.getView().getResolution();
-      const url = wmsLayers.convenience_store
-        .getSource()
-        .getFeatureInfoUrl(evt.coordinate, viewResolution, "EPSG:3857", {
-          INFO_FORMAT: "application/json",
-          FEATURE_COUNT: 1,
-          QUERY_LAYERS: WMS_CONFIG.convenience_store.layerName,
-          BUFFER: 5,
-        });
+  MapEventManager.registerPointerMoveHandler(
+    "wms-pointer-move",
+    function (evt) {
+      const map = getMap();
+      if (wmsActive.convenience_store) {
+        const viewResolution = map.getView().getResolution();
+        const url = wmsLayers.convenience_store
+          .getSource()
+          .getFeatureInfoUrl(evt.coordinate, viewResolution, "EPSG:3857", {
+            INFO_FORMAT: "application/json",
+            FEATURE_COUNT: 1,
+            QUERY_LAYERS: WMS_CONFIG.convenience_store.layerName,
+            BUFFER: 5,
+          });
 
-      if (url) {
-        // WMS 피처가 있는 경우 포인터 커서로 변경
-        map.getTargetElement().style.cursor = "pointer";
-      } else {
-        // WMS 피처가 없는 경우 기본 커서로 변경
-        map.getTargetElement().style.cursor = "";
+        if (url) {
+          // WMS 피처가 있는 경우 포인터 커서로 변경
+          map.getTargetElement().style.cursor = "pointer";
+        } else {
+          // WMS 피처가 없는 경우 기본 커서로 변경
+          map.getTargetElement().style.cursor = "";
+        }
       }
     }
-  });
+  );
 
   // 전역 변수로 저장
   window.wmsLayers = wmsLayers;

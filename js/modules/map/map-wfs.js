@@ -1,5 +1,6 @@
 // 맵 WFS 레이어 모듈
 import { getMap } from "./map-core.js";
+import { MapEventManager } from "./map-events.js";
 
 // WFS 관련 변수들
 let wfsLayers = {};
@@ -7,6 +8,7 @@ let wfsActive = {};
 let wfsDataCache = {}; // 캐시된 데이터 저장
 let wfsVectorSources = {}; // 벡터 소스 저장
 let wfsDataLoaded = {}; // 데이터 로드 상태 저장
+let wfsUpdating = {}; // 각 레이어별 업데이트 상태 저장
 
 // 환경별 API URL 설정
 const getApiUrl = (endpoint) => {
@@ -33,8 +35,17 @@ const WFS_CONFIG = {
   },
 };
 
+// WFS 레이어 초기화 상태 추적
+let wfsInitialized = false;
+
 // WFS 레이어 초기화
 function initializeWfsLayers() {
+  // 이미 초기화되었는지 확인
+  if (wfsInitialized) {
+    console.log("WFS 레이어가 이미 초기화되어 있습니다.");
+    return;
+  }
+
   const map = getMap();
 
   if (!map || !map.getView) {
@@ -60,6 +71,7 @@ function initializeWfsLayers() {
     // 벡터 소스 저장
     wfsVectorSources[layerName] = vectorSource;
     wfsDataLoaded[layerName] = false; // 초기 로드 상태는 false
+    wfsUpdating[layerName] = false; // 초기 업데이트 상태는 false
 
     // 클러스터 소스 생성 (성능 최적화된 거리 설정)
     const clusterSource = new ol.source.Cluster({
@@ -185,21 +197,38 @@ function initializeWfsLayers() {
       maxResolution: Infinity, // 최대 해상도 제한 없음
     });
 
-    // 성능 최적화된 줌 변경 이벤트 처리 (디바운싱 및 스로틀링 적용)
+    // 성능 최적화된 줌 레벨 변경 이벤트 (디바운싱 적용)
     let zoomUpdateTimeout;
-    let lastZoomLevel = -1;
     let isUpdating = false;
-    let lastDistance = 120; // 마지막 설정된 거리 추적
+    let lastZoomLevel = null;
+    let lastDistance = null;
+    let lastUpdateTime = 0; // 마지막 업데이트 시간 추적
 
-    map.getView().on("change:resolution", function () {
-      if (wfsActive[layerName] && !isUpdating) {
-        const currentZoom = Math.floor(map.getView().getZoom());
+    // 줌 변경 이벤트 핸들러 등록
+    MapEventManager.registerZoomHandler(
+      `wfs-zoom-${layerName}`,
+      function (currentZoom) {
+        console.log(
+          `줌 변경 감지: ${currentZoom} (레이어: ${layerName}, 활성화: ${wfsActive[layerName]})`
+        );
 
-        // 줌 레벨이 실제로 변경되었는지 확인 (성능 최적화)
-        if (currentZoom === lastZoomLevel) {
+        // 편의점 레이어가 활성화된 경우에만 처리
+        if (!wfsActive[layerName]) {
+          console.log(
+            `레이어가 비활성화되어 있어 줌 변경을 무시합니다: ${layerName}`
+          );
           return;
         }
 
+        // 줌 레벨이 실제로 변경된 경우에만 처리 (성능 최적화)
+        if (currentZoom === lastZoomLevel) {
+          console.log(
+            `줌 레벨이 동일하여 업데이트를 건너뜁니다: ${currentZoom}`
+          );
+          return;
+        }
+
+        console.log(`줌 레벨 변경: ${lastZoomLevel} → ${currentZoom}`);
         lastZoomLevel = currentZoom;
 
         // 이전 타임아웃 클리어
@@ -209,8 +238,25 @@ function initializeWfsLayers() {
 
         // 300ms 후에 업데이트 실행 (디바운싱 시간 증가)
         zoomUpdateTimeout = setTimeout(() => {
-          if (isUpdating) return;
-          isUpdating = true;
+          // 추가적인 중복 실행 방지
+          const now = Date.now();
+          if (now - lastUpdateTime < 500) {
+            // 500ms 내에 중복 실행 방지
+            console.log(`줌 업데이트 쿨다운 중: ${now - lastUpdateTime}ms`);
+            return;
+          }
+
+          if (wfsUpdating[layerName]) {
+            console.log(
+              `레이어 ${layerName}이 이미 업데이트 중이므로 건너뜁니다.`
+            );
+            return;
+          }
+
+          lastUpdateTime = now;
+          wfsUpdating[layerName] = true;
+
+          console.log(`줌 변경 업데이트 시작: ${currentZoom}`);
 
           // 성능 최적화된 클러스터 거리 계산
           const newDistance = (function () {
@@ -223,44 +269,166 @@ function initializeWfsLayers() {
 
           // 거리가 실제로 변경된 경우에만 업데이트 (성능 최적화)
           if (newDistance !== lastDistance) {
+            console.log(`클러스터 거리 변경: ${lastDistance} → ${newDistance}`);
             // 클러스터 소스 거리 업데이트
             clusterSource.setDistance(newDistance);
             lastDistance = newDistance;
-
-            // 줌 레벨 변경 시 데이터 재필터링 (성능 최적화)
-            if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
-              // 기존 피처 제거
-              vectorSource.clear();
-
-              // 새로운 줌 레벨에 맞는 데이터만 추가
-              const filteredFeatures = filterFeaturesByZoomAndViewport(
-                wfsDataCache[layerName],
-                layerName
-              );
-              vectorSource.addFeatures(filteredFeatures);
-
-              console.log(
-                `${config.name} 줌 변경으로 데이터 재필터링: ${filteredFeatures.length} 개 피처`
-              );
-            }
-
-            // 스타일 캐시 클리어 (줌 레벨 변경 시) - 선택적 클리어
-            if (Object.keys(styleCache).length > 10) {
-              // 캐시가 너무 많을 때만 클리어
-              Object.keys(styleCache).forEach((key) => delete styleCache[key]);
-            }
-
-            // 레이어 스타일 업데이트 (성능 최적화)
-            requestAnimationFrame(() => {
-              clusterLayer.changed();
-              isUpdating = false;
-            });
-          } else {
-            isUpdating = false;
           }
+
+          // 캐시된 데이터에서 뷰포트 기반 필터링
+          if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
+            console.log(
+              `캐시된 데이터에서 뷰포트 필터링 시작: ${wfsDataCache[layerName].length}개 피처`
+            );
+
+            // 기존 피처 제거
+            const beforeClear = vectorSource.getFeatures().length;
+            vectorSource.clear();
+            console.log(`기존 피처 제거: ${beforeClear}개`);
+
+            // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
+            const currentExtent = map.getView().calculateExtent(map.getSize());
+            const filteredFeatures = wfsDataCache[layerName].filter(
+              (feature) => {
+                const geometry = feature.getGeometry();
+                if (!geometry) return false;
+                return geometry.intersectsExtent(currentExtent);
+              }
+            );
+
+            vectorSource.addFeatures(filteredFeatures);
+
+            console.log(
+              `${config.name} 줌 변경으로 뷰포트 필터링: ${filteredFeatures.length} 개 피처 (줌: ${currentZoom})`
+            );
+          } else {
+            console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
+          }
+
+          // 스타일 캐시 클리어 (줌 레벨 변경 시) - 선택적 클리어
+          if (Object.keys(styleCache).length > 10) {
+            // 캐시가 너무 많을 때만 클리어
+            Object.keys(styleCache).forEach((key) => delete styleCache[key]);
+            console.log("스타일 캐시 클리어됨");
+          }
+
+          // 레이어 스타일 업데이트 (성능 최적화)
+          requestAnimationFrame(() => {
+            clusterLayer.changed();
+            wfsUpdating[layerName] = false;
+            console.log(`줌 변경 업데이트 완료: ${currentZoom}`);
+          });
         }, 300);
       }
-    });
+    );
+
+    // 지도 이동 시 뷰포트 기반 데이터 업데이트 (디바운싱 적용)
+    let moveUpdateTimeout;
+    let lastExtent = null;
+    let lastMoveUpdateTime = 0; // 마지막 이동 업데이트 시간 추적
+
+    // 지도 이동 이벤트 핸들러 등록
+    MapEventManager.registerMoveHandler(
+      `wfs-move-${layerName}`,
+      function (currentExtent) {
+        console.log(
+          `지도 이동 감지 (레이어: ${layerName}, 활성화: ${wfsActive[layerName]})`
+        );
+
+        // 편의점 레이어가 활성화된 경우에만 처리
+        if (!wfsActive[layerName]) {
+          console.log(
+            `레이어가 비활성화되어 있어 지도 이동을 무시합니다: ${layerName}`
+          );
+          return;
+        }
+
+        // 뷰포트가 실제로 변경된 경우에만 처리 (성능 최적화)
+        if (
+          lastExtent &&
+          Math.abs(currentExtent[0] - lastExtent[0]) < 100 &&
+          Math.abs(currentExtent[1] - lastExtent[1]) < 100 &&
+          Math.abs(currentExtent[2] - lastExtent[2]) < 100 &&
+          Math.abs(currentExtent[3] - lastExtent[3]) < 100
+        ) {
+          console.log("뷰포트 변경이 미미하여 업데이트를 건너뜁니다.");
+          return;
+        }
+
+        console.log(
+          `뷰포트 변경: [${
+            lastExtent?.join(", ") || "없음"
+          }] → [${currentExtent.join(", ")}]`
+        );
+        lastExtent = currentExtent;
+
+        // 이전 타임아웃 클리어
+        if (moveUpdateTimeout) {
+          clearTimeout(moveUpdateTimeout);
+        }
+
+        // 200ms 후에 업데이트 실행 (디바운싱)
+        moveUpdateTimeout = setTimeout(() => {
+          // 추가적인 중복 실행 방지
+          const now = Date.now();
+          if (now - lastMoveUpdateTime < 300) {
+            // 300ms 내에 중복 실행 방지
+            console.log(
+              `이동 업데이트 쿨다운 중: ${now - lastMoveUpdateTime}ms`
+            );
+            return;
+          }
+
+          if (wfsUpdating[layerName]) {
+            console.log(
+              `레이어 ${layerName}이 이미 업데이트 중이므로 건너뜁니다.`
+            );
+            return;
+          }
+
+          lastMoveUpdateTime = now;
+          wfsUpdating[layerName] = true;
+
+          console.log(`지도 이동 업데이트 시작`);
+
+          // 캐시된 데이터에서 뷰포트 기반 필터링
+          if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
+            console.log(
+              `캐시된 데이터에서 뷰포트 필터링 시작: ${wfsDataCache[layerName].length}개 피처`
+            );
+
+            // 기존 피처 제거
+            const beforeClear = vectorSource.getFeatures().length;
+            vectorSource.clear();
+            console.log(`기존 피처 제거: ${beforeClear}개`);
+
+            // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
+            const filteredFeatures = wfsDataCache[layerName].filter(
+              (feature) => {
+                const geometry = feature.getGeometry();
+                if (!geometry) return false;
+                return geometry.intersectsExtent(currentExtent);
+              }
+            );
+
+            vectorSource.addFeatures(filteredFeatures);
+
+            console.log(
+              `${config.name} 지도 이동으로 뷰포트 필터링: ${filteredFeatures.length} 개 피처`
+            );
+          } else {
+            console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
+          }
+
+          // 레이어 업데이트 (성능 최적화)
+          requestAnimationFrame(() => {
+            clusterLayer.changed();
+            wfsUpdating[layerName] = false;
+            console.log(`지도 이동 업데이트 완료`);
+          });
+        }, 200);
+      }
+    );
 
     // 맵에 레이어 추가
     map.addLayer(clusterLayer);
@@ -276,12 +444,13 @@ function initializeWfsLayers() {
 
   // 성능 최적화된 맵 클릭 이벤트 (디바운싱 적용)
   let clickTimeout;
-  map.on("click", function (evt) {
+  MapEventManager.registerClickHandler("wfs-general-click", function (evt) {
     if (clickTimeout) {
       clearTimeout(clickTimeout);
     }
 
     clickTimeout = setTimeout(() => {
+      const map = getMap();
       const feature = map.forEachFeatureAtPixel(evt.pixel, function (feature) {
         return feature;
       });
@@ -319,36 +488,40 @@ function initializeWfsLayers() {
   let pointerMoveTimeout;
   let lastCursorState = null;
 
-  map.on("pointermove", function (evt) {
-    if (pointerMoveTimeout) {
-      clearTimeout(pointerMoveTimeout);
-    }
+  MapEventManager.registerPointerMoveHandler(
+    "wfs-pointer-move",
+    function (evt) {
+      if (pointerMoveTimeout) {
+        clearTimeout(pointerMoveTimeout);
+      }
 
-    pointerMoveTimeout = setTimeout(() => {
-      const pixel = map.getEventPixel(evt.originalEvent);
-      const hit = map.hasFeatureAtPixel(pixel);
+      pointerMoveTimeout = setTimeout(() => {
+        const map = getMap();
+        const pixel = map.getEventPixel(evt.originalEvent);
+        const hit = map.hasFeatureAtPixel(pixel);
 
-      // 활성화된 WFS 레이어에 피처가 있는지 확인
-      let hasWfsFeature = false;
-      if (hit) {
-        map.forEachFeatureAtPixel(pixel, function (feature, layer) {
-          // WFS 레이어인지 확인
-          Object.values(wfsLayers).forEach((wfsLayer) => {
-            if (layer === wfsLayer && wfsLayer.getVisible()) {
-              hasWfsFeature = true;
-            }
+        // 활성화된 WFS 레이어에 피처가 있는지 확인
+        let hasWfsFeature = false;
+        if (hit) {
+          map.forEachFeatureAtPixel(pixel, function (feature, layer) {
+            // WFS 레이어인지 확인
+            Object.values(wfsLayers).forEach((wfsLayer) => {
+              if (layer === wfsLayer && wfsLayer.getVisible()) {
+                hasWfsFeature = true;
+              }
+            });
           });
-        });
-      }
+        }
 
-      // 커서 상태가 변경된 경우에만 업데이트 (성능 최적화)
-      const newCursorState = hasWfsFeature ? "pointer" : "";
-      if (newCursorState !== lastCursorState) {
-        map.getTargetElement().style.cursor = newCursorState;
-        lastCursorState = newCursorState;
-      }
-    }, 16); // 약 60fps로 제한
-  });
+        // 커서 상태가 변경된 경우에만 업데이트 (성능 최적화)
+        const newCursorState = hasWfsFeature ? "pointer" : "";
+        if (newCursorState !== lastCursorState) {
+          map.getTargetElement().style.cursor = newCursorState;
+          lastCursorState = newCursorState;
+        }
+      }, 16); // 약 60fps로 제한
+    }
+  );
 
   // 전역 변수로 저장
   window.wfsLayers = wfsLayers;
@@ -356,6 +529,10 @@ function initializeWfsLayers() {
   window.wfsDataCache = wfsDataCache;
   window.wfsVectorSources = wfsVectorSources;
   window.wfsDataLoaded = wfsDataLoaded;
+
+  // 초기화 완료 플래그 설정
+  wfsInitialized = true;
+  console.log("WFS 레이어 초기화 완료");
 }
 
 // WFS 레이어 토글
@@ -378,10 +555,68 @@ function toggleWfsLayer(layerName) {
   return !isVisible;
 }
 
+// 뷰포트 기반 WFS 데이터 요청 함수 (현재 사용하지 않음)
+/*
+function loadWfsDataByViewport(layerName, extent) {
+  const config = WFS_CONFIG[layerName];
+  const vectorSource = wfsVectorSources[layerName];
+
+  // 뷰포트 정보를 URL 파라미터로 추가
+  const bbox = extent.join(",");
+  const viewportUrl = `${config.url}?bbox=${bbox}`;
+
+  console.log(`${config.name} 뷰포트 기반 데이터 요청: ${viewportUrl}`);
+
+  // 로딩 시작 표시
+  showLoadingMessage(`${config.name} 뷰포트 데이터 로딩 중...`);
+  updateLoadingProgress(10);
+
+  return fetch(viewportUrl)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      const features = vectorSource.getFormat().readFeatures(data, {
+        dataProjection: "EPSG:4326",
+        featureProjection: vectorSource.getProjection(),
+      });
+
+      // 기존 피처 제거
+      vectorSource.clear();
+
+      // 새로운 피처 추가
+      vectorSource.addFeatures(features);
+
+      console.log(
+        `${config.name} 뷰포트 데이터 로드 완료: ${features.length} 개 피처`
+      );
+
+      // 로딩 완료
+      updateLoadingProgress(100);
+      showLoadingMessage(`${config.name} 뷰포트 데이터 로드 완료!`);
+
+      setTimeout(() => {
+        hideLoadingMessage();
+      }, 800);
+
+      return features;
+    })
+    .catch((error) => {
+      console.error(`${config.name} 뷰포트 데이터 로드 실패:`, error);
+      hideLoadingMessage();
+      throw error;
+    });
+}
+*/
+
 // WFS 데이터 로드 함수
 function loadWfsData(layerName) {
   const config = WFS_CONFIG[layerName];
   const vectorSource = wfsVectorSources[layerName];
+  const map = getMap(); // 맵 인스턴스를 먼저 가져옴
 
   // 이미 로드된 경우 캐시된 데이터 사용
   if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
@@ -392,11 +627,13 @@ function loadWfsData(layerName) {
     // 벡터 소스가 비어있는 경우에만 피처 추가 (중복 방지)
     const currentFeatures = vectorSource.getFeatures();
     if (currentFeatures.length === 0) {
-      // 성능 최적화: 줌 레벨과 뷰포트 기반 필터링
-      const filteredFeatures = filterFeaturesByZoomAndViewport(
-        wfsDataCache[layerName],
-        layerName
-      );
+      // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
+      const currentExtent = map.getView().calculateExtent(map.getSize());
+      const filteredFeatures = wfsDataCache[layerName].filter((feature) => {
+        const geometry = feature.getGeometry();
+        if (!geometry) return false;
+        return geometry.intersectsExtent(currentExtent);
+      });
       vectorSource.addFeatures(filteredFeatures);
       console.log(
         `${config.name} 필터링된 데이터: ${filteredFeatures.length} 개 피처 (전체: ${wfsDataCache[layerName].length} 개)`
@@ -523,11 +760,13 @@ function loadWfsData(layerName) {
       wfsDataCache[layerName] = features;
       wfsDataLoaded[layerName] = true;
 
-      // 성능 최적화: 줌 레벨과 뷰포트 기반 필터링 후 벡터 소스에 추가
-      const filteredFeatures = filterFeaturesByZoomAndViewport(
-        features,
-        layerName
-      );
+      // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
+      const currentExtent = map.getView().calculateExtent(map.getSize());
+      const filteredFeatures = features.filter((feature) => {
+        const geometry = feature.getGeometry();
+        if (!geometry) return false;
+        return geometry.intersectsExtent(currentExtent);
+      });
       vectorSource.addFeatures(filteredFeatures);
 
       console.log(
@@ -542,7 +781,6 @@ function loadWfsData(layerName) {
 
       // 데이터 로드 완료 후 클러스터 거리 설정 (성능 최적화)
       const clusterSource = wfsLayers[layerName].getSource();
-      const map = getMap();
 
       if (map && map.getView) {
         const zoomLevel = map.getView().getZoom();
@@ -597,27 +835,42 @@ function loadWfsData(layerName) {
     });
 }
 
-// 줌 레벨과 뷰포트 기반 데이터 필터링 함수
+// 줌 레벨과 뷰포트 기반 데이터 필터링 함수 (현재 사용하지 않음)
+/*
 function filterFeaturesByZoomAndViewport(features, layerName) {
   const map = getMap();
   if (!map || !map.getView) {
+    console.warn("맵 객체를 찾을 수 없습니다.");
     return features; // 맵이 없으면 전체 데이터 반환
   }
 
   const zoomLevel = map.getView().getZoom();
   const extent = map.getView().calculateExtent(map.getSize());
 
+  console.log(
+    `필터링 시작 - 줌레벨: ${zoomLevel}, 뷰포트: [${extent.join(
+      ", "
+    )}], 전체 피처: ${features.length}개`
+  );
+
   // 뷰포트 내 피처만 필터링 (데이터 수 제한 없음)
   const viewportFeatures = features.filter((feature) => {
     const geometry = feature.getGeometry();
-    if (!geometry) return false;
+    if (!geometry) {
+      console.warn("피처에 지오메트리가 없습니다:", feature);
+      return false;
+    }
 
     // 피처가 뷰포트 내에 있는지 확인
-    return geometry.intersectsExtent(extent);
+    const isInViewport = geometry.intersectsExtent(extent);
+    return isInViewport;
   });
+
+  console.log(`필터링 완료 - 뷰포트 내 피처: ${viewportFeatures.length}개`);
 
   return viewportFeatures;
 }
+*/
 
 // 편의점 레이어 토글 (UI에서 사용) - WFS 전용
 function toggleConvenienceStore() {
@@ -1080,6 +1333,33 @@ function testWfsUrl(url) {
     });
 }
 
+// 교통 관련 기능 함수들
+function showBusInfo() {
+  console.log("버스 기능 실행");
+  alert(
+    "버스 기능이 활성화되었습니다.\n버스 정류장 및 노선 정보를 확인할 수 있습니다."
+  );
+}
+
+function showSubwayInfo() {
+  console.log("지하철 기능 실행");
+  alert(
+    "지하철 기능이 활성화되었습니다.\n지하철역 및 노선 정보를 확인할 수 있습니다."
+  );
+}
+
+function showTrafficInfo() {
+  console.log("교통정보 기능 실행");
+  alert(
+    "교통정보 기능이 활성화되었습니다.\n실시간 교통 상황을 확인할 수 있습니다."
+  );
+}
+
+function showCctvInfo() {
+  console.log("CCTV 기능 실행");
+  alert("CCTV 기능이 활성화되었습니다.\n도로 CCTV 영상을 확인할 수 있습니다.");
+}
+
 // 편의시설 관련 기능 함수들
 function showParkingInfo() {
   console.log("주차장 기능 실행");
@@ -1160,6 +1440,12 @@ window.showRestroomInfo = showRestroomInfo;
 window.showWifiInfo = showWifiInfo;
 window.showAtmInfo = showAtmInfo;
 
+// 교통 관련 함수들 추가
+window.showBusInfo = showBusInfo;
+window.showSubwayInfo = showSubwayInfo;
+window.showTrafficInfo = showTrafficInfo;
+window.showCctvInfo = showCctvInfo;
+
 // 편의점 관련 함수들 추가
 window.showNearbyConvenienceStores = showNearbyConvenienceStores;
 window.showConvenienceStoreSearch = showConvenienceStoreSearch;
@@ -1181,6 +1467,10 @@ export {
   showRestroomInfo,
   showWifiInfo,
   showAtmInfo,
+  showBusInfo,
+  showSubwayInfo,
+  showTrafficInfo,
+  showCctvInfo,
   showNearbyConvenienceStores,
   showConvenienceStoreSearch,
   showConvenienceStoreFilter,

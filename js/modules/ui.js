@@ -358,6 +358,25 @@ function initializeLayerPanel() {
     });
   }
 
+  // 교통 서브메뉴 토글 함수
+  window.toggleTransportSubmenu = function () {
+    const transportBtn = document.getElementById("wfsTransportBtn");
+    const transportSubmenu = document.getElementById("transportSubmenu");
+
+    if (transportBtn && transportSubmenu) {
+      // 버튼 활성화/비활성화 토글
+      transportBtn.classList.toggle("active");
+
+      // 서브메뉴 토글
+      transportSubmenu.classList.toggle("show");
+
+      console.log(
+        "교통 서브메뉴:",
+        transportSubmenu.classList.contains("show") ? "표시" : "숨김"
+      );
+    }
+  };
+
   // 편의시설 서브메뉴 토글 함수
   window.toggleAmenitiesSubmenu = function () {
     const amenitiesBtn = document.getElementById("wfsAmenitiesBtn");
@@ -408,12 +427,47 @@ function initializeLayerPanel() {
       const cadastralType = this.getAttribute("data-cadastral");
       const convenienceType = this.getAttribute("data-convenience");
       const amenitiesType = this.getAttribute("data-amenities");
+      const transportType = this.getAttribute("data-transport");
 
       // 모든 서브메뉴 버튼 비활성화
       submenuBtns.forEach((b) => b.classList.remove("active"));
 
       // 기본적으로 클릭된 버튼 활성화 (특정 항목에서 토글 결과에 따라 다시 조정)
       this.classList.add("active");
+
+      // 교통 서브메뉴 버튼 처리
+      if (transportType) {
+        console.log("교통 기능 선택:", transportType);
+
+        // 각 기능별 교통 도구 활성화
+        switch (transportType) {
+          case "bus":
+            console.log("버스 기능 활성화");
+            if (window.showBusInfo) {
+              window.showBusInfo();
+            }
+            break;
+          case "subway":
+            console.log("지하철 기능 활성화");
+            if (window.showSubwayInfo) {
+              window.showSubwayInfo();
+            }
+            break;
+          case "traffic":
+            console.log("교통정보 기능 활성화");
+            if (window.showTrafficInfo) {
+              window.showTrafficInfo();
+            }
+            break;
+          case "cctv":
+            console.log("CCTV 기능 활성화");
+            if (window.showCctvInfo) {
+              window.showCctvInfo();
+            }
+            break;
+        }
+        return;
+      }
 
       // 편의시설 서브메뉴 버튼 처리
       if (amenitiesType) {

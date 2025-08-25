@@ -1,5 +1,53 @@
 // 맵 측정 도구 모듈
 import { getMap } from "./map-core.js";
+import { MapEventManager } from "./map-events.js";
+
+// 측정 도구 이벤트 리스너 관리
+function registerMeasureEventListeners() {
+  // 컨텍스트 메뉴 이벤트 등록
+  MapEventManager.registerContextMenuHandler(
+    "measure-contextmenu",
+    cancelMeasurement
+  );
+
+  // 포인터 이동 이벤트 등록
+  MapEventManager.registerPointerMoveHandler(
+    "measure-pointermove",
+    moveListener
+  );
+
+  // 클릭 이벤트 등록
+  MapEventManager.registerClickHandler("measure-click", clickListener);
+
+  // 각도 측정 완료 이벤트 등록
+  MapEventManager.registerClickHandler("measure-angle-finish", finishAngle);
+
+  // 반경 측정 완료 이벤트 등록
+  MapEventManager.registerClickHandler("measure-radius-finish", finishRadius);
+
+  // 사전 이동 리스너 등록
+  MapEventManager.registerPointerMoveHandler(
+    "measure-pre-move",
+    preMoveListener
+  );
+
+  // 완료된 측정 취소 이벤트 등록
+  MapEventManager.registerContextMenuHandler(
+    "measure-completed-cancel",
+    completedCancelMeasurement
+  );
+}
+
+function unregisterMeasureEventListeners() {
+  // 모든 측정 관련 이벤트 리스너 제거
+  MapEventManager.unregisterHandler("measure-contextmenu");
+  MapEventManager.unregisterHandler("measure-pointermove");
+  MapEventManager.unregisterHandler("measure-click");
+  MapEventManager.unregisterHandler("measure-angle-finish");
+  MapEventManager.unregisterHandler("measure-radius-finish");
+  MapEventManager.unregisterHandler("measure-pre-move");
+  MapEventManager.unregisterHandler("measure-completed-cancel");
+}
 
 // 측정 도구 관련 변수들
 let measureInteraction = null;

@@ -1,5 +1,6 @@
 // 맵 메인 모듈 - 모든 맵 관련 모듈을 통합 관리
 import { initializeMap, getMap } from "./map-core.js";
+import { MapEventManager } from "./map-events.js";
 import { switchLayer, toggleOverlay } from "./map-layers.js";
 import { mapTools } from "./map-tools.js";
 import {
@@ -58,6 +59,7 @@ function initializeMapWithModules() {
 
 // 전역 객체에 모든 함수들 추가
 window.mapInstance = getMap();
+window.MapEventManager = MapEventManager;
 window.mapTools = mapTools;
 window.switchLayer = switchLayer;
 window.toggleOverlay = toggleOverlay;
