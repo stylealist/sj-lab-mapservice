@@ -219,141 +219,106 @@ function initializeWfsLayers() {
       `wfs-move-${layerName}`,
       function (currentExtent) {
         // 전역 중복 실행 방지
-        if (window.wfsUpdating && window.wfsUpdating[layerName]) {
-          console.log(`전역 업데이트 중: ${layerName}`);
-          return;
-        }
-
-        const currentZoom = map.getView().getZoom();
-        console.log(
-          `지도 변경 감지 (레이어: ${layerName}, 활성화: ${wfsActive[layerName]}, 줌: ${currentZoom})`
-        );
-
-        // 편의점 레이어가 활성화된 경우에만 처리
-        if (!wfsActive[layerName]) {
-          console.log(
-            `레이어가 비활성화되어 있어 지도 변경을 무시합니다: ${layerName}`
-          );
-          return;
-        }
 
         // 줌 레벨이 실제로 변경된 경우에만 클러스터 거리 재조정
-        const zoomChanged = currentZoom !== lastZoomLevel;
-        if (zoomChanged) {
-          console.log(`줌 레벨 변경: ${lastZoomLevel} → ${currentZoom}`);
-          lastZoomLevel = currentZoom;
-        }
+        // const zoomChanged = currentZoom !== lastZoomLevel;
+        // if (zoomChanged) {
+        //   console.log(`줌 레벨 변경: ${lastZoomLevel} → ${currentZoom}`);
+        //   lastZoomLevel = currentZoom;
+        // }
 
-        // 뷰포트가 실제로 변경된 경우에만 처리 (성능 최적화)
-        const extentChanged =
-          !lastExtent ||
-          Math.abs(currentExtent[0] - lastExtent[0]) > 100 ||
-          Math.abs(currentExtent[1] - lastExtent[1]) > 100 ||
-          Math.abs(currentExtent[2] - lastExtent[2]) > 100 ||
-          Math.abs(currentExtent[3] - lastExtent[3]) > 100;
+        // // 뷰포트가 실제로 변경된 경우에만 처리 (성능 최적화)
+        // const extentChanged =
+        //   !lastExtent ||
+        //   Math.abs(currentExtent[0] - lastExtent[0]) > 50 ||
+        //   Math.abs(currentExtent[1] - lastExtent[1]) > 50 ||
+        //   Math.abs(currentExtent[2] - lastExtent[2]) > 50 ||
+        //   Math.abs(currentExtent[3] - lastExtent[3]) > 50;
 
-        if (!extentChanged && !zoomChanged) {
-          console.log("뷰포트와 줌 레벨이 동일하여 업데이트를 건너뜁니다.");
+        // if (!extentChanged && !zoomChanged) {
+        //   console.log("뷰포트와 줌 레벨이 동일하여 업데이트를 건너뜁니다.");
+        //   return;
+        // }
+
+        // if (extentChanged) {
+        //   console.log(
+        //     `뷰포트 변경: [${
+        //       lastExtent?.join(", ") || "없음"
+        //     }] → [${currentExtent.join(", ")}]`
+        //   );
+        //   lastExtent = currentExtent;
+        // }
+
+        // 300ms 후에 업데이트 실행 (디바운싱)
+        // 추가적인 중복 실행 방지
+        const now = Date.now();
+        if (now - lastUpdateTime < 500) {
+          console.log(`업데이트 쿨다운 중: ${now - lastUpdateTime}ms`);
           return;
         }
 
-        if (extentChanged) {
+        if (wfsUpdating[layerName]) {
           console.log(
-            `뷰포트 변경: [${
-              lastExtent?.join(", ") || "없음"
-            }] → [${currentExtent.join(", ")}]`
+            `레이어 ${layerName}이 이미 업데이트 중이므로 건너뜁니다.`
           );
-          lastExtent = currentExtent;
+          return;
         }
 
-        // 이전 타임아웃 클리어
-        if (updateTimeout) {
-          clearTimeout(updateTimeout);
+        lastUpdateTime = now;
+        wfsUpdating[layerName] = true;
+
+        console.log(`지도 변경 업데이트 시작 (줌: ${currentZoom})`);
+
+        const zoomChanged = map.getView().getZoom();
+        // 줌 레벨이 변경된 경우 클러스터 거리 재조정
+        if (zoomChanged) {
+          const newDistance = (function () {
+            if (currentZoom <= 8) return 250;
+            if (currentZoom <= 10) return 200;
+            if (currentZoom <= 12) return 150;
+            if (currentZoom <= 14) return 100;
+            return 80;
+          })();
+
+          if (newDistance !== lastDistance) {
+            console.log(`클러스터 거리 변경: ${lastDistance} → ${newDistance}`);
+            clusterSource.setDistance(newDistance);
+            lastDistance = newDistance;
+          }
+
+          // 스타일 캐시 클리어 (줌 레벨 변경 시)
+          if (Object.keys(styleCache).length > 10) {
+            Object.keys(styleCache).forEach((key) => delete styleCache[key]);
+            console.log("스타일 캐시 클리어됨");
+          }
         }
 
-        // 300ms 후에 업데이트 실행 (디바운싱)
-        updateTimeout = setTimeout(() => {
-          // 추가적인 중복 실행 방지
-          const now = Date.now();
-          if (now - lastUpdateTime < 500) {
-            console.log(`업데이트 쿨다운 중: ${now - lastUpdateTime}ms`);
-            return;
-          }
+        // 캐시된 데이터에서 뷰포트 기반 필터링 (줌 변경 또는 뷰포트 변경 시)
+        if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
+          console.log(
+            `캐시된 데이터에서 뷰포트 필터링 시작: ${wfsDataCache[layerName].length}개 피처`
+          );
 
-          if (wfsUpdating[layerName]) {
-            console.log(
-              `레이어 ${layerName}이 이미 업데이트 중이므로 건너뜁니다.`
-            );
-            return;
-          }
+          // 기존 피처 제거
+          const beforeClear = vectorSource.getFeatures().length;
+          vectorSource.clear();
+          console.log(`기존 피처 제거: ${beforeClear}개`);
 
-          lastUpdateTime = now;
-          wfsUpdating[layerName] = true;
-
-          console.log(`지도 변경 업데이트 시작 (줌: ${currentZoom})`);
-
-          // 줌 레벨이 변경된 경우 클러스터 거리 재조정
-          if (zoomChanged) {
-            const newDistance = (function () {
-              if (currentZoom <= 8) return 250;
-              if (currentZoom <= 10) return 200;
-              if (currentZoom <= 12) return 150;
-              if (currentZoom <= 14) return 100;
-              return 80;
-            })();
-
-            if (newDistance !== lastDistance) {
-              console.log(
-                `클러스터 거리 변경: ${lastDistance} → ${newDistance}`
-              );
-              clusterSource.setDistance(newDistance);
-              lastDistance = newDistance;
-            }
-
-            // 스타일 캐시 클리어 (줌 레벨 변경 시)
-            if (Object.keys(styleCache).length > 10) {
-              Object.keys(styleCache).forEach((key) => delete styleCache[key]);
-              console.log("스타일 캐시 클리어됨");
-            }
-          }
-
-          // 캐시된 데이터에서 뷰포트 기반 필터링
-          if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
-            console.log(
-              `캐시된 데이터에서 뷰포트 필터링 시작: ${wfsDataCache[layerName].length}개 피처`
-            );
-
-            // 기존 피처 제거
-            const beforeClear = vectorSource.getFeatures().length;
-            vectorSource.clear();
-            console.log(`기존 피처 제거: ${beforeClear}개`);
-
-            // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
-            const filteredFeatures = wfsDataCache[layerName].filter(
-              (feature) => {
-                const geometry = feature.getGeometry();
-                if (!geometry) return false;
-                return geometry.intersectsExtent(currentExtent);
-              }
-            );
-
-            vectorSource.addFeatures(filteredFeatures);
-
-            console.log(
-              `${config.name} 뷰포트 필터링: ${filteredFeatures.length} 개 피처 (줌: ${currentZoom})`
-            );
-          } else {
-            console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
-          }
-
-          // 레이어 업데이트 (성능 최적화)
-          requestAnimationFrame(() => {
-            clusterLayer.changed();
-            wfsUpdating[layerName] = false;
-
-            console.log(`지도 변경 업데이트 완료 (줌: ${currentZoom})`);
+          // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
+          const filteredFeatures = wfsDataCache[layerName].filter((feature) => {
+            const geometry = feature.getGeometry();
+            if (!geometry) return false;
+            return geometry.intersectsExtent(currentExtent);
           });
-        }, 300);
+
+          vectorSource.addFeatures(filteredFeatures);
+        } else {
+          console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
+        }
+
+        // 업데이트 상태 해제 (클러스터는 자동으로 업데이트됨)
+        wfsUpdating[layerName] = false;
+        console.log(`지도 변경 업데이트 완료 (줌: ${currentZoom})`);
       }
     );
 

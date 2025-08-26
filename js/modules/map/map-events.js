@@ -41,6 +41,7 @@ const MapEventManager = {
     });
 
     console.log(`지도 이동 이벤트 리스너 등록: ${id}`);
+    console.log(`registerMoveHandler`);
   },
 
   // 클릭 이벤트 등록
