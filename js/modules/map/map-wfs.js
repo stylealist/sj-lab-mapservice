@@ -28,8 +28,13 @@ const WFS_CONFIG = {
     style: {
       image: new ol.style.Icon({
         src: "images/icon/convenienceStore.png",
-        scale: 0.8,
-        anchor: [0.5, 0.5],
+        scale: 1.0,
+        anchor: [0.5, 1.0], // 아이콘 하단 중앙에 앵커 설정
+        offset: [0, 0],
+        opacity: 1.0,
+        rotation: 0,
+        size: [32, 32], // 아이콘 크기 명시적 설정
+        imgSize: [32, 32], // 원본 이미지 크기
       }),
     },
   },
@@ -83,7 +88,7 @@ function initializeWfsLayers() {
 
     // 클러스터 소스 생성 (성능 최적화된 거리 설정)
     const clusterSource = new ol.source.Cluster({
-      distance: 120, // 초기 거리를 더 크게 설정하여 성능 향상
+      distance: 30, // 초기 거리를 매우 작게 설정하여 개별 아이콘 표시 강화
       source: vectorSource,
       geometryFunction: function (feature) {
         // 성능 최적화: 피처의 geometry가 유효한지 확인
@@ -112,10 +117,14 @@ function initializeWfsLayers() {
       const currentMap = getMap();
       const zoomLevel =
         currentMap && currentMap.getView ? currentMap.getView().getZoom() : 10;
-      const clusterZoomThreshold = 13; // 클러스터 표시할 줌 레벨 임계값을 높임
+      const clusterZoomThreshold = 15; // 클러스터 표시할 줌 레벨 임계값
 
-      // 줌 레벨이 임계값 이하이거나 클러스터 크기가 1보다 큰 경우 클러스터 표시
-      if (zoomLevel <= clusterZoomThreshold || size > 1) {
+      // 줌 레벨 16 이상에서는 항상 개별 아이콘 표시
+      if (zoomLevel >= 16) {
+        // 줌 레벨 16 이상에서는 개별 아이콘만 표시
+        return new ol.style.Style(config.style);
+      } else if (size > 1) {
+        // 클러스터가 2개 이상일 때만 클러스터 표시
         // 클러스터 크기에 따른 캔버스 크기 계산 (더 작게 조정)
         const canvasSize = Math.min(Math.max(size * 1.2 + 20, 30), 50);
         const radius = canvasSize / 2;
@@ -218,38 +227,6 @@ function initializeWfsLayers() {
     MapEventManager.registerMoveHandler(
       `wfs-move-${layerName}`,
       function (currentExtent) {
-        // 전역 중복 실행 방지
-
-        // 줌 레벨이 실제로 변경된 경우에만 클러스터 거리 재조정
-        // const zoomChanged = currentZoom !== lastZoomLevel;
-        // if (zoomChanged) {
-        //   console.log(`줌 레벨 변경: ${lastZoomLevel} → ${currentZoom}`);
-        //   lastZoomLevel = currentZoom;
-        // }
-
-        // // 뷰포트가 실제로 변경된 경우에만 처리 (성능 최적화)
-        // const extentChanged =
-        //   !lastExtent ||
-        //   Math.abs(currentExtent[0] - lastExtent[0]) > 50 ||
-        //   Math.abs(currentExtent[1] - lastExtent[1]) > 50 ||
-        //   Math.abs(currentExtent[2] - lastExtent[2]) > 50 ||
-        //   Math.abs(currentExtent[3] - lastExtent[3]) > 50;
-
-        // if (!extentChanged && !zoomChanged) {
-        //   console.log("뷰포트와 줌 레벨이 동일하여 업데이트를 건너뜁니다.");
-        //   return;
-        // }
-
-        // if (extentChanged) {
-        //   console.log(
-        //     `뷰포트 변경: [${
-        //       lastExtent?.join(", ") || "없음"
-        //     }] → [${currentExtent.join(", ")}]`
-        //   );
-        //   lastExtent = currentExtent;
-        // }
-
-        // 300ms 후에 업데이트 실행 (디바운싱)
         // 추가적인 중복 실행 방지
         const now = Date.now();
         if (now - lastUpdateTime < 500) {
@@ -267,21 +244,22 @@ function initializeWfsLayers() {
         lastUpdateTime = now;
         wfsUpdating[layerName] = true;
 
-        console.log(`지도 변경 업데이트 시작 (줌: ${currentZoom})`);
-
-        const zoomChanged = map.getView().getZoom();
+        const currentZoom = map.getView().getZoom();
         // 줌 레벨이 변경된 경우 클러스터 거리 재조정
-        if (zoomChanged) {
+        if (currentZoom) {
           const newDistance = (function () {
-            if (currentZoom <= 8) return 250;
-            if (currentZoom <= 10) return 200;
-            if (currentZoom <= 12) return 150;
-            if (currentZoom <= 14) return 100;
-            return 80;
+            if (currentZoom >= 16) return 0; // 줌 레벨 16 이상에서는 클러스터링 완전 비활성화
+            if (currentZoom <= 8) return 100;
+            if (currentZoom <= 10) return 80;
+            if (currentZoom <= 12) return 60;
+            if (currentZoom <= 14) return 40;
+            return 30; // 줌 레벨 15에서 매우 작은 클러스터 거리
           })();
 
           if (newDistance !== lastDistance) {
-            console.log(`클러스터 거리 변경: ${lastDistance} → ${newDistance}`);
+            console.log(
+              `클러스터 거리 변경: ${lastDistance} → ${newDistance} (줌 레벨: ${currentZoom})`
+            );
             clusterSource.setDistance(newDistance);
             lastDistance = newDistance;
           }
@@ -293,32 +271,25 @@ function initializeWfsLayers() {
           }
         }
 
-        // 캐시된 데이터에서 뷰포트 기반 필터링 (줌 변경 또는 뷰포트 변경 시)
-        if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
-          console.log(
-            `캐시된 데이터에서 뷰포트 필터링 시작: ${wfsDataCache[layerName].length}개 피처`
-          );
+        // // 캐시된 데이터에서 뷰포트 기반 필터링 (줌 변경 또는 뷰포트 변경 시)
+        // if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
+        //   // 기존 피처 제거
+        //   vectorSource.clear();
 
-          // 기존 피처 제거
-          const beforeClear = vectorSource.getFeatures().length;
-          vectorSource.clear();
-          console.log(`기존 피처 제거: ${beforeClear}개`);
+        //   // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
+        //   const filteredFeatures = wfsDataCache[layerName].filter((feature) => {
+        //     const geometry = feature.getGeometry();
+        //     if (!geometry) return false;
+        //     return geometry.intersectsExtent(currentExtent);
+        //   });
 
-          // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
-          const filteredFeatures = wfsDataCache[layerName].filter((feature) => {
-            const geometry = feature.getGeometry();
-            if (!geometry) return false;
-            return geometry.intersectsExtent(currentExtent);
-          });
+        //   vectorSource.addFeatures(filteredFeatures);
+        // } else {
+        //   console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
+        // }
 
-          vectorSource.addFeatures(filteredFeatures);
-        } else {
-          console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
-        }
-
-        // 업데이트 상태 해제 (클러스터는 자동으로 업데이트됨)
-        wfsUpdating[layerName] = false;
-        console.log(`지도 변경 업데이트 완료 (줌: ${currentZoom})`);
+        // // 업데이트 상태 해제 (클러스터는 자동으로 업데이트됨)
+        // wfsUpdating[layerName] = false;
       }
     );
 
@@ -448,63 +419,6 @@ function toggleWfsLayer(layerName) {
   return !isVisible;
 }
 
-// 뷰포트 기반 WFS 데이터 요청 함수 (현재 사용하지 않음)
-/*
-function loadWfsDataByViewport(layerName, extent) {
-  const config = WFS_CONFIG[layerName];
-  const vectorSource = wfsVectorSources[layerName];
-
-  // 뷰포트 정보를 URL 파라미터로 추가
-  const bbox = extent.join(",");
-  const viewportUrl = `${config.url}?bbox=${bbox}`;
-
-  console.log(`${config.name} 뷰포트 기반 데이터 요청: ${viewportUrl}`);
-
-  // 로딩 시작 표시
-  showLoadingMessage(`${config.name} 뷰포트 데이터 로딩 중...`);
-  updateLoadingProgress(10);
-
-  return fetch(viewportUrl)
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then((data) => {
-      const features = vectorSource.getFormat().readFeatures(data, {
-        dataProjection: "EPSG:4326",
-        featureProjection: vectorSource.getProjection(),
-      });
-
-      // 기존 피처 제거
-      vectorSource.clear();
-
-      // 새로운 피처 추가
-      vectorSource.addFeatures(features);
-
-      console.log(
-        `${config.name} 뷰포트 데이터 로드 완료: ${features.length} 개 피처`
-      );
-
-      // 로딩 완료
-      updateLoadingProgress(100);
-      showLoadingMessage(`${config.name} 뷰포트 데이터 로드 완료!`);
-
-      setTimeout(() => {
-        hideLoadingMessage();
-      }, 800);
-
-      return features;
-    })
-    .catch((error) => {
-      console.error(`${config.name} 뷰포트 데이터 로드 실패:`, error);
-      hideLoadingMessage();
-      throw error;
-    });
-}
-*/
-
 // WFS 데이터 로드 함수
 function loadWfsData(layerName) {
   const config = WFS_CONFIG[layerName];
@@ -520,16 +434,16 @@ function loadWfsData(layerName) {
     // 벡터 소스가 비어있는 경우에만 피처 추가 (중복 방지)
     const currentFeatures = vectorSource.getFeatures();
     if (currentFeatures.length === 0) {
-      // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
-      const currentExtent = map.getView().calculateExtent(map.getSize());
-      const filteredFeatures = wfsDataCache[layerName].filter((feature) => {
-        const geometry = feature.getGeometry();
-        if (!geometry) return false;
-        return geometry.intersectsExtent(currentExtent);
-      });
-      vectorSource.addFeatures(filteredFeatures);
+      // 모든 데이터 추가 (뷰포트 필터링 제거)
+      // const currentExtent = map.getView().calculateExtent(map.getSize());
+      // const filteredFeatures = wfsDataCache[layerName].filter((feature) => {
+      //   const geometry = feature.getGeometry();
+      //   if (!geometry) return false;
+      //   return geometry.intersectsExtent(currentExtent);
+      // });
+      vectorSource.addFeatures(wfsDataCache[layerName]);
       console.log(
-        `${config.name} 필터링된 데이터: ${filteredFeatures.length} 개 피처 (전체: ${wfsDataCache[layerName].length} 개)`
+        `${config.name} 전체 데이터: ${wfsDataCache[layerName].length} 개 피처`
       );
     }
 
@@ -653,17 +567,17 @@ function loadWfsData(layerName) {
       wfsDataCache[layerName] = features;
       wfsDataLoaded[layerName] = true;
 
-      // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
-      const currentExtent = map.getView().calculateExtent(map.getSize());
-      const filteredFeatures = features.filter((feature) => {
-        const geometry = feature.getGeometry();
-        if (!geometry) return false;
-        return geometry.intersectsExtent(currentExtent);
-      });
-      vectorSource.addFeatures(filteredFeatures);
+      // 모든 데이터 추가 (뷰포트 필터링 제거)
+      // const currentExtent = map.getView().calculateExtent(map.getSize());
+      // const filteredFeatures = features.filter((feature) => {
+      //   const geometry = feature.getGeometry();
+      //   if (!geometry) return false;
+      //   return geometry.intersectsExtent(currentExtent);
+      // });
+      vectorSource.addFeatures(features);
 
       console.log(
-        `${config.name} 데이터 로드 완료: ${filteredFeatures.length} 개 피처 (전체: ${features.length} 개)`
+        `${config.name} 데이터 로드 완료: ${features.length} 개 피처`
       );
 
       // 첫 번째 피처의 속성 확인 (디버깅용)
@@ -679,11 +593,13 @@ function loadWfsData(layerName) {
         const zoomLevel = map.getView().getZoom();
         let clusterDistance = 200; // 기본값을 더 크게 설정하여 성능 향상
 
-        if (zoomLevel <= 8) clusterDistance = 250; // 더 넓게
-        else if (zoomLevel <= 10) clusterDistance = 200; // 더 넓게
-        else if (zoomLevel <= 12) clusterDistance = 150; // 더 넓게
-        else if (zoomLevel <= 14) clusterDistance = 100; // 더 넓게
-        else clusterDistance = 80; // 더 넓게
+        if (zoomLevel >= 16)
+          clusterDistance = 0; // 줌 레벨 16 이상에서는 클러스터링 완전 비활성화
+        else if (zoomLevel <= 8) clusterDistance = 100; // 더 작게
+        else if (zoomLevel <= 10) clusterDistance = 80; // 더 작게
+        else if (zoomLevel <= 12) clusterDistance = 60; // 더 작게
+        else if (zoomLevel <= 14) clusterDistance = 40; // 더 작게
+        else clusterDistance = 30; // 줌 레벨 15에서 매우 작은 클러스터 거리
 
         // 현재 설정된 거리와 다른 경우에만 업데이트 (성능 최적화)
         const currentDistance = clusterSource.getDistance();
