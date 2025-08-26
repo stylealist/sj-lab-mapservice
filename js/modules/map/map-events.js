@@ -6,43 +6,6 @@ let eventListeners = new Map();
 
 // 이벤트 타입별 리스너 등록 함수들
 const MapEventManager = {
-  // 줌 변경 이벤트 등록
-  registerZoomHandler: function (id, handler) {
-    const map = getMap();
-    if (!map) return;
-
-    // 이미 등록된 리스너가 있는지 확인
-    if (eventListeners.has(id)) {
-      const existingListeners = eventListeners.get(id);
-      const zoomListener = existingListeners.find(
-        (listener) => listener.type === "change:resolution"
-      );
-      if (zoomListener) {
-        console.log(`줌 변경 이벤트 리스너가 이미 등록되어 있습니다: ${id}`);
-        return;
-      }
-    }
-
-    const listener = function () {
-      const currentZoom = map.getView().getZoom();
-      handler(currentZoom);
-    };
-
-    map.getView().on("change:resolution", listener);
-
-    // 리스너 저장
-    if (!eventListeners.has(id)) {
-      eventListeners.set(id, []);
-    }
-    eventListeners.get(id).push({
-      type: "change:resolution",
-      listener: listener,
-      target: map.getView(),
-    });
-
-    console.log(`줌 변경 이벤트 리스너 등록: ${id}`);
-  },
-
   // 지도 이동 이벤트 등록
   registerMoveHandler: function (id, handler) {
     const map = getMap();
@@ -285,6 +248,16 @@ const MapEventManager = {
         );
       });
     });
+    console.log("================================");
+
+    // 줌 핸들러 특별 디버깅
+    console.log("=== 줌 핸들러 디버깅 ===");
+    const map = getMap();
+    if (map && map.getView()) {
+      const view = map.getView();
+      console.log("맵 뷰 줌 핸들러:", view._zoomHandlers);
+      console.log("전역 줌 핸들러:", window.registeredZoomHandlers);
+    }
     console.log("================================");
   },
 };

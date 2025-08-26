@@ -375,9 +375,8 @@ function enableRoadviewPicker(options = {}) {
 
         // OL 뷰 변화 동기화 및 초기 오프셋 보정
         const view = map.getView();
-        const c1 = view.on("change:center", syncKakaoMapWithOL);
-        const c2 = view.on("change:resolution", syncKakaoMapWithOL);
-        olViewListenersForKakao.push(c1, c2);
+        const c1 = map.on("moveend", syncKakaoMapWithOL);
+        olViewListenersForKakao.push(c1);
         // 현재 카카오 레벨과 변환 기대값의 차이를 offset으로 저장
         kakaoLevelOffset =
           kakaoOverlayMap.getLevel() - olZoomToKakaoLevel(view.getZoom());
@@ -400,14 +399,10 @@ function disableRoadviewPicker() {
 
     // 이벤트 해제
     if (olViewListenersForKakao && olViewListenersForKakao.length) {
-      const view = map.getView();
       olViewListenersForKakao.forEach((key) => {
-        if (key && view && view.un) {
+        if (key && map && map.un) {
           try {
-            view.un("change:center", syncKakaoMapWithOL);
-          } catch {}
-          try {
-            view.un("change:resolution", syncKakaoMapWithOL);
+            map.un("moveend", syncKakaoMapWithOL);
           } catch {}
         }
       });

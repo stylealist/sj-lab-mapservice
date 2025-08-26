@@ -1,5 +1,4 @@
 // 맵 코어 모듈
-import { MapEventManager } from "./map-events.js";
 
 // 맵 핵심 모듈 - 초기화 및 기본 기능
 let map;
@@ -100,33 +99,20 @@ function initializeMap() {
 
 // 맵 이벤트 리스너 설정
 function setupMapEventListeners() {
-  // 포인터 이동 이벤트 (선택적)
-  MapEventManager.registerPointerMoveHandler(
-    "core-coordinates",
-    function (evt) {
-      const map = getMap();
-      const coordinate = evt.coordinate;
-      const lonLat = ol.proj.toLonLat(coordinate);
-      // coordinatesElement가 존재할 때만 업데이트
-      if (window.coordinatesElement) {
-        window.coordinatesElement.textContent = `경도: ${lonLat[0].toFixed(
-          6
-        )}, 위도: ${lonLat[1].toFixed(6)}`;
-      }
+  // 포인터 이동 이벤트 (선택적) - 좌표 표시용
+  map.on("pointermove", function (evt) {
+    const coordinate = evt.coordinate;
+    const lonLat = ol.proj.toLonLat(coordinate);
+    // coordinatesElement가 존재할 때만 업데이트
+    if (window.coordinatesElement) {
+      window.coordinatesElement.textContent = `경도: ${lonLat[0].toFixed(
+        6
+      )}, 위도: ${lonLat[1].toFixed(6)}`;
     }
-  );
+  });
 
-  // 줌 레벨 변경 이벤트 (선택적)
-  MapEventManager.registerZoomHandler(
-    "core-zoom-display",
-    function (currentZoom) {
-      const zoom = Math.round(currentZoom);
-      // zoomLevelElement가 존재할 때만 업데이트
-      if (window.zoomLevelElement) {
-        window.zoomLevelElement.textContent = zoom;
-      }
-    }
-  );
+  // 줌 레벨 변경 이벤트는 WFS 모듈에서 처리하므로 제거
+  // UI 업데이트는 WFS 줌 핸들러에서 함께 처리됨
 
   // 맵 로드 완료 이벤트
   map.once("postrender", function () {

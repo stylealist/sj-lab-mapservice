@@ -10,10 +10,23 @@ import { makeAjaxRequest, utils } from "./utils/helpers.js";
 
 // 앱 초기화
 document.addEventListener("DOMContentLoaded", function () {
+  console.log("DOMContentLoaded 이벤트 발생");
+
+  // 중복 초기화 방지
+  if (window.appInitialized) {
+    console.log("앱이 이미 초기화되어 있습니다.");
+    return;
+  }
+
   initializeMapWithModules();
   initializeNavigation();
   initializeLayerPanel();
   initializeHeaderToggle();
+
+  // 앱 초기화 완료 플래그 설정
+  window.appInitialized = true;
+  console.log("앱 초기화 완료");
+
   // hideLoading() 제거 - 맵 로드 완료 후 자동으로 호출됨
 });
 

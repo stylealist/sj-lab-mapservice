@@ -40,9 +40,17 @@ let wfsInitialized = false;
 
 // WFS 레이어 초기화
 function initializeWfsLayers() {
-  // 이미 초기화되었는지 확인
+  console.log("initializeWfsLayers 호출됨");
+
+  // 이미 초기화되었는지 확인 (더 강력한 중복 방지)
   if (wfsInitialized) {
     console.log("WFS 레이어가 이미 초기화되어 있습니다.");
+    return;
+  }
+
+  // 전역 초기화 상태 확인
+  if (window.wfsLayersInitialized) {
+    console.log("전역에서 WFS 레이어가 이미 초기화되어 있습니다.");
     return;
   }
 
@@ -197,52 +205,78 @@ function initializeWfsLayers() {
       maxResolution: Infinity, // 최대 해상도 제한 없음
     });
 
-    // 성능 최적화된 줌 레벨 변경 이벤트 (디바운싱 적용)
-    let zoomUpdateTimeout;
-    let isUpdating = false;
+    // 줌 레벨 변경 시 UI 업데이트만 처리 (클러스터 재조정은 moveend에서 처리)
+
+    // 줌/이동 통합 처리 변수들
+    let updateTimeout;
+    let lastExtent = null;
     let lastZoomLevel = null;
     let lastDistance = null;
-    let lastUpdateTime = 0; // 마지막 업데이트 시간 추적
+    let lastUpdateTime = 0;
 
-    // 줌 변경 이벤트 핸들러 등록
-    MapEventManager.registerZoomHandler(
-      `wfs-zoom-${layerName}`,
-      function (currentZoom) {
+    // 지도 줌/이동 통합 이벤트 핸들러 등록
+    MapEventManager.registerMoveHandler(
+      `wfs-move-${layerName}`,
+      function (currentExtent) {
+        // 전역 중복 실행 방지
+        if (window.wfsUpdating && window.wfsUpdating[layerName]) {
+          console.log(`전역 업데이트 중: ${layerName}`);
+          return;
+        }
+
+        const currentZoom = map.getView().getZoom();
         console.log(
-          `줌 변경 감지: ${currentZoom} (레이어: ${layerName}, 활성화: ${wfsActive[layerName]})`
+          `지도 변경 감지 (레이어: ${layerName}, 활성화: ${wfsActive[layerName]}, 줌: ${currentZoom})`
         );
 
         // 편의점 레이어가 활성화된 경우에만 처리
         if (!wfsActive[layerName]) {
           console.log(
-            `레이어가 비활성화되어 있어 줌 변경을 무시합니다: ${layerName}`
+            `레이어가 비활성화되어 있어 지도 변경을 무시합니다: ${layerName}`
           );
           return;
         }
 
-        // 줌 레벨이 실제로 변경된 경우에만 처리 (성능 최적화)
-        if (currentZoom === lastZoomLevel) {
+        // 줌 레벨이 실제로 변경된 경우에만 클러스터 거리 재조정
+        const zoomChanged = currentZoom !== lastZoomLevel;
+        if (zoomChanged) {
+          console.log(`줌 레벨 변경: ${lastZoomLevel} → ${currentZoom}`);
+          lastZoomLevel = currentZoom;
+        }
+
+        // 뷰포트가 실제로 변경된 경우에만 처리 (성능 최적화)
+        const extentChanged =
+          !lastExtent ||
+          Math.abs(currentExtent[0] - lastExtent[0]) > 100 ||
+          Math.abs(currentExtent[1] - lastExtent[1]) > 100 ||
+          Math.abs(currentExtent[2] - lastExtent[2]) > 100 ||
+          Math.abs(currentExtent[3] - lastExtent[3]) > 100;
+
+        if (!extentChanged && !zoomChanged) {
+          console.log("뷰포트와 줌 레벨이 동일하여 업데이트를 건너뜁니다.");
+          return;
+        }
+
+        if (extentChanged) {
           console.log(
-            `줌 레벨이 동일하여 업데이트를 건너뜁니다: ${currentZoom}`
+            `뷰포트 변경: [${
+              lastExtent?.join(", ") || "없음"
+            }] → [${currentExtent.join(", ")}]`
           );
-          return;
+          lastExtent = currentExtent;
         }
-
-        console.log(`줌 레벨 변경: ${lastZoomLevel} → ${currentZoom}`);
-        lastZoomLevel = currentZoom;
 
         // 이전 타임아웃 클리어
-        if (zoomUpdateTimeout) {
-          clearTimeout(zoomUpdateTimeout);
+        if (updateTimeout) {
+          clearTimeout(updateTimeout);
         }
 
-        // 300ms 후에 업데이트 실행 (디바운싱 시간 증가)
-        zoomUpdateTimeout = setTimeout(() => {
+        // 300ms 후에 업데이트 실행 (디바운싱)
+        updateTimeout = setTimeout(() => {
           // 추가적인 중복 실행 방지
           const now = Date.now();
           if (now - lastUpdateTime < 500) {
-            // 500ms 내에 중복 실행 방지
-            console.log(`줌 업데이트 쿨다운 중: ${now - lastUpdateTime}ms`);
+            console.log(`업데이트 쿨다운 중: ${now - lastUpdateTime}ms`);
             return;
           }
 
@@ -256,140 +290,32 @@ function initializeWfsLayers() {
           lastUpdateTime = now;
           wfsUpdating[layerName] = true;
 
-          console.log(`줌 변경 업데이트 시작: ${currentZoom}`);
+          console.log(`지도 변경 업데이트 시작 (줌: ${currentZoom})`);
 
-          // 성능 최적화된 클러스터 거리 계산
-          const newDistance = (function () {
-            if (currentZoom <= 8) return 250; // 더 넓게
-            if (currentZoom <= 10) return 200; // 더 넓게
-            if (currentZoom <= 12) return 150; // 더 넓게
-            if (currentZoom <= 14) return 100; // 더 넓게
-            return 80; // 더 넓게
-          })();
+          // 줌 레벨이 변경된 경우 클러스터 거리 재조정
+          if (zoomChanged) {
+            const newDistance = (function () {
+              if (currentZoom <= 8) return 250;
+              if (currentZoom <= 10) return 200;
+              if (currentZoom <= 12) return 150;
+              if (currentZoom <= 14) return 100;
+              return 80;
+            })();
 
-          // 거리가 실제로 변경된 경우에만 업데이트 (성능 최적화)
-          if (newDistance !== lastDistance) {
-            console.log(`클러스터 거리 변경: ${lastDistance} → ${newDistance}`);
-            // 클러스터 소스 거리 업데이트
-            clusterSource.setDistance(newDistance);
-            lastDistance = newDistance;
+            if (newDistance !== lastDistance) {
+              console.log(
+                `클러스터 거리 변경: ${lastDistance} → ${newDistance}`
+              );
+              clusterSource.setDistance(newDistance);
+              lastDistance = newDistance;
+            }
+
+            // 스타일 캐시 클리어 (줌 레벨 변경 시)
+            if (Object.keys(styleCache).length > 10) {
+              Object.keys(styleCache).forEach((key) => delete styleCache[key]);
+              console.log("스타일 캐시 클리어됨");
+            }
           }
-
-          // 캐시된 데이터에서 뷰포트 기반 필터링
-          if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
-            console.log(
-              `캐시된 데이터에서 뷰포트 필터링 시작: ${wfsDataCache[layerName].length}개 피처`
-            );
-
-            // 기존 피처 제거
-            const beforeClear = vectorSource.getFeatures().length;
-            vectorSource.clear();
-            console.log(`기존 피처 제거: ${beforeClear}개`);
-
-            // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
-            const currentExtent = map.getView().calculateExtent(map.getSize());
-            const filteredFeatures = wfsDataCache[layerName].filter(
-              (feature) => {
-                const geometry = feature.getGeometry();
-                if (!geometry) return false;
-                return geometry.intersectsExtent(currentExtent);
-              }
-            );
-
-            vectorSource.addFeatures(filteredFeatures);
-
-            console.log(
-              `${config.name} 줌 변경으로 뷰포트 필터링: ${filteredFeatures.length} 개 피처 (줌: ${currentZoom})`
-            );
-          } else {
-            console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
-          }
-
-          // 스타일 캐시 클리어 (줌 레벨 변경 시) - 선택적 클리어
-          if (Object.keys(styleCache).length > 10) {
-            // 캐시가 너무 많을 때만 클리어
-            Object.keys(styleCache).forEach((key) => delete styleCache[key]);
-            console.log("스타일 캐시 클리어됨");
-          }
-
-          // 레이어 스타일 업데이트 (성능 최적화)
-          requestAnimationFrame(() => {
-            clusterLayer.changed();
-            wfsUpdating[layerName] = false;
-            console.log(`줌 변경 업데이트 완료: ${currentZoom}`);
-          });
-        }, 300);
-      }
-    );
-
-    // 지도 이동 시 뷰포트 기반 데이터 업데이트 (디바운싱 적용)
-    let moveUpdateTimeout;
-    let lastExtent = null;
-    let lastMoveUpdateTime = 0; // 마지막 이동 업데이트 시간 추적
-
-    // 지도 이동 이벤트 핸들러 등록
-    MapEventManager.registerMoveHandler(
-      `wfs-move-${layerName}`,
-      function (currentExtent) {
-        console.log(
-          `지도 이동 감지 (레이어: ${layerName}, 활성화: ${wfsActive[layerName]})`
-        );
-
-        // 편의점 레이어가 활성화된 경우에만 처리
-        if (!wfsActive[layerName]) {
-          console.log(
-            `레이어가 비활성화되어 있어 지도 이동을 무시합니다: ${layerName}`
-          );
-          return;
-        }
-
-        // 뷰포트가 실제로 변경된 경우에만 처리 (성능 최적화)
-        if (
-          lastExtent &&
-          Math.abs(currentExtent[0] - lastExtent[0]) < 100 &&
-          Math.abs(currentExtent[1] - lastExtent[1]) < 100 &&
-          Math.abs(currentExtent[2] - lastExtent[2]) < 100 &&
-          Math.abs(currentExtent[3] - lastExtent[3]) < 100
-        ) {
-          console.log("뷰포트 변경이 미미하여 업데이트를 건너뜁니다.");
-          return;
-        }
-
-        console.log(
-          `뷰포트 변경: [${
-            lastExtent?.join(", ") || "없음"
-          }] → [${currentExtent.join(", ")}]`
-        );
-        lastExtent = currentExtent;
-
-        // 이전 타임아웃 클리어
-        if (moveUpdateTimeout) {
-          clearTimeout(moveUpdateTimeout);
-        }
-
-        // 200ms 후에 업데이트 실행 (디바운싱)
-        moveUpdateTimeout = setTimeout(() => {
-          // 추가적인 중복 실행 방지
-          const now = Date.now();
-          if (now - lastMoveUpdateTime < 300) {
-            // 300ms 내에 중복 실행 방지
-            console.log(
-              `이동 업데이트 쿨다운 중: ${now - lastMoveUpdateTime}ms`
-            );
-            return;
-          }
-
-          if (wfsUpdating[layerName]) {
-            console.log(
-              `레이어 ${layerName}이 이미 업데이트 중이므로 건너뜁니다.`
-            );
-            return;
-          }
-
-          lastMoveUpdateTime = now;
-          wfsUpdating[layerName] = true;
-
-          console.log(`지도 이동 업데이트 시작`);
 
           // 캐시된 데이터에서 뷰포트 기반 필터링
           if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
@@ -414,7 +340,7 @@ function initializeWfsLayers() {
             vectorSource.addFeatures(filteredFeatures);
 
             console.log(
-              `${config.name} 지도 이동으로 뷰포트 필터링: ${filteredFeatures.length} 개 피처`
+              `${config.name} 뷰포트 필터링: ${filteredFeatures.length} 개 피처 (줌: ${currentZoom})`
             );
           } else {
             console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
@@ -424,9 +350,10 @@ function initializeWfsLayers() {
           requestAnimationFrame(() => {
             clusterLayer.changed();
             wfsUpdating[layerName] = false;
-            console.log(`지도 이동 업데이트 완료`);
+
+            console.log(`지도 변경 업데이트 완료 (줌: ${currentZoom})`);
           });
-        }, 200);
+        }, 300);
       }
     );
 
@@ -532,6 +459,7 @@ function initializeWfsLayers() {
 
   // 초기화 완료 플래그 설정
   wfsInitialized = true;
+  window.wfsLayersInitialized = true;
   console.log("WFS 레이어 초기화 완료");
 }
 

@@ -40,6 +40,23 @@ import {
 
 // 맵 초기화 함수 - 모든 모듈을 초기화
 function initializeMapWithModules() {
+  console.log("initializeMapWithModules 호출됨");
+
+  // 이미 초기화되었는지 확인 (더 강력한 중복 방지)
+  if (window.mapModulesInitialized) {
+    console.log("맵 모듈이 이미 초기화되어 있습니다.");
+    return getMap();
+  }
+
+  // 전역 초기화 상태 확인
+  if (window.mapInitializationInProgress) {
+    console.log("맵 초기화가 이미 진행 중입니다.");
+    return getMap();
+  }
+
+  // 초기화 진행 중 플래그 설정
+  window.mapInitializationInProgress = true;
+
   // 맵 핵심 초기화
   const map = initializeMap();
 
@@ -52,7 +69,18 @@ function initializeMapWithModules() {
   // WMS 레이어 초기화
   initializeWmsLayers();
 
+  // 초기화 완료 플래그 설정
+  window.mapModulesInitialized = true;
+  window.mapInitializationInProgress = false; // 초기화 진행 중 플래그 해제
+
   console.log("모든 맵 모듈이 초기화되었습니다.");
+
+  // 디버깅: 등록된 이벤트 리스너 확인
+  setTimeout(() => {
+    if (MapEventManager.debugHandlers) {
+      MapEventManager.debugHandlers();
+    }
+  }, 1000);
 
   return map;
 }
