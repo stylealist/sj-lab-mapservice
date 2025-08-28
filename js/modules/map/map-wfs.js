@@ -38,10 +38,136 @@ const WFS_CONFIG = {
       }),
     },
   },
+  bus_stop: {
+    url: getApiUrl("/map/bus-stop"),
+    name: "버스정류장",
+    style: {
+      image: new ol.style.Icon({
+        src: "images/icon/busStop.png",
+        scale: 1.0,
+        anchor: [0.5, 1.0], // 아이콘 하단 중앙에 앵커 설정
+        offset: [0, 0],
+        opacity: 1.0,
+        rotation: 0,
+        size: [32, 32], // 아이콘 크기 명시적 설정
+        imgSize: [32, 32], // 원본 이미지 크기
+      }),
+    },
+  },
 };
 
 // WFS 레이어 초기화 상태 추적
 let wfsInitialized = false;
+
+// 줌 레벨에 따른 표출 개수 설정 함수
+const getMaxFeaturesByZoom = (zoomLevel) => {
+  if (zoomLevel >= 18) return 3000; // 줌 레벨 18 이상: 최대 3000개
+  if (zoomLevel >= 16) return 1500; // 줌 레벨 16-17: 최대 1500개
+  if (zoomLevel >= 14) return 800; // 줌 레벨 14-15: 최대 800개
+  if (zoomLevel >= 12) return 400; // 줌 레벨 12-13: 최대 400개
+  if (zoomLevel >= 10) return 200; // 줌 레벨 10-11: 최대 200개
+  return 100; // 줌 레벨 10 미만: 최대 100개
+};
+
+// 균등 분포와 중앙 가중치를 결합한 샘플링 함수
+const spatialSampling = (features, maxCount, extent) => {
+  if (features.length <= maxCount) {
+    return features;
+  }
+
+  // 뷰포트의 중심점 계산
+  const centerX = (extent[0] + extent[2]) / 2;
+  const centerY = (extent[1] + extent[3]) / 2;
+
+  // 화면 비율을 고려한 그리드 분할
+  const viewportWidth = extent[2] - extent[0];
+  const viewportHeight = extent[3] - extent[1];
+  const aspectRatio = viewportWidth / viewportHeight;
+
+  // 고정된 그리드 크기로 균등 분포 보장
+  const gridCols = Math.ceil(Math.sqrt(maxCount * 4)); // 더 많은 셀로 분할
+  const gridRows = Math.ceil(Math.sqrt(maxCount * 4)); // 가로세로 동일하게
+
+  const cellWidth = viewportWidth / gridCols;
+  const cellHeight = viewportHeight / gridRows;
+
+  // 그리드 셀별로 피처 그룹화
+  const grid = {};
+  const cellDistances = {}; // 각 셀의 중심점까지의 거리
+
+  features.forEach((feature) => {
+    const geometry = feature.getGeometry();
+    if (!geometry) return;
+
+    const coord = geometry.getCoordinates();
+    const gridX = Math.floor((coord[0] - extent[0]) / cellWidth);
+    const gridY = Math.floor((coord[1] - extent[1]) / cellHeight);
+
+    // 그리드 범위 내로 제한
+    const clampedX = Math.max(0, Math.min(gridX, gridCols - 1));
+    const clampedY = Math.max(0, Math.min(gridY, gridRows - 1));
+    const cellKey = `${clampedX},${clampedY}`;
+
+    if (!grid[cellKey]) {
+      grid[cellKey] = [];
+      // 셀의 중심점 계산
+      const cellCenterX = extent[0] + (clampedX + 0.5) * cellWidth;
+      const cellCenterY = extent[1] + (clampedY + 0.5) * cellHeight;
+      // 뷰포트 중심점까지의 거리 계산
+      cellDistances[cellKey] = Math.sqrt(
+        Math.pow(cellCenterX - centerX, 2) + Math.pow(cellCenterY - centerY, 2)
+      );
+    }
+    grid[cellKey].push(feature);
+  });
+
+  // 모든 그리드 셀을 포함하도록 보장
+  const allCells = [];
+  for (let x = 0; x < gridCols; x++) {
+    for (let y = 0; y < gridRows; y++) {
+      const cellKey = `${x},${y}`;
+      if (grid[cellKey]) {
+        allCells.push(cellKey);
+      }
+    }
+  }
+
+  // 셀을 랜덤 순서로 정렬 (편향 방지)
+  const sortedCells = allCells.sort(() => 0.5 - Math.random());
+
+  // 완전 균등 분포를 위한 선택 개수 계산
+  const selectedFeatures = [];
+  const totalCells = sortedCells.length;
+  const baseFeaturesPerCell = Math.floor(maxCount / totalCells);
+  const remainingFeatures = maxCount % totalCells;
+
+  sortedCells.forEach((cellKey, index) => {
+    const cellFeatures = grid[cellKey] || [];
+    if (cellFeatures.length === 0) return;
+
+    // 완전 균등 분배 (가중치 제거)
+    let targetCount = baseFeaturesPerCell;
+    if (index < remainingFeatures) {
+      targetCount += 1;
+    }
+
+    if (cellFeatures.length <= targetCount) {
+      // 셀의 피처가 적으면 모두 선택
+      selectedFeatures.push(...cellFeatures);
+    } else {
+      // 셀의 피처가 많으면 랜덤 선택
+      const shuffled = cellFeatures.sort(() => 0.5 - Math.random());
+      selectedFeatures.push(...shuffled.slice(0, targetCount));
+    }
+  });
+
+  // 최종 개수 조정
+  if (selectedFeatures.length > maxCount) {
+    return selectedFeatures.slice(0, maxCount);
+  }
+
+  return selectedFeatures;
+};
 
 // WFS 레이어 초기화
 function initializeWfsLayers() {
@@ -86,128 +212,21 @@ function initializeWfsLayers() {
     wfsDataLoaded[layerName] = false; // 초기 로드 상태는 false
     wfsUpdating[layerName] = false; // 초기 업데이트 상태는 false
 
-    // 클러스터 소스 생성 (성능 최적화된 거리 설정)
-    const clusterSource = new ol.source.Cluster({
-      distance: 30, // 초기 거리를 매우 작게 설정하여 개별 아이콘 표시 강화
-      source: vectorSource,
-      geometryFunction: function (feature) {
-        // 성능 최적화: 피처의 geometry가 유효한지 확인
-        const geometry = feature.getGeometry();
-        return geometry && geometry.getType() === "Point" ? geometry : null;
-      },
-      // 성능 최적화 추가 옵션
-      wrapX: false, // 경계선을 넘어가지 않도록 설정
-      minDistance: 20, // 최소 클러스터 거리 설정
-      // 추가 성능 최적화 옵션
-      extent: undefined, // 전체 범위 클러스터링
-      maxZoom: 18, // 최대 줌 레벨 제한
-    });
-
-    // 성능 최적화된 클러스터 스타일 함수 (Canvas 이미지 기반)
-    const styleCache = {};
-    const clusterStyle = function (feature) {
-      const size = feature.get("features").length;
-
-      // 캐시된 스타일이 있으면 반환
-      if (styleCache[size]) {
-        return styleCache[size];
-      }
-
-      // 줌 레벨 확인 (성능 최적화: 맵 인스턴스 캐싱)
-      const currentMap = getMap();
-      const zoomLevel =
-        currentMap && currentMap.getView ? currentMap.getView().getZoom() : 10;
-      const clusterZoomThreshold = 15; // 클러스터 표시할 줌 레벨 임계값
-
-      // 줌 레벨 16 이상에서는 항상 개별 아이콘 표시
-      if (zoomLevel >= 16) {
-        // 줌 레벨 16 이상에서는 개별 아이콘만 표시
-        return new ol.style.Style(config.style);
-      } else if (size > 1) {
-        // 클러스터가 2개 이상일 때만 클러스터 표시
-        // 클러스터 크기에 따른 캔버스 크기 계산 (더 작게 조정)
-        const canvasSize = Math.min(Math.max(size * 1.2 + 20, 30), 50);
-        const radius = canvasSize / 2;
-
-        // 색상 그라데이션 (성능 최적화: 조건 단순화)
-        let fillColor;
-        if (size > 200) fillColor = "#dc2626"; // 빨강
-        else if (size > 100) fillColor = "#ea580c"; // 주황
-        else if (size > 50) fillColor = "#f97316"; // 밝은 주황
-        else if (size > 20) fillColor = "#fb923c"; // 연한 주황
-        else fillColor = "#fdba74"; // 매우 연한 주황
-
-        // Canvas를 사용하여 클러스터 이미지 생성
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
-        canvas.width = canvasSize;
-        canvas.height = canvasSize;
-
-        // 배경 원 그리기
-        context.beginPath();
-        context.arc(radius, radius, radius - 1, 0, 2 * Math.PI, false);
-        context.fillStyle = fillColor;
-        context.fill();
-
-        // 테두리 그리기
-        context.lineWidth = 1.5;
-        context.strokeStyle = "#ffffff";
-        context.stroke();
-
-        // 텍스트(클러스터 개수) 추가 (적절한 폰트 크기)
-        context.fillStyle = "#000000";
-        context.font =
-          size > 999
-            ? `bold ${Math.max(
-                10,
-                canvasSize / 5
-              )}px 'Segoe UI', Arial, sans-serif`
-            : `bold ${Math.max(
-                12,
-                canvasSize / 4
-              )}px 'Segoe UI', Arial, sans-serif`;
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-
-        // 텍스트에 흰색 테두리 추가
-        context.strokeStyle = "#ffffff";
-        context.lineWidth = 1;
-        const text =
-          size > 999 ? Math.floor(size / 1000) + "k" : size.toString();
-        context.strokeText(text, radius, radius);
-        context.fillText(text, radius, radius);
-
-        // Canvas 이미지를 스타일로 설정
-        const style = new ol.style.Style({
-          image: new ol.style.Icon({
-            img: canvas,
-            imgSize: [canvasSize, canvasSize],
-            scale: 1.0,
-            anchor: [0.5, 0.5],
-          }),
-        });
-
-        // 스타일 캐싱 (성능 향상)
-        styleCache[size] = style;
-        return style;
-      } else {
-        // 단일 피처인 경우 개별 아이콘 표시
-        return new ol.style.Style(config.style);
-      }
+    // 줌 레벨에 따른 스타일 함수
+    const zoomBasedStyle = function (feature) {
+      return new ol.style.Style(config.style);
     };
 
-    // 클러스터 레이어 생성 (성능 최적화 옵션 추가)
-    const clusterLayer = new ol.layer.Vector({
-      source: clusterSource,
-      style: clusterStyle,
+    // 벡터 레이어 생성 (클러스터 없이 개별 아이콘 표시)
+    const vectorLayer = new ol.layer.Vector({
+      source: vectorSource,
+      style: zoomBasedStyle,
       visible: false, // 초기에는 비활성화
       renderBuffer: 100, // 렌더링 버퍼 증가
       updateWhileAnimating: false, // 애니메이션 중 업데이트 비활성화
       updateWhileInteracting: false, // 상호작용 중 업데이트 비활성화
-      // 성능 최적화 추가 옵션
       declutter: true, // 피처 겹침 방지
       zIndex: 1000,
-      // 추가 성능 최적화 옵션
       renderOrder: null, // 렌더링 순서 최적화
       extent: undefined, // 전체 범위 렌더링
       minResolution: 0, // 최소 해상도 제한 없음
@@ -245,64 +264,71 @@ function initializeWfsLayers() {
         wfsUpdating[layerName] = true;
 
         const currentZoom = map.getView().getZoom();
-        // 줌 레벨이 변경된 경우 클러스터 거리 재조정
-        if (currentZoom) {
-          const newDistance = (function () {
-            if (currentZoom >= 16) return 0; // 줌 레벨 16 이상에서는 클러스터링 완전 비활성화
-            if (currentZoom <= 8) return 100;
-            if (currentZoom <= 10) return 80;
-            if (currentZoom <= 12) return 60;
-            if (currentZoom <= 14) return 40;
-            return 30; // 줌 레벨 15에서 매우 작은 클러스터 거리
-          })();
 
-          if (newDistance !== lastDistance) {
-            console.log(
-              `클러스터 거리 변경: ${lastDistance} → ${newDistance} (줌 레벨: ${currentZoom})`
+        // 줌 레벨이 변경된 경우 또는 뷰포트가 변경된 경우 필터링 적용
+        if (
+          currentZoom &&
+          (currentZoom !== lastZoomLevel ||
+            !lastExtent ||
+            !ol.extent.equals(currentExtent, lastExtent))
+        ) {
+          lastZoomLevel = currentZoom;
+          lastExtent = currentExtent;
+
+          // 캐시된 데이터에서 뷰포트 기반 필터링 및 줌 레벨에 따른 개수 제한
+          if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
+            // 기존 피처 제거
+            vectorSource.clear();
+
+            // 현재 뷰포트에 맞는 데이터만 필터링
+            const viewportFeatures = wfsDataCache[layerName].filter(
+              (feature) => {
+                const geometry = feature.getGeometry();
+                if (!geometry) return false;
+                return geometry.intersectsExtent(currentExtent);
+              }
             );
-            clusterSource.setDistance(newDistance);
-            lastDistance = newDistance;
-          }
 
-          // 스타일 캐시 클리어 (줌 레벨 변경 시)
-          if (Object.keys(styleCache).length > 10) {
-            Object.keys(styleCache).forEach((key) => delete styleCache[key]);
-            console.log("스타일 캐시 클리어됨");
+            // 줌 레벨에 따른 최대 표출 개수 제한
+            const maxFeatures = getMaxFeaturesByZoom(currentZoom);
+            let filteredFeatures = viewportFeatures;
+
+            if (viewportFeatures.length > maxFeatures) {
+              // 공간적 균등 분포를 고려한 샘플링
+              filteredFeatures = spatialSampling(
+                viewportFeatures,
+                maxFeatures,
+                currentExtent
+              );
+              console.log(
+                `${config.name}: 뷰포트 내 ${viewportFeatures.length}개 중 ${maxFeatures}개 표출 (줌 레벨: ${currentZoom})`
+              );
+            } else {
+              console.log(
+                `${config.name}: 뷰포트 내 ${viewportFeatures.length}개 모두 표출 (줌 레벨: ${currentZoom})`
+              );
+            }
+
+            // 필터링된 피처 추가
+            vectorSource.addFeatures(filteredFeatures);
+          } else {
+            console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
           }
         }
 
-        // // 캐시된 데이터에서 뷰포트 기반 필터링 (줌 변경 또는 뷰포트 변경 시)
-        // if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
-        //   // 기존 피처 제거
-        //   vectorSource.clear();
-
-        //   // 현재 뷰포트에 맞는 데이터만 필터링하여 추가
-        //   const filteredFeatures = wfsDataCache[layerName].filter((feature) => {
-        //     const geometry = feature.getGeometry();
-        //     if (!geometry) return false;
-        //     return geometry.intersectsExtent(currentExtent);
-        //   });
-
-        //   vectorSource.addFeatures(filteredFeatures);
-        // } else {
-        //   console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
-        // }
-
-        // // 업데이트 상태 해제 (클러스터는 자동으로 업데이트됨)
-        // wfsUpdating[layerName] = false;
+        // 업데이트 상태 해제
+        wfsUpdating[layerName] = false;
       }
     );
 
     // 맵에 레이어 추가
-    map.addLayer(clusterLayer);
+    map.addLayer(vectorLayer);
 
     // 레이어 저장
-    wfsLayers[layerName] = clusterLayer;
+    wfsLayers[layerName] = vectorLayer;
     wfsActive[layerName] = false;
 
-    console.log(
-      `WFS 클러스터 레이어 생성됨: ${config.name} (데이터 로드 대기 중)`
-    );
+    console.log(`WFS 벡터 레이어 생성됨: ${config.name} (데이터 로드 대기 중)`);
   });
 
   // 성능 최적화된 맵 클릭 이벤트 (디바운싱 적용)
@@ -319,31 +345,10 @@ function initializeWfsLayers() {
       });
 
       if (feature) {
-        // 클러스터인지 확인
-        const features = feature.get("features");
-        if (features && features.length > 1) {
-          // 클러스터인 경우 확대
-          const extent = new ol.source.Vector({
-            features: features,
-          }).getExtent();
-          map.getView().fit(extent, {
-            duration: 500,
-            padding: [50, 50, 50, 50],
-          });
-          return;
-        } else if (features && features.length === 1) {
-          // 단일 피처인 경우 팝업 표시
-          console.log(
-            "클러스터에서 단일 피처 클릭:",
-            features[0].getProperties()
-          );
-          displayWfsFeatureInfo(evt);
-          return;
-        }
+        // 피처 정보 표시
+        console.log("피처 클릭:", feature.getProperties());
+        displayWfsFeatureInfo(evt);
       }
-
-      // 일반 피처 정보 표시
-      displayWfsFeatureInfo(evt);
     }, 50); // 50ms 디바운싱
   });
 
@@ -567,17 +572,9 @@ function loadWfsData(layerName) {
       wfsDataCache[layerName] = features;
       wfsDataLoaded[layerName] = true;
 
-      // 모든 데이터 추가 (뷰포트 필터링 제거)
-      // const currentExtent = map.getView().calculateExtent(map.getSize());
-      // const filteredFeatures = features.filter((feature) => {
-      //   const geometry = feature.getGeometry();
-      //   if (!geometry) return false;
-      //   return geometry.intersectsExtent(currentExtent);
-      // });
-      vectorSource.addFeatures(features);
-
+      // 초기 로드 시에는 모든 데이터를 추가하지 않고, 줌/이동 이벤트에서 필터링
       console.log(
-        `${config.name} 데이터 로드 완료: ${features.length} 개 피처`
+        `${config.name} 데이터 로드 완료: ${features.length} 개 피처 (캐시에 저장됨)`
       );
 
       // 첫 번째 피처의 속성 확인 (디버깅용)
@@ -586,38 +583,40 @@ function loadWfsData(layerName) {
         console.log("첫 번째 피처 속성:", firstFeature.getProperties());
       }
 
-      // 데이터 로드 완료 후 클러스터 거리 설정 (성능 최적화)
-      const clusterSource = wfsLayers[layerName].getSource();
-
+      // 초기 뷰포트에 맞는 데이터만 표시
       if (map && map.getView) {
+        const currentExtent = map.getView().calculateExtent(map.getSize());
         const zoomLevel = map.getView().getZoom();
-        let clusterDistance = 200; // 기본값을 더 크게 설정하여 성능 향상
 
-        if (zoomLevel >= 16)
-          clusterDistance = 0; // 줌 레벨 16 이상에서는 클러스터링 완전 비활성화
-        else if (zoomLevel <= 8) clusterDistance = 100; // 더 작게
-        else if (zoomLevel <= 10) clusterDistance = 80; // 더 작게
-        else if (zoomLevel <= 12) clusterDistance = 60; // 더 작게
-        else if (zoomLevel <= 14) clusterDistance = 40; // 더 작게
-        else clusterDistance = 30; // 줌 레벨 15에서 매우 작은 클러스터 거리
+        // 현재 뷰포트에 맞는 데이터만 필터링
+        const viewportFeatures = features.filter((feature) => {
+          const geometry = feature.getGeometry();
+          if (!geometry) return false;
+          return geometry.intersectsExtent(currentExtent);
+        });
 
-        // 현재 설정된 거리와 다른 경우에만 업데이트 (성능 최적화)
-        const currentDistance = clusterSource.getDistance();
-        if (clusterDistance !== currentDistance) {
-          clusterSource.setDistance(clusterDistance);
+        // 줌 레벨에 따른 최대 표출 개수 제한
+        const maxFeatures = getMaxFeaturesByZoom(zoomLevel);
+        let filteredFeatures = viewportFeatures;
+
+        if (viewportFeatures.length > maxFeatures) {
+          // 공간적 균등 분포를 고려한 샘플링
+          filteredFeatures = spatialSampling(
+            viewportFeatures,
+            maxFeatures,
+            currentExtent
+          );
           console.log(
-            `${config.name} 클러스터 거리 설정: ${clusterDistance} (줌 레벨: ${zoomLevel})`
+            `${config.name}: 초기 로드 - 뷰포트 내 ${viewportFeatures.length}개 중 ${maxFeatures}개 표출 (줌 레벨: ${zoomLevel})`
+          );
+        } else {
+          console.log(
+            `${config.name}: 초기 로드 - 뷰포트 내 ${viewportFeatures.length}개 모두 표출 (줌 레벨: ${zoomLevel})`
           );
         }
-      } else {
-        console.warn(
-          "맵 인스턴스를 찾을 수 없어 기본 클러스터 거리를 사용합니다."
-        );
-        // 기본값도 현재 설정과 다른 경우에만 업데이트
-        const currentDistance = clusterSource.getDistance();
-        if (200 !== currentDistance) {
-          clusterSource.setDistance(200); // 기본값을 더 크게 설정
-        }
+
+        // 필터링된 피처만 추가
+        vectorSource.addFeatures(filteredFeatures);
       }
 
       // 데이터 처리 완료 후 진행률을 100%로 설정
