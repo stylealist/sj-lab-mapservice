@@ -39,7 +39,7 @@ const WFS_CONFIG = {
     },
   },
   bus_stop: {
-    url: getApiUrl("/map/bus-stop"),
+    url: getApiUrl("/map/busStop-info"),
     name: "버스정류장",
     style: {
       image: new ol.style.Icon({
@@ -215,7 +215,14 @@ function initializeWfsLayers() {
     // 줌 레벨에 따른 스타일 함수 (아이콘 + 텍스트)
     const zoomBasedStyle = function (feature) {
       const properties = feature.getProperties();
-      const storeName = properties.fclty_nm || "편의점";
+
+      // 레이어에 따라 다른 텍스트 표시
+      let displayText = "";
+      if (layerName === "bus_stop") {
+        displayText = properties.stop_name || "정류장";
+      } else {
+        displayText = properties.fclty_nm || "편의점";
+      }
 
       // 줌 레벨에 따라 텍스트 표시 여부 결정
       const currentZoom = getMap().getView().getZoom();
@@ -237,11 +244,11 @@ function initializeWfsLayers() {
       ];
 
       // 줌 레벨이 충분히 높으면 텍스트 추가
-      if (showText && storeName) {
+      if (showText && displayText) {
         styles.push(
           new ol.style.Style({
             text: new ol.style.Text({
-              text: storeName,
+              text: displayText,
               font: "bold 12px Arial", // 글씨 크기 증가
               fill: new ol.style.Fill({
                 color: "#333333",
@@ -791,6 +798,63 @@ function toggleConvenienceStore() {
   }
 }
 
+// 버스정류장 레이어 토글 (UI에서 사용) - WFS 전용
+function toggleBusStop() {
+  // WFS 레이어 사용
+  if (wfsLayers.bus_stop) {
+    const layer = wfsLayers.bus_stop;
+    const isVisible = layer.getVisible();
+
+    if (!isVisible) {
+      // 레이어를 활성화할 때 데이터 로드
+      loadWfsData("bus_stop")
+        .then(() => {
+          // 데이터 로드 완료 후 레이어 활성화
+          layer.setVisible(true);
+          wfsActive.bus_stop = true;
+
+          // WMS 레이어가 활성화되어 있다면 비활성화
+          if (
+            window.wmsLayers &&
+            window.wmsLayers.bus_stop &&
+            window.wmsActive.bus_stop
+          ) {
+            window.toggleWmsLayer("bus_stop");
+          }
+
+          // 버튼 상태 업데이트
+          const button = document.querySelector('[data-transport="bus"]');
+          if (button) {
+            button.classList.add("active");
+            button.title = "버스정류장 레이어 끄기";
+          }
+        })
+        .catch((error) => {
+          console.error("버스정류장 데이터 로드 실패:", error);
+          alert("버스정류장 데이터를 불러오는데 실패했습니다.");
+        });
+    } else {
+      // 레이어를 비활성화
+      layer.setVisible(false);
+      wfsActive.bus_stop = false;
+
+      // 버튼 상태 업데이트
+      const button = document.querySelector('[data-transport="bus"]');
+      if (button) {
+        button.classList.remove("active");
+        button.title = "버스정류장 레이어 켜기";
+      }
+    }
+
+    return !isVisible;
+  } else {
+    // WFS 레이어가 없으면 오류 메시지
+    console.error("WFS 버스정류장 레이어를 찾을 수 없습니다.");
+    alert("버스정류장 레이어를 사용할 수 없습니다.");
+    return false;
+  }
+}
+
 // 모든 WFS 레이어 끄기
 function clearAllWfsLayers() {
   Object.keys(wfsLayers).forEach((layerName) => {
@@ -901,38 +965,87 @@ function showWfsPopup(coordinate, feature, layerName) {
     return properties[key] || "정보 없음";
   };
 
-  let content = `<div class="wfs-popup-header">
-    <div class="wfs-popup-title">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-      </svg>
-      편의점 정보
+  // 레이어에 따라 다른 팝업 내용 생성
+  let content = "";
+
+  if (layerName === "bus_stop") {
+    // 버스정류장 팝업
+    content = `<div class="wfs-popup-header">
+      <div class="wfs-popup-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" />
+          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" />
+          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" />
+        </svg>
+        버스정류장 정보
+      </div>
+      <button class="wfs-popup-close" onclick="closeWfsPopup()">×</button>
     </div>
-    <button class="wfs-popup-close" onclick="closeWfsPopup()">×</button>
-  </div>
-  <div class="wfs-popup-content">
-    <div class="wfs-info-item">
-      <span class="wfs-info-label">상호명</span>
-      <span class="wfs-info-value">${getPropertyValue(
-        properties,
-        "fclty_nm"
-      )}</span>
+    <div class="wfs-popup-content">
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">정류장명</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "stop_name"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">관리도시명</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "city_mgmt_name"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">도시명</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "city_name"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">정보수집일</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "collected_on"
+        )}</span>
+      </div>
+    </div>`;
+  } else {
+    // 편의점 팝업 (기존)
+    content = `<div class="wfs-popup-header">
+      <div class="wfs-popup-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+        </svg>
+        편의점 정보
+      </div>
+      <button class="wfs-popup-close" onclick="closeWfsPopup()">×</button>
     </div>
-    <div class="wfs-info-item">
-      <span class="wfs-info-label">주소</span>
-      <span class="wfs-info-value">${getPropertyValue(
-        properties,
-        "adres"
-      )}</span>
-    </div>
-    <div class="wfs-info-item">
-      <span class="wfs-info-label">도로명주소</span>
-      <span class="wfs-info-value">${getPropertyValue(
-        properties,
-        "rn_adres"
-      )}</span>
-    </div>
-  </div>`;
+    <div class="wfs-popup-content">
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">상호명</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "fclty_nm"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">주소</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "adres"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">도로명주소</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "rn_adres"
+        )}</span>
+      </div>
+    </div>`;
+  }
   popup.innerHTML = content;
 
   // 팝업 스타일 적용
@@ -1286,6 +1399,7 @@ function showConvenienceStoreInfo() {
 // 전역 객체에 WFS 함수들 추가
 window.toggleWfsLayer = toggleWfsLayer;
 window.toggleConvenienceStore = toggleConvenienceStore;
+window.toggleBusStop = toggleBusStop;
 window.clearAllWfsLayers = clearAllWfsLayers;
 window.queryWfsFeaturesAt = queryWfsFeaturesAt;
 window.getWfsLayerInfo = getWfsLayerInfo;
@@ -1315,6 +1429,7 @@ export {
   initializeWfsLayers,
   toggleWfsLayer,
   toggleConvenienceStore,
+  toggleBusStop,
   loadWfsData,
   clearAllWfsLayers,
   queryWfsFeaturesAt,

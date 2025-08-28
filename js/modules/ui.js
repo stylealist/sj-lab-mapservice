@@ -443,9 +443,13 @@ function initializeLayerPanel() {
         switch (transportType) {
           case "bus":
             console.log("버스 기능 활성화");
-            if (window.showBusInfo) {
-              window.showBusInfo();
+            // 버스정류장 WFS 토글
+            let isActive = false;
+            if (window.toggleBusStop) {
+              isActive = window.toggleBusStop();
             }
+            // 토글 결과에 따라 active 정확히 반영
+            this.classList.toggle("active", !!isActive);
             break;
           case "subway":
             console.log("지하철 기능 활성화");
