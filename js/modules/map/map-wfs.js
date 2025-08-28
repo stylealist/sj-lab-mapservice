@@ -212,9 +212,53 @@ function initializeWfsLayers() {
     wfsDataLoaded[layerName] = false; // 초기 로드 상태는 false
     wfsUpdating[layerName] = false; // 초기 업데이트 상태는 false
 
-    // 줌 레벨에 따른 스타일 함수
+    // 줌 레벨에 따른 스타일 함수 (아이콘 + 텍스트)
     const zoomBasedStyle = function (feature) {
-      return new ol.style.Style(config.style);
+      const properties = feature.getProperties();
+      const storeName = properties.fclty_nm || "편의점";
+
+      // 줌 레벨에 따라 텍스트 표시 여부 결정
+      const currentZoom = getMap().getView().getZoom();
+      const showText = currentZoom >= 14; // 줌 레벨 14 이상에서만 텍스트 표시
+
+      const styles = [
+        new ol.style.Style({
+          image: new ol.style.Icon({
+            src: config.style.image.getSrc(),
+            scale: 1.0,
+            anchor: [0.5, 1.0],
+            offset: [0, 0],
+            opacity: 1.0,
+            rotation: 0,
+            size: [32, 32],
+            imgSize: [32, 32],
+          }),
+        }),
+      ];
+
+      // 줌 레벨이 충분히 높으면 텍스트 추가
+      if (showText && storeName) {
+        styles.push(
+          new ol.style.Style({
+            text: new ol.style.Text({
+              text: storeName,
+              font: "bold 12px Arial", // 글씨 크기 증가
+              fill: new ol.style.Fill({
+                color: "#333333",
+              }),
+              stroke: new ol.style.Stroke({
+                color: "#ffffff",
+                width: 2,
+              }),
+              offsetY: 12, // 아이콘과의 거리 감소
+              textAlign: "center",
+              textBaseline: "top",
+            }),
+          })
+        );
+      }
+
+      return styles;
     };
 
     // 벡터 레이어 생성 (클러스터 없이 개별 아이콘 표시)
@@ -231,6 +275,13 @@ function initializeWfsLayers() {
       extent: undefined, // 전체 범위 렌더링
       minResolution: 0, // 최소 해상도 제한 없음
       maxResolution: Infinity, // 최대 해상도 제한 없음
+    });
+
+    // 줌 레벨 변경 시 스타일 업데이트
+    map.getView().on("change:resolution", function () {
+      if (vectorLayer.getVisible()) {
+        vectorLayer.changed(); // 레이어 강제 업데이트
+      }
     });
 
     // 줌 레벨 변경 시 UI 업데이트만 처리 (클러스터 재조정은 moveend에서 처리)
