@@ -54,6 +54,22 @@ const WFS_CONFIG = {
       }),
     },
   },
+  cctv: {
+    url: getApiUrl("/map/cctv-info"),
+    name: "CCTV",
+    style: {
+      image: new ol.style.Icon({
+        src: "images/icon/cctv.png",
+        scale: 1.0,
+        anchor: [0.5, 1.0], // 아이콘 하단 중앙에 앵커 설정
+        offset: [0, 0],
+        opacity: 1.0,
+        rotation: 0,
+        size: [32, 32], // 아이콘 크기 명시적 설정
+        imgSize: [32, 32], // 원본 이미지 크기
+      }),
+    },
+  },
 };
 
 // WFS 레이어 초기화 상태 추적
@@ -220,6 +236,8 @@ function initializeWfsLayers() {
       let displayText = "";
       if (layerName === "bus_stop") {
         displayText = properties.stop_name || "정류장";
+      } else if (layerName === "cctv") {
+        displayText = properties.cctv_name || properties.name || "CCTV";
       } else {
         displayText = properties.fclty_nm || "편의점";
       }
@@ -855,6 +873,63 @@ function toggleBusStop() {
   }
 }
 
+// CCTV 레이어 토글 (UI에서 사용) - WFS 전용
+function toggleCctv() {
+  // WFS 레이어 사용
+  if (wfsLayers.cctv) {
+    const layer = wfsLayers.cctv;
+    const isVisible = layer.getVisible();
+
+    if (!isVisible) {
+      // 레이어를 활성화할 때 데이터 로드
+      loadWfsData("cctv")
+        .then(() => {
+          // 데이터 로드 완료 후 레이어 활성화
+          layer.setVisible(true);
+          wfsActive.cctv = true;
+
+          // WMS 레이어가 활성화되어 있다면 비활성화
+          if (
+            window.wmsLayers &&
+            window.wmsLayers.cctv &&
+            window.wmsActive.cctv
+          ) {
+            window.toggleWmsLayer("cctv");
+          }
+
+          // 버튼 상태 업데이트
+          const button = document.querySelector('[data-transport="cctv"]');
+          if (button) {
+            button.classList.add("active");
+            button.title = "CCTV 레이어 끄기";
+          }
+        })
+        .catch((error) => {
+          console.error("CCTV 데이터 로드 실패:", error);
+          alert("CCTV 데이터를 불러오는데 실패했습니다.");
+        });
+    } else {
+      // 레이어를 비활성화
+      layer.setVisible(false);
+      wfsActive.cctv = false;
+
+      // 버튼 상태 업데이트
+      const button = document.querySelector('[data-transport="cctv"]');
+      if (button) {
+        button.classList.remove("active");
+        button.title = "CCTV 레이어 켜기";
+      }
+    }
+
+    return !isVisible;
+  } else {
+    // WFS 레이어가 없으면 오류 메시지
+    console.error("WFS CCTV 레이어를 찾을 수 없습니다.");
+    alert("CCTV 레이어를 사용할 수 없습니다.");
+    return false;
+  }
+}
+
 // 모든 WFS 레이어 끄기
 function clearAllWfsLayers() {
   Object.keys(wfsLayers).forEach((layerName) => {
@@ -1011,6 +1086,96 @@ function showWfsPopup(coordinate, feature, layerName) {
         )}</span>
       </div>
     </div>`;
+  } else if (layerName === "cctv") {
+    // CCTV 팝업
+    // 가능한 모든 URL 속성명 시도
+    let cctvUrl = "";
+    const possibleUrlKeys = [
+      "stream_url",
+      "hls_url",
+      "url",
+      "video_url",
+      "streaming_url",
+      "cctv_url",
+      "live_url",
+      "rtsp_url",
+      "rtmp_url",
+    ];
+
+    for (const key of possibleUrlKeys) {
+      const value = getPropertyValue(properties, key);
+      if (
+        value &&
+        value !== "정보 없음" &&
+        value !== "null" &&
+        value.trim() !== ""
+      ) {
+        cctvUrl = value;
+        break;
+      }
+    }
+
+    // 디버깅: 원본 URL 값 확인
+    console.log("CCTV 원본 URL:", cctvUrl);
+    console.log("CCTV properties:", properties);
+    console.log("CCTV 모든 속성 키:", Object.keys(properties));
+    console.log("CCTV 속성 값들:", Object.entries(properties));
+
+    // URL 유효성 검사 - 실제 URL인지 확인
+    const isValidUrl =
+      cctvUrl &&
+      (cctvUrl.startsWith("http://") ||
+        cctvUrl.startsWith("https://") ||
+        cctvUrl.startsWith("rtmp://") ||
+        cctvUrl.startsWith("rtsp://")) &&
+      !cctvUrl.includes("정보 없음") &&
+      !cctvUrl.includes("null") &&
+      cctvUrl.trim() !== "";
+
+    console.log("CCTV URL 유효성:", isValidUrl);
+
+    if (!isValidUrl) {
+      cctvUrl = "";
+    }
+    content = `<div class="wfs-popup-header">
+      <div class="wfs-popup-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" stroke-width="2" />
+          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" />
+          <path d="M12 15V18" stroke="currentColor" stroke-width="2" />
+          <path d="M9 18H15" stroke="currentColor" stroke-width="2" />
+        </svg>
+        CCTV 정보
+      </div>
+      <button class="wfs-popup-close" onclick="closeWfsPopup()">×</button>
+    </div>
+        <div class="wfs-popup-content">
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">CCTV명</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "cctv_name"
+        )}</span>
+      </div>
+      ${
+        cctvUrl
+          ? `
+        <div class="cctv-video-container">
+          <div class="cctv-video-wrapper">
+            <video id="cctv-video-${Date.now()}" controls autoplay muted style="width: 100%; height: 300px; background: #000;">
+              <source src="${cctvUrl}" type="application/x-mpegURL">
+              브라우저가 HLS 스트리밍을 지원하지 않습니다.
+            </video>
+          </div>
+        </div>
+      `
+          : `
+        <div class="wfs-info-item">
+          <span class="wfs-info-value" style="color: #999; font-style: italic;">스트리밍 URL이 제공되지 않았습니다.</span>
+        </div>
+      `
+      }
+    </div>`;
   } else {
     // 편의점 팝업 (기존)
     content = `<div class="wfs-popup-header">
@@ -1047,6 +1212,73 @@ function showWfsPopup(coordinate, feature, layerName) {
     </div>`;
   }
   popup.innerHTML = content;
+
+  // CCTV 팝업인 경우 특별한 클래스 추가
+  if (layerName === "cctv") {
+    popup.classList.add("cctv-popup");
+  }
+
+  // CCTV 팝업인 경우 HLS 스트리밍 초기화
+  if (layerName === "cctv") {
+    const videoElement = popup.querySelector("video");
+    const sourceElement = videoElement?.querySelector("source");
+
+    if (videoElement && sourceElement && sourceElement.src && window.Hls) {
+      const streamUrl = sourceElement.src;
+
+      // URL 유효성 재확인
+      const isValidUrl =
+        streamUrl &&
+        (streamUrl.startsWith("http://") ||
+          streamUrl.startsWith("https://") ||
+          streamUrl.startsWith("rtmp://")) &&
+        !streamUrl.includes("정보 없음") &&
+        !streamUrl.includes("null") &&
+        streamUrl.trim() !== "";
+
+      if (isValidUrl) {
+        const hls = new window.Hls();
+        window.currentHlsInstance = hls; // 전역 변수로 저장
+        hls.loadSource(streamUrl);
+        hls.attachMedia(videoElement);
+        hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
+          console.log("CCTV HLS 스트리밍 시작");
+        });
+        hls.on(window.Hls.Events.ERROR, function (event, data) {
+          console.error("CCTV HLS 스트리밍 오류:", data);
+        });
+      } else {
+        console.log("유효하지 않은 CCTV 스트리밍 URL:", streamUrl);
+      }
+    } else if (
+      videoElement &&
+      sourceElement &&
+      sourceElement.src &&
+      videoElement.canPlayType("application/vnd.apple.mpegurl")
+    ) {
+      // Safari의 경우 네이티브 HLS 지원
+      const streamUrl = sourceElement.src;
+
+      // URL 유효성 재확인
+      const isValidUrl =
+        streamUrl &&
+        (streamUrl.startsWith("http://") ||
+          streamUrl.startsWith("https://") ||
+          streamUrl.startsWith("rtmp://")) &&
+        !streamUrl.includes("정보 없음") &&
+        !streamUrl.includes("null") &&
+        streamUrl.trim() !== "";
+
+      if (isValidUrl) {
+        videoElement.src = streamUrl;
+        videoElement.addEventListener("loadedmetadata", function () {
+          console.log("CCTV 네이티브 HLS 스트리밍 시작");
+        });
+      } else {
+        console.log("유효하지 않은 CCTV 스트리밍 URL:", streamUrl);
+      }
+    }
+  }
 
   // 팝업 스타일 적용
   popup.style.cssText = `
@@ -1194,6 +1426,21 @@ function showWfsPopup(coordinate, feature, layerName) {
 
 // WFS 팝업 닫기
 function closeWfsPopup() {
+  // CCTV HLS 스트리밍 정리
+  const videoElement = document.querySelector("#wfs-popup video");
+  if (videoElement) {
+    // 비디오 정지
+    videoElement.pause();
+    videoElement.src = "";
+    videoElement.load();
+
+    // HLS 인스턴스 정리
+    if (window.currentHlsInstance) {
+      window.currentHlsInstance.destroy();
+      window.currentHlsInstance = null;
+    }
+  }
+
   if (window.currentWfsOverlay) {
     const map = getMap();
     map.removeOverlay(window.currentWfsOverlay);
@@ -1400,6 +1647,7 @@ function showConvenienceStoreInfo() {
 window.toggleWfsLayer = toggleWfsLayer;
 window.toggleConvenienceStore = toggleConvenienceStore;
 window.toggleBusStop = toggleBusStop;
+window.toggleCctv = toggleCctv;
 window.clearAllWfsLayers = clearAllWfsLayers;
 window.queryWfsFeaturesAt = queryWfsFeaturesAt;
 window.getWfsLayerInfo = getWfsLayerInfo;
@@ -1430,6 +1678,7 @@ export {
   toggleWfsLayer,
   toggleConvenienceStore,
   toggleBusStop,
+  toggleCctv,
   loadWfsData,
   clearAllWfsLayers,
   queryWfsFeaturesAt,

@@ -12,6 +12,54 @@
   <link rel="stylesheet" href="css/components/header.css" />
   <link rel="stylesheet" href="css/components/layer-panel.css" />
   <link rel="stylesheet" href="css/components/map-controls.css" />
+  <style>
+    /* CCTV 팝업 비디오 스타일 */
+    .cctv-video-container {
+      margin-top: 15px;
+      width: 100%;
+    }
+
+    .cctv-video-wrapper {
+      width: 100%;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .cctv-video-wrapper video {
+      width: 100%;
+      height: 200px;
+      background: #000;
+      border-radius: 6px;
+      display: block;
+    }
+
+    /* CCTV 팝업 전용 비디오 크기 */
+    #wfs-popup.cctv-popup .cctv-video-wrapper video {
+      height: 300px;
+    }
+
+    /* 팝업 크기 조정 */
+    #wfs-popup {
+      max-width: 450px !important;
+    }
+
+    /* CCTV 팝업 전용 크기 */
+    #wfs-popup.cctv-popup {
+      max-width: 600px !important;
+      min-width: 500px !important;
+    }
+
+    .wfs-popup-content {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    /* CCTV 팝업 전용 콘텐츠 크기 */
+    #wfs-popup.cctv-popup .wfs-popup-content {
+      max-height: 500px;
+    }
+  </style>
 </head>
 
 <body>
@@ -81,11 +129,7 @@
             <button class="cadastral-btn" id="wfsTransportBtn" title="교통 레이어 켜기" style="margin-top:10px;"
               onclick="toggleTransportSubmenu();">
               <span class="cadastral-icon">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" />
-                  <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" />
-                  <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" />
-                </svg>
+                <img src="images/icon/traffic_icon.png" alt="교통" width="26" height="26" />
               </span>
               <span class="cadastral-label">교통</span>
             </button>
@@ -167,14 +211,7 @@
               </button>
               <button class="submenu-btn" data-transport="cctv" title="CCTV">
                 <span class="submenu-icon">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="2" y="6" width="20" height="12" rx="2" stroke="currentColor" stroke-width="2" />
-                    <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" />
-                    <path d="M12 15V18" stroke="currentColor" stroke-width="2" />
-                    <path d="M9 18H15" stroke="currentColor" stroke-width="2" />
-                    <path d="M6 9L8 7" stroke="currentColor" stroke-width="2" />
-                    <path d="M18 9L16 7" stroke="currentColor" stroke-width="2" />
-                  </svg>
+                  <img src="images/icon/cctv.png" alt="CCTV" width="22" height="22" />
                 </span>
                 <span class="submenu-label">CCTV</span>
               </button>
@@ -495,6 +532,7 @@
   </div>
 
   <script src="js/utils/openlayers/ol.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <!-- <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=b45c962cc0c0c492309ed19539227c9c"></script> -->
   <script type="module" src="js/app.js"></script>
   <script>

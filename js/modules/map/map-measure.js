@@ -790,25 +790,16 @@ function measureRadius() {
       // ESC 키 이벤트 리스너 제거
       document.removeEventListener("keydown", escKeyListener);
 
-      // 반경 측정이 완료된 상태라면 팝업 표시
-      if (startPoint && radiusFeature) {
-        const geometry = radiusFeature.getGeometry();
-        const radius = formatRadius(geometry);
-
-        // 측정 팝업 표시
-        createMeasurePopup(radiusFeature, "radius", radius);
-      } else {
-        // 진행 중인 측정 요소들 제거
-        if (centerFeature) {
-          measureSource.removeFeature(centerFeature);
-        }
-        if (radiusFeature) {
-          measureSource.removeFeature(radiusFeature);
-        }
-        if (hoverFeature) {
-          measureSource.removeFeature(hoverFeature);
-          hoverFeature = null;
-        }
+      // 진행 중인 측정 요소들 제거
+      if (centerFeature) {
+        measureSource.removeFeature(centerFeature);
+      }
+      if (radiusFeature) {
+        measureSource.removeFeature(radiusFeature);
+      }
+      if (hoverFeature) {
+        measureSource.removeFeature(hoverFeature);
+        hoverFeature = null;
       }
 
       // 변수 초기화
@@ -970,6 +961,20 @@ function measureRadius() {
           try {
             map.un("contextmenu", completedCancelMeasurement);
             document.removeEventListener("keydown", completedEscKeyListener);
+
+            // 완료된 측정 요소들 제거
+            if (radiusFeature) {
+              measureSource.removeFeature(radiusFeature);
+            }
+
+            // 측정 팝업 제거
+            const popup = document.querySelector(
+              `[data-feature-id="${radiusFeature.ol_uid}"]`
+            );
+            if (popup) {
+              popup.remove();
+            }
+
             currentMeasureType = null;
             console.log("완료된 반경 측정이 취소되었습니다.");
           } catch (error) {

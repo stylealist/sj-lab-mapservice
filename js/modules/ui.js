@@ -429,11 +429,19 @@ function initializeLayerPanel() {
       const amenitiesType = this.getAttribute("data-amenities");
       const transportType = this.getAttribute("data-transport");
 
-      // 모든 서브메뉴 버튼 비활성화
-      submenuBtns.forEach((b) => b.classList.remove("active"));
-
-      // 기본적으로 클릭된 버튼 활성화 (특정 항목에서 토글 결과에 따라 다시 조정)
-      this.classList.add("active");
+      // 측정 도구는 하나만 활성화되도록 처리
+      if (cadastralType) {
+        // 측정 도구 버튼들만 비활성화
+        submenuBtns.forEach((b) => {
+          if (b.getAttribute("data-cadastral")) {
+            b.classList.remove("active");
+          }
+        });
+        this.classList.add("active");
+      } else {
+        // 레이어 버튼들은 독립적으로 토글되므로 active 상태 변경하지 않음
+        // 토글 함수의 결과에 따라 active 상태가 결정됨
+      }
 
       // 교통 서브메뉴 버튼 처리
       if (transportType) {
@@ -453,21 +461,27 @@ function initializeLayerPanel() {
             break;
           case "subway":
             console.log("지하철 기능 활성화");
+            // 지하철 WFS 토글 (향후 구현 시)
             if (window.showSubwayInfo) {
               window.showSubwayInfo();
             }
             break;
           case "traffic":
             console.log("교통정보 기능 활성화");
+            // 교통정보 WFS 토글 (향후 구현 시)
             if (window.showTrafficInfo) {
               window.showTrafficInfo();
             }
             break;
           case "cctv":
             console.log("CCTV 기능 활성화");
-            if (window.showCctvInfo) {
-              window.showCctvInfo();
+            // CCTV WFS 토글
+            let cctvActive = false;
+            if (window.toggleCctv) {
+              cctvActive = window.toggleCctv();
             }
+            // 토글 결과에 따라 active 정확히 반영
+            this.classList.toggle("active", !!cctvActive);
             break;
         }
         return;
@@ -491,24 +505,28 @@ function initializeLayerPanel() {
           }
           case "parking":
             console.log("주차장 기능 활성화");
+            // 주차장 WFS 토글 (향후 구현 시)
             if (window.showParkingInfo) {
               window.showParkingInfo();
             }
             break;
           case "restroom":
             console.log("화장실 기능 활성화");
+            // 화장실 WFS 토글 (향후 구현 시)
             if (window.showRestroomInfo) {
               window.showRestroomInfo();
             }
             break;
           case "wifi":
             console.log("WiFi 기능 활성화");
+            // WiFi WFS 토글 (향후 구현 시)
             if (window.showWifiInfo) {
               window.showWifiInfo();
             }
             break;
           case "atm":
             console.log("ATM 기능 활성화");
+            // ATM WFS 토글 (향후 구현 시)
             if (window.showAtmInfo) {
               window.showAtmInfo();
             }
