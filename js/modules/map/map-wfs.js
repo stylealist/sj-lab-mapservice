@@ -1111,6 +1111,12 @@ function showWfsPopup(coordinate, feature, layerName) {
         value.trim() !== ""
       ) {
         cctvUrl = value;
+
+        // 현재 웹의 프로토콜에 따라 URL 프로토콜 변경
+        if (window.location.protocol === "https:") {
+          cctvUrl = cctvUrl.replaceAll("http:", "https:");
+        }
+
         break;
       }
     }
