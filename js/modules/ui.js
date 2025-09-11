@@ -701,7 +701,7 @@ function hideLoading() {
   const loading = document.getElementById("loading");
   setTimeout(() => {
     loading.classList.add("hidden");
-  }, 1000);
+  }, 300); // 1초에서 0.3초로 단축
 }
 
 // 전역 객체에 hideLoading 함수 추가

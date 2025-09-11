@@ -272,9 +272,9 @@ function initializeWfsLayers() {
       } else if (layerName === "cctv") {
         displayText = properties.cctv_name || properties.name || "CCTV";
       } else if (layerName === "pharmacy") {
-        displayText = properties.fclty_nm || "약국";
+        displayText = properties.duty_name || properties.fclty_nm || "약국";
       } else if (layerName === "hospital") {
-        displayText = properties.fclty_nm || "병원";
+        displayText = properties.duty_name || properties.fclty_nm || "병원";
       } else {
         displayText = properties.fclty_nm || "편의점";
       }
@@ -573,7 +573,7 @@ function loadWfsData(layerName) {
   }
 
   // 로딩 시작 표시
-  showLoadingMessage(`${config.name} 데이터 로딩 중...`);
+  showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
   updateLoadingProgress(10);
 
   // 점진적 로딩 진행을 위한 타이머 (더 자연스러운 진행률)
@@ -629,11 +629,11 @@ function loadWfsData(layerName) {
 
       // 로딩 메시지 업데이트 (진행 상황에 따라)
       if (currentProgress < 30) {
-        showLoadingMessage(`${config.name} 서버 연결 중...`);
+        showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
       } else if (currentProgress < 50) {
-        showLoadingMessage(`${config.name} 데이터 요청 중...`);
+        showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
       } else {
-        showLoadingMessage(`${config.name} 서버 응답 대기 중...`);
+        showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
       }
     }
   }, 100); // 100ms마다 업데이트 (더 부드러운 진행)
@@ -671,9 +671,9 @@ function loadWfsData(layerName) {
 
           // 데이터 처리 단계 메시지 업데이트
           if (currentProgress < 80) {
-            showLoadingMessage(`${config.name} 데이터 파싱 중...`);
+            showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
           } else {
-            showLoadingMessage(`${config.name} 지도에 표시 중...`);
+            showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
           }
         } else {
           clearInterval(dataProcessInterval);
@@ -741,7 +741,7 @@ function loadWfsData(layerName) {
       updateLoadingProgress(100);
 
       // 완료 메시지 표시
-      showLoadingMessage(`${config.name} 로딩 완료!`);
+      showLoadingMessage(`${config.name} 데이터 로딩 완료!`);
 
       // 완료 후 잠시 대기 후 팝업 숨기기
       setTimeout(() => {
@@ -1361,6 +1361,58 @@ function showWfsPopup(coordinate, feature, layerName) {
     </div>`;
   } else if (layerName === "pharmacy") {
     // 약국 팝업
+    const dutyName = getPropertyValue(properties, "duty_name") || "정보 없음";
+    const dutyAddr = getPropertyValue(properties, "duty_addr") || "정보 없음";
+    const dutyTel = getPropertyValue(properties, "duty_tel1") || "정보 없음";
+
+    // 요일별 운영시간 생성 (compact 형태)
+    const weekdays = ["월", "화", "수", "목", "금", "토"];
+    let operatingHours = "";
+
+    // 시간 포맷팅 함수 (0900 -> 09시)
+    const formatTime = (time) => {
+      if (!time || time === "정보 없음") return "정보 없음";
+      if (time.length === 4) {
+        const hour = time.substring(0, 2);
+        return `${hour}시`;
+      }
+      return time;
+    };
+
+    // 모든 요일의 운영시간을 수집
+    const hoursData = [];
+    for (let i = 1; i <= 6; i++) {
+      const openTime = getPropertyValue(properties, `duty_time${i}s`);
+      const closeTime = getPropertyValue(properties, `duty_time${i}c`);
+      const weekday = weekdays[i - 1];
+
+      if (
+        openTime &&
+        closeTime &&
+        openTime !== "정보 없음" &&
+        closeTime !== "정보 없음"
+      ) {
+        const formattedOpenTime = formatTime(openTime);
+        const formattedCloseTime = formatTime(closeTime);
+        hoursData.push({
+          weekday,
+          time: `${formattedOpenTime} ~ ${formattedCloseTime}`,
+        });
+      }
+    }
+
+    // 운영시간이 있으면 compact하게 표시
+    if (hoursData.length > 0) {
+      operatingHours = `<div class="wfs-info-item">
+        <span class="wfs-info-label">운영시간</span>
+        <span class="wfs-info-value" style="line-height: 1.3;">
+          ${hoursData
+            .map((item) => `${item.weekday}: ${item.time}`)
+            .join("<br>")}
+        </span>
+      </div>`;
+    }
+
     content = `<div class="wfs-popup-header">
       <div class="wfs-popup-title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -1373,28 +1425,83 @@ function showWfsPopup(coordinate, feature, layerName) {
     <div class="wfs-popup-content">
       <div class="wfs-info-item">
         <span class="wfs-info-label">약국명</span>
-        <span class="wfs-info-value">${getPropertyValue(
-          properties,
-          "fclty_nm"
-        )}</span>
+        <span class="wfs-info-value">${dutyName}</span>
       </div>
       <div class="wfs-info-item">
         <span class="wfs-info-label">주소</span>
-        <span class="wfs-info-value">${getPropertyValue(
-          properties,
-          "adres"
-        )}</span>
+        <span class="wfs-info-value">${dutyAddr}</span>
       </div>
       <div class="wfs-info-item">
-        <span class="wfs-info-label">도로명주소</span>
-        <span class="wfs-info-value">${getPropertyValue(
-          properties,
-          "rn_adres"
-        )}</span>
+        <span class="wfs-info-label">전화번호</span>
+        <span class="wfs-info-value">${dutyTel}</span>
       </div>
+      ${operatingHours}
     </div>`;
   } else if (layerName === "hospital") {
     // 병원 팝업
+    const dutyName = getPropertyValue(properties, "duty_name") || "정보 없음";
+    const dutyAddr = getPropertyValue(properties, "duty_addr") || "정보 없음";
+    const dutyTel = getPropertyValue(properties, "duty_tel1") || "정보 없음";
+    const dutyDivName =
+      getPropertyValue(properties, "duty_div_nam") || "정보 없음";
+
+    // 응급실운영여부 변환 (1: 운영함, 2: 운영하지 않음)
+    const dutyErynRaw = getPropertyValue(properties, "duty_eryn");
+    let dutyEryn = "정보 없음";
+    if (dutyErynRaw === "1") {
+      dutyEryn = "운영함";
+    } else if (dutyErynRaw === "2") {
+      dutyEryn = "운영하지 않음";
+    }
+
+    // 요일별 운영시간 생성 (compact 형태)
+    const weekdays = ["월", "화", "수", "목", "금", "토"];
+    let operatingHours = "";
+
+    // 시간 포맷팅 함수 (0900 -> 09시)
+    const formatTime = (time) => {
+      if (!time || time === "정보 없음") return "정보 없음";
+      if (time.length === 4) {
+        const hour = time.substring(0, 2);
+        return `${hour}시`;
+      }
+      return time;
+    };
+
+    // 모든 요일의 운영시간을 수집
+    const hoursData = [];
+    for (let i = 1; i <= 6; i++) {
+      const openTime = getPropertyValue(properties, `duty_time${i}s`);
+      const closeTime = getPropertyValue(properties, `duty_time${i}c`);
+      const weekday = weekdays[i - 1];
+
+      if (
+        openTime &&
+        closeTime &&
+        openTime !== "정보 없음" &&
+        closeTime !== "정보 없음"
+      ) {
+        const formattedOpenTime = formatTime(openTime);
+        const formattedCloseTime = formatTime(closeTime);
+        hoursData.push({
+          weekday,
+          time: `${formattedOpenTime} ~ ${formattedCloseTime}`,
+        });
+      }
+    }
+
+    // 운영시간이 있으면 compact하게 표시
+    if (hoursData.length > 0) {
+      operatingHours = `<div class="wfs-info-item">
+        <span class="wfs-info-label">운영시간</span>
+        <span class="wfs-info-value" style="line-height: 1.3;">
+          ${hoursData
+            .map((item) => `${item.weekday}: ${item.time}`)
+            .join("<br>")}
+        </span>
+      </div>`;
+    }
+
     content = `<div class="wfs-popup-header">
       <div class="wfs-popup-title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -1407,25 +1514,25 @@ function showWfsPopup(coordinate, feature, layerName) {
     <div class="wfs-popup-content">
       <div class="wfs-info-item">
         <span class="wfs-info-label">병원명</span>
-        <span class="wfs-info-value">${getPropertyValue(
-          properties,
-          "fclty_nm"
-        )}</span>
+        <span class="wfs-info-value">${dutyName}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">병원분류</span>
+        <span class="wfs-info-value">${dutyDivName}</span>
       </div>
       <div class="wfs-info-item">
         <span class="wfs-info-label">주소</span>
-        <span class="wfs-info-value">${getPropertyValue(
-          properties,
-          "adres"
-        )}</span>
+        <span class="wfs-info-value">${dutyAddr}</span>
       </div>
       <div class="wfs-info-item">
-        <span class="wfs-info-label">도로명주소</span>
-        <span class="wfs-info-value">${getPropertyValue(
-          properties,
-          "rn_adres"
-        )}</span>
+        <span class="wfs-info-label">전화번호</span>
+        <span class="wfs-info-value">${dutyTel}</span>
       </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">응급실운영여부</span>
+        <span class="wfs-info-value">${dutyEryn}</span>
+      </div>
+      ${operatingHours}
     </div>`;
   } else {
     // 편의점 팝업 (기본)
