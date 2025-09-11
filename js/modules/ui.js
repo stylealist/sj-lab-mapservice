@@ -535,6 +535,37 @@ function initializeLayerPanel() {
         return;
       }
 
+      // 약국/병원 서브메뉴 버튼 처리
+      const amenityType = this.getAttribute("data-amenity");
+      if (amenityType) {
+        console.log("편의시설 기능 선택:", amenityType);
+
+        // 각 기능별 편의시설 도구 활성화
+        switch (amenityType) {
+          case "pharmacy": {
+            // 약국 WFS 토글
+            let isActive = false;
+            if (window.togglePharmacy) {
+              isActive = window.togglePharmacy();
+            }
+            // 토글 결과에 따라 active 정확히 반영
+            this.classList.toggle("active", !!isActive);
+            break;
+          }
+          case "hospital": {
+            // 병원 WFS 토글
+            let isActive = false;
+            if (window.toggleHospital) {
+              isActive = window.toggleHospital();
+            }
+            // 토글 결과에 따라 active 정확히 반영
+            this.classList.toggle("active", !!isActive);
+            break;
+          }
+        }
+        return;
+      }
+
       // 편의점 서브메뉴 버튼 처리
       if (convenienceType) {
         console.log("편의점 기능 선택:", convenienceType);

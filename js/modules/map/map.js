@@ -24,6 +24,8 @@ import {
   initializeWfsLayers,
   toggleWfsLayer,
   toggleConvenienceStore,
+  togglePharmacy,
+  toggleHospital,
   clearAllWfsLayers,
   queryWfsFeaturesAt,
   getWfsLayerInfo,
@@ -106,6 +108,8 @@ window.toggleRoadviewBtn = toggleRoadviewBtn;
 window.toggleWfsLayer = toggleWfsLayer;
 window.toggleWmsLayer = toggleWmsLayer;
 window.toggleConvenienceStore = toggleConvenienceStore;
+window.togglePharmacy = togglePharmacy;
+window.toggleHospital = toggleHospital;
 window.clearAllWfsLayers = clearAllWfsLayers;
 window.queryWfsFeaturesAt = queryWfsFeaturesAt;
 window.getWfsLayerInfo = getWfsLayerInfo;
@@ -114,5 +118,8 @@ window.showWfsPopup = showWfsPopup;
 window.closeWfsPopup = closeWfsPopup;
 window.showWmsPopup = showWmsPopup;
 window.closeWmsPopup = closeWmsPopup;
+
+// 테스트 함수들 추가
+window.testPharmacyHospitalApis = window.testPharmacyHospitalApis;
 
 export { initializeMapWithModules, mapTools, switchLayer, toggleOverlay };

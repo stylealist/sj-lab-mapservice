@@ -70,6 +70,38 @@ const WFS_CONFIG = {
       }),
     },
   },
+  pharmacy: {
+    url: getApiUrl("/map/pharmacy-info"),
+    name: "약국",
+    style: {
+      image: new ol.style.Icon({
+        src: "images/icon/pharmacy.png",
+        scale: 1.0,
+        anchor: [0.5, 1.0], // 아이콘 하단 중앙에 앵커 설정
+        offset: [0, 0],
+        opacity: 1.0,
+        rotation: 0,
+        size: [32, 32], // 아이콘 크기 명시적 설정
+        imgSize: [32, 32], // 원본 이미지 크기
+      }),
+    },
+  },
+  hospital: {
+    url: getApiUrl("/map/hospital-info"),
+    name: "병원",
+    style: {
+      image: new ol.style.Icon({
+        src: "images/icon/hospital.png",
+        scale: 1.0,
+        anchor: [0.5, 1.0], // 아이콘 하단 중앙에 앵커 설정
+        offset: [0, 0],
+        opacity: 1.0,
+        rotation: 0,
+        size: [32, 32], // 아이콘 크기 명시적 설정
+        imgSize: [32, 32], // 원본 이미지 크기
+      }),
+    },
+  },
 };
 
 // WFS 레이어 초기화 상태 추적
@@ -213,6 +245,7 @@ function initializeWfsLayers() {
   // 각 WFS 서비스에 대한 레이어 생성
   Object.keys(WFS_CONFIG).forEach((layerName) => {
     const config = WFS_CONFIG[layerName];
+    console.log(`WFS 레이어 초기화 중: ${layerName} (${config.name})`);
 
     // 벡터 소스 생성 (빈 상태로 시작)
     const vectorSource = new ol.source.Vector({
@@ -238,6 +271,10 @@ function initializeWfsLayers() {
         displayText = properties.stop_name || "정류장";
       } else if (layerName === "cctv") {
         displayText = properties.cctv_name || properties.name || "CCTV";
+      } else if (layerName === "pharmacy") {
+        displayText = properties.fclty_nm || "약국";
+      } else if (layerName === "hospital") {
+        displayText = properties.fclty_nm || "병원";
       } else {
         displayText = properties.fclty_nm || "편의점";
       }
@@ -405,6 +442,7 @@ function initializeWfsLayers() {
     wfsActive[layerName] = false;
 
     console.log(`WFS 벡터 레이어 생성됨: ${config.name} (데이터 로드 대기 중)`);
+    console.log(`저장된 레이어: ${layerName}`, vectorLayer);
   });
 
   // 성능 최적화된 맵 클릭 이벤트 (디바운싱 적용)
@@ -478,6 +516,9 @@ function initializeWfsLayers() {
   wfsInitialized = true;
   window.wfsLayersInitialized = true;
   console.log("WFS 레이어 초기화 완료");
+  console.log("생성된 레이어들:", Object.keys(wfsLayers));
+  console.log("약국 레이어:", wfsLayers.pharmacy);
+  console.log("병원 레이어:", wfsLayers.hospital);
 }
 
 // WFS 레이어 토글
@@ -930,6 +971,142 @@ function toggleCctv() {
   }
 }
 
+// 약국 레이어 토글 (UI에서 사용) - WFS 전용
+function togglePharmacy() {
+  console.log("togglePharmacy 호출됨");
+  console.log("wfsLayers.pharmacy:", wfsLayers.pharmacy);
+  console.log("전체 wfsLayers:", wfsLayers);
+
+  // WFS 레이어 사용
+  if (wfsLayers.pharmacy) {
+    const layer = wfsLayers.pharmacy;
+    const isVisible = layer.getVisible();
+    console.log("약국 레이어 현재 가시성:", isVisible);
+
+    if (!isVisible) {
+      console.log("약국 레이어 활성화 시작");
+      // 레이어를 활성화할 때 데이터 로드
+      loadWfsData("pharmacy")
+        .then(() => {
+          console.log("약국 데이터 로드 완료");
+          // 데이터 로드 완료 후 레이어 활성화
+          layer.setVisible(true);
+          wfsActive.pharmacy = true;
+          console.log("약국 레이어 가시성 설정됨:", layer.getVisible());
+
+          // WMS 레이어가 활성화되어 있다면 비활성화
+          if (
+            window.wmsLayers &&
+            window.wmsLayers.pharmacy &&
+            window.wmsActive.pharmacy
+          ) {
+            window.toggleWmsLayer("pharmacy");
+          }
+
+          // 버튼 상태 업데이트
+          const button = document.querySelector('[data-amenity="pharmacy"]');
+          if (button) {
+            button.classList.add("active");
+            button.title = "약국 레이어 끄기";
+            console.log("약국 버튼 활성화됨");
+          }
+        })
+        .catch((error) => {
+          console.error("약국 데이터 로드 실패:", error);
+          alert("약국 데이터를 불러오는데 실패했습니다.");
+        });
+    } else {
+      console.log("약국 레이어 비활성화");
+      // 레이어를 비활성화
+      layer.setVisible(false);
+      wfsActive.pharmacy = false;
+
+      // 버튼 상태 업데이트
+      const button = document.querySelector('[data-amenity="pharmacy"]');
+      if (button) {
+        button.classList.remove("active");
+        button.title = "약국 레이어 켜기";
+      }
+    }
+
+    return !isVisible;
+  } else {
+    // WFS 레이어가 없으면 오류 메시지
+    console.error("WFS 약국 레이어를 찾을 수 없습니다.");
+    console.log("사용 가능한 레이어들:", Object.keys(wfsLayers));
+    alert("약국 레이어를 사용할 수 없습니다.");
+    return false;
+  }
+}
+
+// 병원 레이어 토글 (UI에서 사용) - WFS 전용
+function toggleHospital() {
+  console.log("toggleHospital 호출됨");
+  console.log("wfsLayers.hospital:", wfsLayers.hospital);
+  console.log("전체 wfsLayers:", wfsLayers);
+
+  // WFS 레이어 사용
+  if (wfsLayers.hospital) {
+    const layer = wfsLayers.hospital;
+    const isVisible = layer.getVisible();
+    console.log("병원 레이어 현재 가시성:", isVisible);
+
+    if (!isVisible) {
+      console.log("병원 레이어 활성화 시작");
+      // 레이어를 활성화할 때 데이터 로드
+      loadWfsData("hospital")
+        .then(() => {
+          console.log("병원 데이터 로드 완료");
+          // 데이터 로드 완료 후 레이어 활성화
+          layer.setVisible(true);
+          wfsActive.hospital = true;
+          console.log("병원 레이어 가시성 설정됨:", layer.getVisible());
+
+          // WMS 레이어가 활성화되어 있다면 비활성화
+          if (
+            window.wmsLayers &&
+            window.wmsLayers.hospital &&
+            window.wmsActive.hospital
+          ) {
+            window.toggleWmsLayer("hospital");
+          }
+
+          // 버튼 상태 업데이트
+          const button = document.querySelector('[data-amenity="hospital"]');
+          if (button) {
+            button.classList.add("active");
+            button.title = "병원 레이어 끄기";
+            console.log("병원 버튼 활성화됨");
+          }
+        })
+        .catch((error) => {
+          console.error("병원 데이터 로드 실패:", error);
+          alert("병원 데이터를 불러오는데 실패했습니다.");
+        });
+    } else {
+      console.log("병원 레이어 비활성화");
+      // 레이어를 비활성화
+      layer.setVisible(false);
+      wfsActive.hospital = false;
+
+      // 버튼 상태 업데이트
+      const button = document.querySelector('[data-amenity="hospital"]');
+      if (button) {
+        button.classList.remove("active");
+        button.title = "병원 레이어 켜기";
+      }
+    }
+
+    return !isVisible;
+  } else {
+    // WFS 레이어가 없으면 오류 메시지
+    console.error("WFS 병원 레이어를 찾을 수 없습니다.");
+    console.log("사용 가능한 레이어들:", Object.keys(wfsLayers));
+    alert("병원 레이어를 사용할 수 없습니다.");
+    return false;
+  }
+}
+
 // 모든 WFS 레이어 끄기
 function clearAllWfsLayers() {
   Object.keys(wfsLayers).forEach((layerName) => {
@@ -1182,8 +1359,76 @@ function showWfsPopup(coordinate, feature, layerName) {
       `
       }
     </div>`;
+  } else if (layerName === "pharmacy") {
+    // 약국 팝업
+    content = `<div class="wfs-popup-header">
+      <div class="wfs-popup-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+        </svg>
+        약국 정보
+      </div>
+      <button class="wfs-popup-close" onclick="closeWfsPopup()">×</button>
+    </div>
+    <div class="wfs-popup-content">
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">약국명</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "fclty_nm"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">주소</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "adres"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">도로명주소</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "rn_adres"
+        )}</span>
+      </div>
+    </div>`;
+  } else if (layerName === "hospital") {
+    // 병원 팝업
+    content = `<div class="wfs-popup-header">
+      <div class="wfs-popup-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+        </svg>
+        병원 정보
+      </div>
+      <button class="wfs-popup-close" onclick="closeWfsPopup()">×</button>
+    </div>
+    <div class="wfs-popup-content">
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">병원명</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "fclty_nm"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">주소</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "adres"
+        )}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">도로명주소</span>
+        <span class="wfs-info-value">${getPropertyValue(
+          properties,
+          "rn_adres"
+        )}</span>
+      </div>
+    </div>`;
   } else {
-    // 편의점 팝업 (기존)
+    // 편의점 팝업 (기본)
     content = `<div class="wfs-popup-header">
       <div class="wfs-popup-title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -1558,6 +1803,21 @@ function testWfsUrl(url) {
     });
 }
 
+// 약국/병원 API 테스트 함수
+function testPharmacyHospitalApis() {
+  console.log("약국/병원 API 테스트 시작");
+
+  // 약국 API 테스트
+  const pharmacyUrl = WFS_CONFIG.pharmacy.url;
+  console.log("약국 API URL:", pharmacyUrl);
+  testWfsUrl(pharmacyUrl);
+
+  // 병원 API 테스트
+  const hospitalUrl = WFS_CONFIG.hospital.url;
+  console.log("병원 API URL:", hospitalUrl);
+  testWfsUrl(hospitalUrl);
+}
+
 // 교통 관련 기능 함수들
 function showBusInfo() {
   console.log("버스 기능 실행");
@@ -1654,6 +1914,8 @@ window.toggleWfsLayer = toggleWfsLayer;
 window.toggleConvenienceStore = toggleConvenienceStore;
 window.toggleBusStop = toggleBusStop;
 window.toggleCctv = toggleCctv;
+window.togglePharmacy = togglePharmacy;
+window.toggleHospital = toggleHospital;
 window.clearAllWfsLayers = clearAllWfsLayers;
 window.queryWfsFeaturesAt = queryWfsFeaturesAt;
 window.getWfsLayerInfo = getWfsLayerInfo;
@@ -1679,12 +1941,18 @@ window.showConvenienceStoreSearch = showConvenienceStoreSearch;
 window.showConvenienceStoreFilter = showConvenienceStoreFilter;
 window.showConvenienceStoreInfo = showConvenienceStoreInfo;
 
+// 테스트 함수들 추가
+window.testWfsUrl = testWfsUrl;
+window.testPharmacyHospitalApis = testPharmacyHospitalApis;
+
 export {
   initializeWfsLayers,
   toggleWfsLayer,
   toggleConvenienceStore,
   toggleBusStop,
   toggleCctv,
+  togglePharmacy,
+  toggleHospital,
   loadWfsData,
   clearAllWfsLayers,
   queryWfsFeaturesAt,
