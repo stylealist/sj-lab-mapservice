@@ -524,13 +524,6 @@ function initializeLayerPanel() {
               window.showWifiInfo();
             }
             break;
-          case "atm":
-            console.log("ATM 기능 활성화");
-            // ATM WFS 토글 (향후 구현 시)
-            if (window.showAtmInfo) {
-              window.showAtmInfo();
-            }
-            break;
         }
         return;
       }
@@ -557,6 +550,16 @@ function initializeLayerPanel() {
             let isActive = false;
             if (window.toggleHospital) {
               isActive = window.toggleHospital();
+            }
+            // 토글 결과에 따라 active 정확히 반영
+            this.classList.toggle("active", !!isActive);
+            break;
+          }
+          case "government_office": {
+            // 관공서 WFS 토글
+            let isActive = false;
+            if (window.toggleGovernmentOffice) {
+              isActive = window.toggleGovernmentOffice();
             }
             // 토글 결과에 따라 active 정확히 반영
             this.classList.toggle("active", !!isActive);

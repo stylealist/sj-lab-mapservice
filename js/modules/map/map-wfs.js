@@ -102,6 +102,22 @@ const WFS_CONFIG = {
       }),
     },
   },
+  government_office: {
+    url: getApiUrl("/map/governmentOffice-info"),
+    name: "관공서",
+    style: {
+      image: new ol.style.Icon({
+        src: "images/icon/governmentOffice.png",
+        scale: 1.0,
+        anchor: [0.5, 1.0], // 아이콘 하단 중앙에 앵커 설정
+        offset: [0, 0],
+        opacity: 1.0,
+        rotation: 0,
+        size: [32, 32], // 아이콘 크기 명시적 설정
+        imgSize: [32, 32], // 원본 이미지 크기
+      }),
+    },
+  },
 };
 
 // WFS 레이어 초기화 상태 추적
@@ -275,6 +291,8 @@ function initializeWfsLayers() {
         displayText = properties.duty_name || properties.fclty_nm || "약국";
       } else if (layerName === "hospital") {
         displayText = properties.duty_name || properties.fclty_nm || "병원";
+      } else if (layerName === "government_office") {
+        displayText = properties.duty_name || properties.fclty_nm || "관공서";
       } else {
         displayText = properties.fclty_nm || "편의점";
       }
@@ -1107,6 +1125,78 @@ function toggleHospital() {
   }
 }
 
+// 관공서 레이어 토글 (UI에서 사용) - WFS 전용
+function toggleGovernmentOffice() {
+  console.log("toggleGovernmentOffice 호출됨");
+  console.log("wfsLayers.government_office:", wfsLayers.government_office);
+  console.log("전체 wfsLayers:", wfsLayers);
+
+  // WFS 레이어 사용
+  if (wfsLayers.government_office) {
+    const layer = wfsLayers.government_office;
+    const isVisible = layer.getVisible();
+    console.log("관공서 레이어 현재 가시성:", isVisible);
+
+    if (!isVisible) {
+      console.log("관공서 레이어 활성화 시작");
+      // 레이어를 활성화할 때 데이터 로드
+      loadWfsData("government_office")
+        .then(() => {
+          console.log("관공서 데이터 로드 완료");
+          // 데이터 로드 완료 후 레이어 활성화
+          layer.setVisible(true);
+          wfsActive.government_office = true;
+          console.log("관공서 레이어 가시성 설정됨:", layer.getVisible());
+
+          // WMS 레이어가 활성화되어 있다면 비활성화
+          if (
+            window.wmsLayers &&
+            window.wmsLayers.government_office &&
+            window.wmsActive.government_office
+          ) {
+            window.toggleWmsLayer("government_office");
+          }
+
+          // 버튼 상태 업데이트
+          const button = document.querySelector(
+            '[data-amenity="government_office"]'
+          );
+          if (button) {
+            button.classList.add("active");
+            button.title = "관공서 레이어 끄기";
+            console.log("관공서 버튼 활성화됨");
+          }
+        })
+        .catch((error) => {
+          console.error("관공서 데이터 로드 실패:", error);
+          alert("관공서 데이터를 불러오는데 실패했습니다.");
+        });
+    } else {
+      console.log("관공서 레이어 비활성화");
+      // 레이어를 비활성화
+      layer.setVisible(false);
+      wfsActive.government_office = false;
+
+      // 버튼 상태 업데이트
+      const button = document.querySelector(
+        '[data-amenity="government_office"]'
+      );
+      if (button) {
+        button.classList.remove("active");
+        button.title = "관공서 레이어 켜기";
+      }
+    }
+
+    return !isVisible;
+  } else {
+    // WFS 레이어가 없으면 오류 메시지
+    console.error("WFS 관공서 레이어를 찾을 수 없습니다.");
+    console.log("사용 가능한 레이어들:", Object.keys(wfsLayers));
+    alert("관공서 레이어를 사용할 수 없습니다.");
+    return false;
+  }
+}
+
 // 모든 WFS 레이어 끄기
 function clearAllWfsLayers() {
   Object.keys(wfsLayers).forEach((layerName) => {
@@ -1533,6 +1623,35 @@ function showWfsPopup(coordinate, feature, layerName) {
         <span class="wfs-info-value">${dutyEryn}</span>
       </div>
       ${operatingHours}
+    </div>`;
+  } else if (layerName === "government_office") {
+    // 관공서 팝업
+    const fcltyNm = getPropertyValue(properties, "fclty_nm") || "정보 없음";
+    const rnAdres = getPropertyValue(properties, "rn_adres") || "정보 없음";
+    const telno = getPropertyValue(properties, "telno") || "정보 없음";
+
+    content = `<div class="wfs-popup-header">
+      <div class="wfs-popup-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+        </svg>
+        관공서 정보
+      </div>
+      <button class="wfs-popup-close" onclick="closeWfsPopup()">×</button>
+    </div>
+    <div class="wfs-popup-content">
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">시설명</span>
+        <span class="wfs-info-value">${fcltyNm}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">주소</span>
+        <span class="wfs-info-value">${rnAdres}</span>
+      </div>
+      <div class="wfs-info-item">
+        <span class="wfs-info-label">전화번호</span>
+        <span class="wfs-info-value">${telno}</span>
+      </div>
     </div>`;
   } else {
     // 편의점 팝업 (기본)
@@ -2023,6 +2142,7 @@ window.toggleBusStop = toggleBusStop;
 window.toggleCctv = toggleCctv;
 window.togglePharmacy = togglePharmacy;
 window.toggleHospital = toggleHospital;
+window.toggleGovernmentOffice = toggleGovernmentOffice;
 window.clearAllWfsLayers = clearAllWfsLayers;
 window.queryWfsFeaturesAt = queryWfsFeaturesAt;
 window.getWfsLayerInfo = getWfsLayerInfo;
@@ -2060,6 +2180,7 @@ export {
   toggleCctv,
   togglePharmacy,
   toggleHospital,
+  toggleGovernmentOffice,
   loadWfsData,
   clearAllWfsLayers,
   queryWfsFeaturesAt,
