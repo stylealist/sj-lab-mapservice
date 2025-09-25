@@ -200,6 +200,7 @@ function initializeLayerPanel() {
         measure: "측정",
         draw: "그리기",
         export: "내보내기",
+        "map-edit": "지도편집",
       };
       if (panelTitle && tabLabels[targetTab]) {
         panelTitle.textContent = tabLabels[targetTab];
@@ -376,6 +377,18 @@ function initializeLayerPanel() {
       );
     }
   };
+
+  // 지도편집 버튼 이벤트
+  const mapEditBtn = document.getElementById("mapEditBtn");
+  if (mapEditBtn) {
+    mapEditBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      // 지도 영역 선택 시작
+      if (window.startMapEdit) {
+        window.startMapEdit();
+      }
+    });
+  }
 
   // 편의시설 서브메뉴 토글 함수
   window.toggleAmenitiesSubmenu = function () {

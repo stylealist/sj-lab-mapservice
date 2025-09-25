@@ -59,6 +59,92 @@
     #wfs-popup.cctv-popup .wfs-popup-content {
       max-height: 500px;
     }
+
+    /* 지도편집 탭 스타일 */
+    .map-edit-options {
+      padding: 20px;
+    }
+
+    .edit-instructions {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+
+    .edit-instructions p {
+      margin: 0;
+      color: #6c757d;
+      font-size: 14px;
+    }
+
+    .edit-controls {
+      margin-bottom: 20px;
+    }
+
+    .edit-btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-right: 10px;
+      margin-bottom: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .edit-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .edit-btn.primary {
+      background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    }
+
+    .edit-btn.primary:hover {
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .edit-icon {
+      font-size: 16px;
+    }
+
+    .selected-area-info {
+      background: #e8f5e8;
+      border: 1px solid #c3e6c3;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 20px;
+    }
+
+    .selected-area-info h5 {
+      margin: 0 0 15px 0;
+      color: #155724;
+      font-size: 16px;
+    }
+
+    .area-details {
+      margin-bottom: 15px;
+    }
+
+    .area-details p {
+      margin: 5px 0;
+      font-size: 13px;
+      color: #155724;
+    }
+
+    .area-details span {
+      font-weight: 600;
+      color: #0d4a1a;
+    }
   </style>
 </head>
 
@@ -132,6 +218,12 @@
                 <img src="images/icon/traffic_icon.png" alt="교통" width="26" height="26" />
               </span>
               <span class="cadastral-label">교통</span>
+            </button>
+            <button class="cadastral-btn" id="mapEditBtn" title="지도캡쳐" style="margin-top:10px;">
+              <span class="cadastral-icon">
+                <img src="images/icon/map-capture.png" alt="지도캡쳐" width="26" height="26" />
+              </span>
+              <span class="cadastral-label">지도캡쳐</span>
             </button>
 
             <!-- 편의시설 서브메뉴 -->
@@ -268,10 +360,6 @@
               <span class="tab-icon">⭐</span>
               <span class="tab-label">즐겨찾기</span>
             </button>
-            <button class="fixed-tab" data-tab="measure">
-              <span class="tab-icon">📏</span>
-              <span class="tab-label">측정</span>
-            </button>
             <button class="fixed-tab" data-tab="draw">
               <span class="tab-icon">✏️</span>
               <span class="tab-label">그리기</span>
@@ -279,6 +367,10 @@
             <button class="fixed-tab" data-tab="export">
               <span class="tab-icon">💾</span>
               <span class="tab-label">내보내기</span>
+            </button>
+            <button class="fixed-tab" data-tab="measure">
+              <span class="tab-icon">📏</span>
+              <span class="tab-label">측정</span>
             </button>
           </div>
           <div class="layer-panel" id="layerPanel">
@@ -455,6 +547,7 @@
                     <button class="export-btn">내보내기</button>
                   </div>
                 </div>
+
               </div>
             </div>
           </div>

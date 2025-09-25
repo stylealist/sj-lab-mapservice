@@ -1,0 +1,3661 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Fabric.js 도형 툴</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8fafc;
+            color: #334155;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        #container {
+            height: calc(100vh - 80px);
+            width: 100%;
+            display: flex;
+            overflow: hidden;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            margin: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        #container.scrollable {
+            overflow: auto !important;
+        }
+
+        #canvasContainer {
+            flex: 1;
+            position: relative;
+            height: 100%;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 0;
+            background: #f8fafc;
+            border-radius: 0 12px 12px 0;
+        }
+
+        #canvasContainer.scrollable {
+            overflow: auto !important;
+        }
+
+        .canvas-container {
+            position: relative !important;
+        }
+
+        #canvas {
+            background-color: #ffffff;
+            border: 2px solid #e2e8f0;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+        }
+
+        #toolbar {
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, rgb(30, 41, 59) 0%, rgb(51, 65, 85) 50%, rgb(71, 85, 105) 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            z-index: 10;
+            min-height: 70px;
+            box-sizing: border-box;
+            border-radius: 12px 12px 0 0;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        #toolbar .group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        #toolbar button {
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            color: #334155;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 100px;
+            justify-content: center;
+        }
+
+        #toolbar button:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        #toolbar button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 700;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        #toolbar button:active {
+            transform: translateY(0);
+        }
+
+        /* 단축키 도움말 스타일 */
+        .shortcut-help {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            margin-left: 8px;
+            z-index: 1001;
+        }
+
+        .help-icon {
+            font-size: 16px;
+            padding: 8px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            display: inline-block;
+            transition: background 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .help-icon:hover {
+            background-color: #e8f0ff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+
+        .shortcut-tooltip {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 0;
+            border-radius: 8px;
+            font-size: 13px;
+            white-space: nowrap;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            min-width: 250px;
+            margin-top: 8px;
+            pointer-events: none;
+        }
+
+        .shortcut-help:hover .shortcut-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .shortcut-tooltip::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+        }
+
+        .shortcut-tooltip::before {
+            top: -6px;
+            border-bottom: 6px solid #333;
+        }
+
+        .shortcut-tooltip[style*="--arrow-direction: bottom"]::before {
+            top: auto;
+            bottom: -6px;
+            border-bottom: none;
+            border-top: 6px solid #333;
+        }
+
+        .tooltip-header {
+            background: #007bff;
+            color: white;
+            padding: 10px 15px;
+            font-weight: bold;
+            border-radius: 8px 8px 0 0;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .tooltip-content {
+            padding: 12px 15px;
+        }
+
+        .shortcut-item {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .shortcut-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .shortcut-item kbd {
+            background: #2c3e50;
+            border: 1px solid #34495e;
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                "Helvetica Neue", Arial, sans-serif;
+            min-width: 60px;
+            text-align: center;
+            display: inline-block;
+            font-weight: 600;
+            color: #ffffff;
+            text-shadow: none;
+            letter-spacing: 0.5px;
+            line-height: 1.2;
+        }
+
+        #coordDisplay {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 8px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        #layerList {
+            position: sticky;
+            top: 0;
+            right: 0;
+            width: 300px;
+            min-width: 250px;
+            max-width: 360px;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border-left: 1px solid #e2e8f0;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            font-size: 14px;
+            box-sizing: border-box;
+            padding: 20px;
+            flex-shrink: 0;
+        }
+
+        #layerList strong {
+            display: block;
+            margin-bottom: 16px;
+            font-size: 18px;
+            color: #1f2937;
+            font-weight: 700;
+            text-align: center;
+            padding: 12px;
+            background: linear-gradient(135deg, rgb(30, 41, 59) 0%, rgb(51, 65, 85) 50%, rgb(71, 85, 105) 100%);
+            color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        #layerList .layer-item {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        #layerList .layer-item:hover {
+            background: #f8fafc;
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        #layerList .layer-label {
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        #layerList .layer-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        #layerList button {
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #4b5563;
+            flex: 1;
+        }
+
+        #layerList button:hover {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        #layerList button:first-child:hover {
+            background: #10b981;
+            border-color: #10b981;
+        }
+
+        #layerList button:last-child:hover {
+            background: #ef4444;
+            border-color: #ef4444;
+        }
+
+        #layerList::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #layerList::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 6px;
+        }
+
+        #layerList::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 6px;
+        }
+
+        #layerList .layer-item.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 100%);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
+        }
+
+        #shapeProperties {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            background: white;
+            border: none;
+            border-radius: 16px;
+            font-size: 14px;
+            display: none;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            cursor: move;
+            user-select: none;
+            max-height: 500px;
+            overflow: visible;
+            backdrop-filter: blur(10px);
+        }
+
+        #shapeProperties .header {
+            cursor: move;
+            padding: 20px 20px 15px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 16px 16px 0 0;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        #shapeProperties .body {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #fafbfc;
+        }
+
+        #shapeProperties .header strong {
+            display: inline-block;
+            margin-right: 20px;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        #shapeProperties .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        #shapeProperties .close-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        #shapeProperties .property-group {
+            margin-bottom: 20px;
+            cursor: default;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            background: white;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        #shapeProperties .property-group::before {
+            content: attr(data-label);
+            position: absolute;
+            top: -8px;
+            left: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        #shapeProperties .property-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+            font-size: 13px;
+            margin-top: 6px;
+        }
+
+        #shapeProperties input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: text;
+            background: white;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        #shapeProperties input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        #shapeProperties input[type="color"] {
+            height: 40px;
+            padding: 4px;
+            cursor: pointer;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+        }
+
+        #shapeProperties .style-btn {
+            width: 100%;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            color: #4b5563;
+        }
+
+        #shapeProperties .style-btn:hover {
+            background: #e2e8f0;
+            border-color: #667eea;
+            transform: translateY(-1px);
+        }
+
+        #shapeProperties .style-btn.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .color-btn {
+            width: 36px;
+            height: 36px;
+            border: 3px solid #e5e7eb;
+            border-radius: 10px;
+            cursor: pointer;
+            outline: none;
+            padding: 0;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .color-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .color-btn:focus {
+            border: 3px solid #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+
+        .styled-btn {
+            display: inline-block;
+            width: 100%;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #4b5563;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            margin-bottom: 8px;
+        }
+
+        .styled-btn:hover,
+        .styled-btn:focus {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+            outline: none;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .color-palette-popup {
+            background: white;
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+            padding: 16px;
+            position: fixed;
+            z-index: 9999;
+            display: none;
+            width: auto;
+            backdrop-filter: blur(10px);
+        }
+
+        .palette-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+            justify-content: flex-start;
+            background: none;
+            border: none;
+            box-shadow: none;
+            padding: 0;
+        }
+
+        #shapeProperties .property-group#zOrderSection button {
+            margin-right: 8px;
+        }
+
+        #shapeProperties .property-group#zOrderSection button:last-child {
+            margin-right: 0;
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 1200px) {
+            #layerList {
+                width: 250px;
+                min-width: 200px;
+            }
+
+            #shapeProperties {
+                width: 280px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #container {
+                flex-direction: column;
+                height: calc(100vh - 60px);
+            }
+
+            #layerList {
+                width: 100%;
+                height: 200px;
+                border-left: none;
+                border-top: 1px solid #e2e8f0;
+                order: 2;
+            }
+
+            #canvasContainer {
+                order: 1;
+                border-radius: 12px 12px 0 0;
+            }
+
+            #toolbar {
+                padding: 12px 16px;
+                gap: 12px;
+            }
+
+            #toolbar .group {
+                padding: 6px 12px;
+                gap: 8px;
+            }
+
+            #toolbar button {
+                padding: 8px 12px;
+                font-size: 13px;
+                min-width: 80px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            #toolbar {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            #toolbar .group {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            #toolbar button {
+                min-width: 70px;
+                font-size: 12px;
+                padding: 6px 10px;
+            }
+        }
+
+        /* 팝업 최적화 */
+        .modal-back {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 9998;
+            backdrop-filter: blur(5px);
+        }
+
+        /* 애니메이션 효과 */
+        #shapeProperties {
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .color-palette-popup {
+            animation: fadeInScale 0.2s ease-out;
+        }
+
+        @keyframes fadeInScale {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 호버 효과 개선 */
+        #toolbar button:hover {
+            transform: translateY(-2px) scale(1.02);
+        }
+
+        #layerList .layer-item:hover {
+            transform: translateY(-2px) scale(1.02);
+        }
+
+        .color-btn:hover {
+            transform: scale(1.15);
+        }
+
+        /* 포커스 스타일 개선 */
+        #toolbar button:focus,
+        #layerList button:focus,
+        .styled-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+
+        /* 스크롤바 스타일 통일 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="toolbar">
+        <div class="group">
+            <input type="file" id="bgImageInput" accept="image/*" style="display: none" />
+            <button id="btn-pan" onclick="setMode('pan')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                </svg>
+                팬
+            </button>
+            <button id="btn-line" onclick="setMode('line')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 3h18v2H3V3zm0 4h18v2H3V7zm0 4h18v2H3v-2zm0 4h18v2H3v-2z" />
+                </svg>
+                직선
+            </button>
+            <button id="btn-circle" onclick="setMode('circle')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none" />
+                </svg>
+                원
+            </button>
+            <button id="btn-rect" onclick="setMode('rect')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="3" y="3" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" />
+                </svg>
+                사각형
+            </button>
+            <button id="btn-triangle" onclick="setMode('triangle')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2l9 18H3l9-18z" stroke="currentColor" stroke-width="2" fill="none" />
+                </svg>
+                삼각형
+            </button>
+            <button id="btn-arrow" onclick="setMode('arrow')">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+                치수선
+            </button>
+            <button onclick="addText()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5 4v3h5.5v12h3V7H19V4H5z" />
+                </svg>
+                텍스트
+            </button>
+        </div>
+        <div class="group">
+            <button onclick="document.getElementById('bgImageInput').click()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+                </svg>
+                이미지
+            </button>
+            <button onclick="clearLayers()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                </svg>
+                초기화
+            </button>
+            <button id="fabricSave" onclick="saveImage();">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path
+                        d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V7h10v2z" />
+                </svg>
+                저장
+            </button>
+        </div>
+        <div class="group">
+            <div class="shortcut-help" title="단축키 도움말">
+                <span class="help-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path
+                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z" />
+                    </svg>
+                </span>
+                <div class="shortcut-tooltip">
+                    <div class="tooltip-header">단축키 도움말</div>
+                    <div class="tooltip-content">
+                        <div class="shortcut-item">
+                            <kbd>Delete</kbd> 선택된 객체 삭제
+                        </div>
+                        <div class="shortcut-item"><kbd>Esc</kbd> 선택 해제</div>
+                        <div class="shortcut-item"><kbd>Ctrl+A</kbd> 모든 객체 선택</div>
+                        <div class="shortcut-item"><kbd>Ctrl+C</kbd> 복사</div>
+                        <div class="shortcut-item"><kbd>Ctrl+V</kbd> 붙여넣기</div>
+                        <div class="shortcut-item"><kbd>Ctrl+Z</kbd> 되돌리기</div>
+                        <div class="shortcut-item">
+                            <kbd>도형 우클릭</kbd> 속성 편집 팝업
+                        </div>
+                        <div class="shortcut-item"><kbd>Ctrl + 휠</kbd> 확대/축소</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="container">
+        <div id="canvasContainer">
+            <canvas id="canvas"></canvas>
+            <div id="coordDisplay">x: 0, y: 0</div>
+        </div>
+        <div id="layerList"><strong>레이어 목록</strong></div>
+        <div id="shapeProperties">
+            <div class="header">
+                <strong>속성 편집</strong>
+                <button class="close-btn" onclick="hideShapeProperties()">×</button>
+            </div>
+            <div class="body">
+                <div class="property-group" id="strokeColorSection" data-label="색상 설정">
+                    <label id="strokeColorLabel">선 색상:</label>
+                    <div style="
+                display: flex;
+                gap: 8px;
+                margin-bottom: 8px;
+                position: relative;
+              ">
+                        <button class="palette-trigger styled-btn" id="strokeThemeBtn" style="flex: 1">
+                            테마색
+                        </button>
+                        <button class="palette-trigger styled-btn" id="strokeStandardBtn" style="flex: 1">
+                            표준색
+                        </button>
+                        <div class="color-palette-popup" id="strokeThemePalette" style="
+                  display: none;
+                  position: absolute;
+                  top: 40px;
+                  left: 0;
+                  z-index: 10;
+                ">
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ffffff" style="background: #ffffff"></button>
+                                <button class="color-btn" data-color="#f2f2f2" style="background: #f2f2f2"></button>
+                                <button class="color-btn" data-color="#e7e6e6" style="background: #e7e6e6"></button>
+                                <button class="color-btn" data-color="#44546a" style="background: #44546a"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#4472c4" style="background: #4472c4"></button>
+                                <button class="color-btn" data-color="#ed7d31" style="background: #ed7d31"></button>
+                                <button class="color-btn" data-color="#70ad47" style="background: #70ad47"></button>
+                                <button class="color-btn" data-color="#a5a5a5" style="background: #a5a5a5"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ffc000" style="background: #ffc000"></button>
+                                <button class="color-btn" data-color="#5b9bd5" style="background: #5b9bd5"></button>
+                                <button class="color-btn" data-color="#c00000" style="background: #c00000"></button>
+                                <button class="color-btn" data-color="#548235" style="background: #548235"></button>
+                            </div>
+                        </div>
+                        <div class="color-palette-popup" id="strokeStandardPalette" style="
+                  display: none;
+                  position: absolute;
+                  top: 40px;
+                  z-index: 10;
+                ">
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ff0000" style="background: #ff0000"></button>
+                                <button class="color-btn" data-color="#ffff00" style="background: #ffff00"></button>
+                                <button class="color-btn" data-color="#00b050" style="background: #00b050"></button>
+                                <button class="color-btn" data-color="#00b0f0" style="background: #00b0f0"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#0070c0" style="background: #0070c0"></button>
+                                <button class="color-btn" data-color="#002060" style="background: #002060"></button>
+                                <button class="color-btn" data-color="#7030a0" style="background: #7030a0"></button>
+                                <button class="color-btn" data-color="#000000" style="background: #000000"></button>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="color" id="strokeColor" value="#FF0000" />
+                </div>
+                <div class="property-group" id="textBackgroundSection" data-label="텍스트 배경 설정" style="display: none">
+                    <label id="textBackgroundLabel">텍스트 배경색:</label>
+                    <div style="
+                display: flex;
+                gap: 8px;
+                margin-bottom: 8px;
+                position: relative;
+              ">
+                        <button class="palette-trigger styled-btn" id="textBackgroundThemeBtn" style="flex: 1">
+                            테마색
+                        </button>
+                        <button class="palette-trigger styled-btn" id="textBackgroundStandardBtn" style="flex: 1">
+                            표준색
+                        </button>
+                        <div class="color-palette-popup" id="textBackgroundThemePalette" style="
+                  display: none;
+                  position: absolute;
+                  top: 40px;
+                  left: 0;
+                  z-index: 10;
+                ">
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ffffff" style="background: #ffffff"></button>
+                                <button class="color-btn" data-color="#f2f2f2" style="background: #f2f2f2"></button>
+                                <button class="color-btn" data-color="#e7e6e6" style="background: #e7e6e6"></button>
+                                <button class="color-btn" data-color="#44546a" style="background: #44546a"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#4472c4" style="background: #4472c4"></button>
+                                <button class="color-btn" data-color="#ed7d31" style="background: #ed7d31"></button>
+                                <button class="color-btn" data-color="#70ad47" style="background: #70ad47"></button>
+                                <button class="color-btn" data-color="#a5a5a5" style="background: #a5a5a5"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ffc000" style="background: #ffc000"></button>
+                                <button class="color-btn" data-color="#5b9bd5" style="background: #5b9bd5"></button>
+                                <button class="color-btn" data-color="#c00000" style="background: #c00000"></button>
+                                <button class="color-btn" data-color="#548235" style="background: #548235"></button>
+                            </div>
+                        </div>
+                        <div class="color-palette-popup" id="textBackgroundStandardPalette" style="
+                  display: none;
+                  position: absolute;
+                  top: 40px;
+                  z-index: 10;
+                ">
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ff0000" style="background: #ff0000"></button>
+                                <button class="color-btn" data-color="#ffff00" style="background: #ffff00"></button>
+                                <button class="color-btn" data-color="#00b050" style="background: #00b050"></button>
+                                <button class="color-btn" data-color="#00b0f0" style="background: #00b0f0"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#0070c0" style="background: #0070c0"></button>
+                                <button class="color-btn" data-color="#002060" style="background: #002060"></button>
+                                <button class="color-btn" data-color="#7030a0" style="background: #7030a0"></button>
+                                <button class="color-btn" data-color="#000000" style="background: #000000"></button>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="color" id="textBackgroundColor" value="#FFFFFF" />
+                    <button id="textBackgroundTransparentBtn" class="style-btn" style="margin-top: 5px">
+                        배경없음
+                    </button>
+                </div>
+                <div class="property-group" id="strokeWidthSection" data-label="크기 설정">
+                    <label>선 두께:</label>
+                    <input type="number" id="strokeWidth" min="1" max="20" value="2" />
+                </div>
+                <div class="property-group" id="fillSection" data-label="채우기 설정">
+                    <label>채우기 색상:</label>
+                    <div style="
+                display: flex;
+                gap: 8px;
+                margin-bottom: 8px;
+                position: relative;
+              ">
+                        <button class="palette-trigger styled-btn" id="fillThemeBtn" style="flex: 1">
+                            테마색
+                        </button>
+                        <button class="palette-trigger styled-btn" id="fillStandardBtn" style="flex: 1">
+                            표준색
+                        </button>
+                        <div class="color-palette-popup" id="fillThemePalette" style="
+                  display: none;
+                  position: absolute;
+                  top: 40px;
+                  left: 0;
+                  z-index: 10;
+                ">
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ffffff" style="background: #ffffff"></button>
+                                <button class="color-btn" data-color="#f2f2f2" style="background: #f2f2f2"></button>
+                                <button class="color-btn" data-color="#e7e6e6" style="background: #e7e6e6"></button>
+                                <button class="color-btn" data-color="#44546a" style="background: #44546a"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#4472c4" style="background: #4472c4"></button>
+                                <button class="color-btn" data-color="#ed7d31" style="background: #ed7d31"></button>
+                                <button class="color-btn" data-color="#70ad47" style="background: #70ad47"></button>
+                                <button class="color-btn" data-color="#a5a5a5" style="background: #a5a5a5"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ffc000" style="background: #ffc000"></button>
+                                <button class="color-btn" data-color="#5b9bd5" style="background: #5b9bd5"></button>
+                                <button class="color-btn" data-color="#c00000" style="background: #c00000"></button>
+                                <button class="color-btn" data-color="#548235" style="background: #548235"></button>
+                            </div>
+                        </div>
+                        <div class="color-palette-popup" id="fillStandardPalette" style="
+                  display: none;
+                  position: absolute;
+                  top: 40px;
+                  z-index: 10;
+                ">
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#ff0000" style="background: #ff0000"></button>
+                                <button class="color-btn" data-color="#ffff00" style="background: #ffff00"></button>
+                                <button class="color-btn" data-color="#00b050" style="background: #00b050"></button>
+                                <button class="color-btn" data-color="#00b0f0" style="background: #00b0f0"></button>
+                            </div>
+                            <div class="palette-row">
+                                <button class="color-btn" data-color="#0070c0" style="background: #0070c0"></button>
+                                <button class="color-btn" data-color="#002060" style="background: #002060"></button>
+                                <button class="color-btn" data-color="#7030a0" style="background: #7030a0"></button>
+                                <button class="color-btn" data-color="#000000" style="background: #000000"></button>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="color" id="fillColor" value="#FFFFFF" />
+                    <button id="transparentBtn" class="style-btn" style="margin-top: 5px">
+                        채우기없음
+                    </button>
+                </div>
+                <div class="property-group" id="dashedSection" data-label="스타일 설정">
+                    <label>선 스타일:</label>
+                    <button id="dashedToggle" class="style-btn">실선</button>
+                </div>
+                <div class="property-group" id="zOrderSection" data-label="레이어 순서">
+                    <button id="bringToFrontBtn" class="style-btn" style="margin-bottom: 10px">
+                        맨위로
+                    </button>
+                    <button id="sendToBackBtn" class="style-btn">맨아래로</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 파일 이름 입력 모달 -->
+    <!-- 모달 팝업 -->
+    <div id="saveModal" style="
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        border: none;
+        border-radius: 20px;
+        padding: 32px;
+        z-index: 9999;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+        width: 400px;
+        font-family: 'Segoe UI', sans-serif;
+        backdrop-filter: blur(10px);
+      ">
+        <div style="
+          margin-bottom: 24px;
+          font-weight: 700;
+          color: #1f2937;
+          font-size: 20px;
+          text-align: center;
+        ">
+            💾 이미지 저장
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <label style="
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+            font-size: 14px;
+        ">파일명을 입력하세요</label>
+            <input id="fabricFileName" type="text" placeholder="예: my-image" style="
+          width: 100%;
+          padding: 12px 16px;
+          font-size: 14px;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          background: #f8fafc;
+          transition: all 0.3s ease;
+        " autocomplete="off" />
+        </div>
+
+        <div style="margin-top: 24px; text-align: right; display: flex; gap: 12px; justify-content: flex-end">
+            <button onclick="closeSaveModal()" style="
+            background: #f3f4f6;
+            color: #374151;
+            border: 2px solid #e5e7eb;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+          ">
+                취소
+            </button>
+
+            <button onclick="downloadCanvasImage()" style="
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+          ">
+                💾 저장하기
+            </button>
+        </div>
+    </div>
+    <div id="fabric-back" class="modal-back" style="display: none"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+    <script>
+        (function () {
+            const fabricType = "";
+            const fabricCanvas = new fabric.Canvas("canvas");
+            window.fabricCanvas = fabricCanvas;
+
+            // 컨트롤 박스 위치 수정 설정
+            fabric.Object.prototype.transparentCorners = false;
+            fabric.Object.prototype.cornerColor = '#4169E1';
+            fabric.Object.prototype.cornerStyle = 'circle';
+            fabric.Object.prototype.cornerSize = 8;
+            fabric.Object.prototype.borderColor = '#4169E1';
+            fabric.Object.prototype.borderDashArray = [5, 5];
+
+            // 컨트롤러 위치 오프셋 수정
+            fabric.Object.prototype.padding = 0;
+            fabric.Canvas.prototype.uniformScaling = false;
+
+            fabricCanvas.on("object:added", function (e) {
+                const textObjects = fabricCanvas
+                    .getObjects("text")
+                    .concat(fabricCanvas.getObjects("i-text"));
+                textObjects.forEach((obj) => fabricCanvas.bringToFront(obj));
+
+                // 새로 추가된 객체의 컨트롤 위치 보정
+                if (e.target) {
+                    e.target.setCoords();
+                }
+            });
+
+            fabricCanvas.on("selection:created", function (e) {
+                if (
+                    e.target &&
+                    (e.target.type === "text" || e.target.type === "i-text")
+                ) {
+                    fabricCanvas.bringToFront(e.target);
+                }
+
+                // 선택된 객체의 컨트롤 위치 보정
+                if (e.target) {
+                    e.target.setCoords();
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            // 객체 선택 변경 시 컨트롤 위치 보정
+            fabricCanvas.on("selection:updated", function (e) {
+                if (e.target) {
+                    e.target.setCoords();
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            // 객체 이동/변형 후 컨트롤 위치 보정
+            fabricCanvas.on("object:modified", function (e) {
+                if (e.target) {
+                    e.target.setCoords();
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            // canvas 초기 크기를 컨테이너에 맞게 설정
+            function initializeCanvasSize() {
+                const container = document.getElementById("canvasContainer");
+                const containerWidth = container.clientWidth;
+                const containerHeight = container.clientHeight;
+
+                // 기본 크기를 컨테이너보다 작게 설정 (여유 공간 100px)
+                const defaultWidth = Math.max(400, containerWidth - 100);
+                const defaultHeight = Math.max(300, containerHeight - 100);
+
+                fabricCanvas.setWidth(defaultWidth);
+                fabricCanvas.setHeight(defaultHeight);
+                fabricCanvas.perPixelTargetFind = false;
+
+                // 컨트롤러 위치 오프셋 수정을 위한 추가 설정
+                fabricCanvas.on('after:render', function () {
+                    // 캔버스가 렌더링된 후 컨트롤 위치를 다시 계산
+                    const activeObject = fabricCanvas.getActiveObject();
+                    if (activeObject) {
+                        activeObject.setCoords();
+                    }
+                });
+
+                fabricCanvas.renderAll();
+            }
+
+            let currentMode = "none";
+            let isDrawing = false;
+            let startX, startY, currentShape;
+            let history = [],
+                lastSavedJSON = "";
+            // 마우스 휠로 마우스 위치 기준 확대/축소
+            let zoom = 1;
+            const minZoom = 1;
+            const maxZoom = 5;
+            // 원본 이미지 크기 저장
+            let fabricImgWidth = 0;
+            let fabricImgHeight = 0;
+
+            // canvas 초기 크기 설정
+            initializeCanvasSize();
+
+            // 컨테이너 크기 동적 조정은 CSS로 처리하므로 제거
+
+            // 최초 상태를 히스토리에 저장 (Ctrl+Z로 최초 도형도 완전히 되돌리기 위함)
+            saveHistory();
+
+            // 컨트롤 위치 전체 보정 함수
+            function fixControlsPosition() {
+                fabricCanvas.getObjects().forEach(function (obj) {
+                    obj.setCoords();
+                });
+                fabricCanvas.renderAll();
+            }
+
+            // 초기 컨트롤 위치 보정
+            setTimeout(fixControlsPosition, 100);
+
+            fabricCanvas.on("mouse:wheel", function (opt) {
+                // Ctrl 키가 눌려있을 때만 확대/축소
+                if (!opt.e.ctrlKey) return;
+
+                const delta = opt.e.deltaY;
+                let zoomFactor = zoom;
+                zoomFactor *= 0.999 ** delta;
+                zoomFactor = Math.max(minZoom, Math.min(maxZoom, zoomFactor));
+                const pointer = fabricCanvas.getPointer(opt.e);
+                fabricCanvas.zoomToPoint(
+                    { x: opt.e.offsetX, y: opt.e.offsetY },
+                    zoomFactor
+                );
+                zoom = zoomFactor;
+                opt.e.preventDefault();
+                opt.e.stopPropagation();
+
+                // 확대/축소 후 공백 방지: 좌상단이 항상 (0,0)에 오도록 이동
+                const vpt = fabricCanvas.viewportTransform;
+                if (vpt[4] > 0) vpt[4] = 0;
+                if (vpt[5] > 0) vpt[5] = 0;
+                const canvasWidth = fabricCanvas.getWidth();
+                const canvasHeight = fabricCanvas.getHeight();
+                const zoomedWidth = canvasWidth * zoom;
+                const zoomedHeight = canvasHeight * zoom;
+                if (zoomedWidth + vpt[4] < canvasWidth)
+                    vpt[4] = canvasWidth - zoomedWidth;
+                if (zoomedHeight + vpt[5] < canvasHeight)
+                    vpt[5] = canvasHeight - zoomedHeight;
+                fabricCanvas.requestRenderAll();
+            });
+
+            // 드래그 관련 변수
+            let isDragging = false;
+            let dragStartX, dragStartY;
+            let originalLeft, originalTop;
+
+            const objectCounters = {
+                pan: 0,
+                line: 0,
+                circle: 0,
+                rect: 0,
+                triangle: 0,
+                textbox: 0,
+                arrow: 0,
+            };
+
+            // 배경 이미지가 깨지지 않는 비율로 최대한 canvasContainer에 맞게 중앙에 오도록
+            function fitImageToContainer() {
+                const container = document.getElementById("canvasContainer");
+                const maxWidth = container.clientWidth;
+                const maxHeight = container.clientHeight;
+                const img = fabricCanvas.backgroundImage;
+                if (img) {
+                    const scale = Math.min(
+                        maxWidth / img.width,
+                        maxHeight / img.height,
+                        1
+                    );
+                    const newWidth = img.width * scale;
+                    const newHeight = img.height * scale;
+                    fabricCanvas.setWidth(newWidth);
+                    fabricCanvas.setHeight(newHeight);
+                    img.scaleX = scale;
+                    img.scaleY = scale;
+                    img.left = 0;
+                    img.top = 0;
+                    img.setCoords?.();
+                    fabricCanvas.renderAll();
+
+                    // 이미지 크기에 따라 스크롤 필요 여부 확인
+                    setContainerScrollableIfNeeded(newWidth, newHeight);
+                }
+            }
+            // window에 노출
+            window.fitImageToContainer = fitImageToContainer;
+
+            // 컨테이너 스크롤 필요 여부 설정
+            function setContainerScrollableIfNeeded(imgWidth, imgHeight) {
+                const container = document.getElementById("container");
+                const containerWidth = container.clientWidth;
+                const containerHeight = container.clientHeight;
+
+                // 여유 공간을 두고 스크롤 필요 여부 판단 (20px 여유)
+                if (
+                    imgWidth > containerWidth - 20 ||
+                    imgHeight > containerHeight - 20
+                ) {
+                    container.classList.add("scrollable");
+                } else {
+                    container.classList.remove("scrollable");
+                }
+            }
+            window.addEventListener("resize", fitImageToContainer);
+            fitImageToContainer();
+
+            fabricCanvas.on("path:created", function (opt) {
+                objectCounters.pan++;
+                opt.path.set({
+                    customLabel: "자유곡선" + objectCounters.pan,
+                    selectable: true,
+                    evented: true,
+                });
+                fabricCanvas.setActiveObject(opt.path);
+                saveHistory();
+                setMode("none");
+            });
+
+            function saveHistory() {
+                // customLabel 속성을 포함하여 저장
+                const canvasJSON = fabricCanvas.toJSON(["customLabel"]);
+                // 배경 이미지 정보는 별도로 저장
+                const backgroundImage = fabricCanvas.backgroundImage;
+                const current = JSON.stringify(canvasJSON);
+                if (current !== lastSavedJSON) {
+                    history.push(canvasJSON);
+                    lastSavedJSON = current;
+                    updateLayerList();
+                }
+            }
+            function setMode(mode) {
+                fabricCanvas.isDrawingMode = false;
+                currentMode = mode;
+                document
+                    .querySelectorAll("#toolbar button")
+                    .forEach((btn) => btn.classList.remove("active"));
+                const btn = document.getElementById("btn-" + mode);
+                if (btn) btn.classList.add("active");
+                fabricCanvas.setCursor(mode === "pan" ? "default" : "crosshair");
+
+                // 도형 그리기 모드일 때는 오브젝트 무시
+                if (["line", "circle", "rect", "triangle", "pan"].includes(mode)) {
+                    fabricCanvas.skipTargetFind = true;
+                } else {
+                    fabricCanvas.skipTargetFind = false;
+                }
+                if (mode === "pan") {
+                    fabricCanvas.isDrawingMode = true;
+                    fabricCanvas.freeDrawingBrush.width = 2;
+                    fabricCanvas.freeDrawingBrush.color = "#000000";
+                }
+            }
+            // window에 노출
+            window.setMode = setMode;
+
+            fabricCanvas.on("mouse:down", function (opt) {
+                const pointer = fabricCanvas.getPointer(opt.e);
+                const isRightClick = opt.e.button === 2;
+                const isEmptyClick = !opt.target;
+                const hasSelection = !!fabricCanvas.getActiveObject();
+
+                if (currentMode === "pan" || isRightClick) return;
+
+                if (isEmptyClick && hasSelection) {
+                    fabricCanvas.discardActiveObject();
+                    fabricCanvas.renderAll();
+                    return;
+                }
+
+                if (isEmptyClick) {
+                    fabricCanvas.discardActiveObject();
+                    fabricCanvas.renderAll();
+                    isDrawing = true;
+                    startX = pointer.x;
+                    startY = pointer.y;
+
+                    if (currentMode === "line") {
+                        objectCounters.line++;
+                        const label = "직선" + objectCounters.line;
+                        currentShape = new fabric.Line(
+                            [startX, startY, startX + 0.1, startY + 0.1],
+                            {
+                                stroke: "#000000",
+                                strokeWidth: 2,
+                                customLabel: label,
+                            }
+                        );
+                        fabricCanvas.add(currentShape);
+                    } else if (currentMode === "arrow") {
+                        objectCounters.arrow++;
+                        const label = "치수선" + objectCounters.arrow;
+                        // 임시로 선만 먼저 그림, mouse:move에서 그룹으로 대체
+                        currentShape = new fabric.Line(
+                            [startX, startY, startX + 0.1, startY + 0.1],
+                            {
+                                stroke: "#000000",
+                                strokeWidth: 2,
+                                customLabel: label,
+                            }
+                        );
+                        fabricCanvas.add(currentShape);
+                    } else if (currentMode === "circle") {
+                        objectCounters.circle++;
+                        const label = "원" + objectCounters.circle;
+                        currentShape = new fabric.Circle({
+                            left: startX,
+                            top: startY,
+                            radius: 1,
+                            originX: "left",
+                            originY: "top",
+                            fill: "transparent",
+                            stroke: "#000000",
+                            strokeWidth: 2,
+                            customLabel: label,
+                        });
+                        fabricCanvas.add(currentShape);
+                    } else if (currentMode === "rect") {
+                        objectCounters.rect++;
+                        const label = "사각형" + objectCounters.rect;
+                        currentShape = new fabric.Rect({
+                            left: startX,
+                            top: startY,
+                            width: 1,
+                            height: 1,
+                            fill: "transparent",
+                            stroke: "#000000",
+                            strokeWidth: 2,
+                            customLabel: label,
+                            // originX: "left",
+                            // originY: "top",
+                        });
+                        fabricCanvas.add(currentShape);
+                    } else if (currentMode === "triangle") {
+                        objectCounters.triangle++;
+                        const label = "삼각형" + objectCounters.triangle;
+                        currentShape = new fabric.Triangle({
+                            left: startX,
+                            top: startY,
+                            width: 1,
+                            height: 1,
+                            fill: "transparent",
+                            stroke: "#000000",
+                            strokeWidth: 2,
+                            customLabel: label,
+                            // originX: "left",
+                            // originY: "top",
+                        });
+                        fabricCanvas.add(currentShape);
+                    }
+                }
+            });
+
+            fabricCanvas.on("mouse:move", function (opt) {
+                const pointer = fabricCanvas.getPointer(opt.e);
+                document.getElementById(
+                    "coordDisplay"
+                ).innerText = `x: ${pointer.x.toFixed(0)}, y: ${pointer.y.toFixed(
+                    0
+                )}`;
+                if (!isDrawing || !currentShape) return;
+
+                if (currentMode === "line") {
+                    currentShape.set({ x2: pointer.x + 0.001, y2: pointer.y + 0.001 });
+                } else if (currentMode === "arrow") {
+                    console.log("arrow");
+
+                    const arrowLength = 16; // 화살촉 길이
+                    const width = 10; // 화살촉 폭
+                    const pixelFix = 2; // 오른쪽 화살촉과 선 사이 보정
+
+                    const lineDx = pointer.x - currentShape.x1;
+                    const lineDy = pointer.y - currentShape.y1;
+                    const lineAngle = Math.atan2(lineDy, lineDx);
+
+                    // 끝점 보정 (화살촉 밑면보다 안쪽으로 들어오게)
+                    const adjustedX = Number(
+                        (
+                            pointer.x -
+                            (arrowLength - pixelFix) * Math.cos(lineAngle)
+                        ).toFixed(2)
+                    );
+                    const adjustedY = Number(
+                        (
+                            pointer.y -
+                            (arrowLength - pixelFix) * Math.sin(lineAngle)
+                        ).toFixed(2)
+                    );
+
+                    // 선 좌표 업데이트 (시작점은 클릭 위치 그대로, 끝점만 보정)
+                    currentShape.set({
+                        x1: currentShape.x1,
+                        y1: currentShape.y1,
+                        x2: adjustedX,
+                        y2: adjustedY,
+                    });
+
+                    // 기존 화살촉/캡 제거
+                    fabricCanvas.remove(currentShape.arrowHead);
+                    fabricCanvas.remove(currentShape.startArrowHead);
+                    fabricCanvas.remove(currentShape.arrowCap);
+                    fabricCanvas.remove(currentShape.startArrowCap);
+
+                    // ---------- 오른쪽 화살촉 ----------
+                    // tip(뾰족한 끝)은 마우스 위치
+                    const tipX = pointer.x;
+                    const tipY = pointer.y;
+                    // base(밑변 중심)은 tip에서 arrowLength만큼 선의 반대방향으로 이동
+                    const baseX = tipX - arrowLength * Math.cos(lineAngle);
+                    const baseY = tipY - arrowLength * Math.sin(lineAngle);
+                    // perpAngle(수직방향)로 width/2만큼 이동해서 밑변 양끝 계산
+                    const perpAngle = lineAngle + Math.PI / 2;
+                    const leftX = baseX + (width / 2) * Math.cos(perpAngle);
+                    const leftY = baseY + (width / 2) * Math.sin(perpAngle);
+                    const rightX = baseX - (width / 2) * Math.cos(perpAngle);
+                    const rightY = baseY - (width / 2) * Math.sin(perpAngle);
+                    const arrowHead = new fabric.Polygon(
+                        [
+                            { x: tipX, y: tipY },
+                            { x: leftX, y: leftY },
+                            { x: rightX, y: rightY },
+                        ],
+                        {
+                            fill: currentShape.stroke || "#000000",
+                            selectable: false,
+                            evented: false,
+                            hasControls: false,
+                            hasBorders: false,
+                            objectCaching: false,
+                            hoverCursor: "default",
+                        }
+                    );
+                    fabricCanvas.add(arrowHead);
+                    currentShape.arrowHead = arrowHead;
+
+                    // 오른쪽 | 캡 추가 (뾰족한 끝에, 밑변의 1/2)
+                    const baseLength = Math.sqrt(
+                        Math.pow(leftX - rightX, 2) + Math.pow(leftY - rightY, 2)
+                    );
+                    const capLength = baseLength * 2;
+                    const perpUnitX = Math.cos(perpAngle);
+                    const perpUnitY = Math.sin(perpAngle);
+                    const capX1 = tipX + (capLength / 2) * perpUnitX;
+                    const capY1 = tipY + (capLength / 2) * perpUnitY;
+                    const capX2 = tipX - (capLength / 2) * perpUnitX;
+                    const capY2 = tipY - (capLength / 2) * perpUnitY;
+                    const capLine = new fabric.Line([capX1, capY1, capX2, capY2], {
+                        stroke: currentShape.stroke || "#000000",
+                        strokeWidth: currentShape.strokeWidth || 2,
+                        selectable: false,
+                        evented: false,
+                        hasControls: false,
+                        hasBorders: false,
+                        objectCaching: false,
+                        hoverCursor: "default",
+                        isArrowCap: true, // 캡 식별용 속성 추가
+                    });
+                    fabricCanvas.add(capLine);
+                    currentShape.arrowCap = capLine;
+
+                    // ---------- 왼쪽 화살촉 ----------
+                    // tip(뾰족한 끝)은 시작점에서 arrowLength만큼 선의 반대방향으로 이동
+                    const startBaseX = currentShape.x1 + 3;
+                    const startBaseY = currentShape.y1;
+                    const startTipX =
+                        startBaseX + arrowLength * Math.cos(lineAngle + Math.PI);
+                    const startTipY =
+                        startBaseY + arrowLength * Math.sin(lineAngle + Math.PI);
+                    // base(밑변 중심)은 시작점
+                    const startPerpAngle = lineAngle + Math.PI / 2;
+                    const startLeftX =
+                        startBaseX + (width / 2) * Math.cos(startPerpAngle);
+                    const startLeftY =
+                        startBaseY + (width / 2) * Math.sin(startPerpAngle);
+                    const startRightX =
+                        startBaseX - (width / 2) * Math.cos(startPerpAngle);
+                    const startRightY =
+                        startBaseY - (width / 2) * Math.sin(startPerpAngle);
+                    const startArrowHead = new fabric.Polygon(
+                        [
+                            { x: startTipX, y: startTipY },
+                            { x: startLeftX, y: startLeftY },
+                            { x: startRightX, y: startRightY },
+                        ],
+                        {
+                            fill: currentShape.stroke || "#000000",
+                            selectable: false,
+                            evented: false,
+                            hasControls: false,
+                            hasBorders: false,
+                            objectCaching: false,
+                            hoverCursor: "default",
+                        }
+                    );
+                    fabricCanvas.add(startArrowHead);
+                    currentShape.startArrowHead = startArrowHead;
+
+                    // 왼쪽 | 캡 추가 (뾰족한 끝에, 밑변의 1/2)
+                    const startBaseLength = Math.sqrt(
+                        Math.pow(startLeftX - startRightX, 2) +
+                        Math.pow(startLeftY - startRightY, 2)
+                    );
+                    const startCapLength = startBaseLength * 2;
+                    const startPerpUnitX = Math.cos(startPerpAngle);
+                    const startPerpUnitY = Math.sin(startPerpAngle);
+                    const startCapX1 =
+                        startTipX + (startCapLength / 2) * startPerpUnitX;
+                    const startCapY1 =
+                        startTipY + (startCapLength / 2) * startPerpUnitY;
+                    const startCapX2 =
+                        startTipX - (startCapLength / 2) * startPerpUnitX;
+                    const startCapY2 =
+                        startTipY - (startCapLength / 2) * startPerpUnitY;
+                    const startCapLine = new fabric.Line(
+                        [startCapX1, startCapY1, startCapX2, startCapY2],
+                        {
+                            stroke: currentShape.stroke || "#000000",
+                            strokeWidth: currentShape.strokeWidth || 2,
+                            selectable: false,
+                            evented: false,
+                            hasControls: false,
+                            hasBorders: false,
+                            objectCaching: false,
+                            hoverCursor: "default",
+                            isArrowCap: true, // 캡 식별용 속성 추가
+                        }
+                    );
+                    fabricCanvas.add(startCapLine);
+                    currentShape.startArrowCap = startCapLine;
+                    fabricCanvas.renderAll();
+                } else if (currentMode === "circle") {
+                    const width = Math.abs(pointer.x - startX);
+                    const height = Math.abs(pointer.y - startY);
+                    const diameter = Math.min(width, height);
+                    currentShape.set({
+                        left: Math.min(pointer.x, startX),
+                        top: Math.min(pointer.y, startY),
+                        radius: diameter / 2,
+                    });
+                } else if (currentMode === "rect") {
+                    const width = pointer.x - startX;
+                    const height = pointer.y - startY;
+                    currentShape.set({
+                        left: width < 0 ? pointer.x : startX,
+                        top: height < 0 ? pointer.y : startY,
+                        width: Math.abs(width),
+                        height: Math.abs(height),
+                    });
+                } else if (currentMode === "triangle") {
+                    const width = pointer.x - startX;
+                    const height = pointer.y - startY;
+                    currentShape.set({
+                        left: width < 0 ? pointer.x : startX,
+                        top: height < 0 ? pointer.y : startY,
+                        width: Math.abs(width),
+                        height: Math.abs(height),
+                    });
+                }
+                fabricCanvas.renderAll();
+            });
+
+            fabricCanvas.on("mouse:up", function () {
+                if (isDrawing && currentShape) {
+                    if (currentMode === "arrow" && currentShape.arrowHead) {
+                        // 선+화살촉+캡 그룹화 (양쪽)
+                        const groupObjs = [currentShape];
+                        if (currentShape.arrowHead)
+                            groupObjs.push(currentShape.arrowHead);
+                        if (currentShape.startArrowHead)
+                            groupObjs.push(currentShape.startArrowHead);
+                        if (currentShape.arrowCap) groupObjs.push(currentShape.arrowCap);
+                        if (currentShape.startArrowCap)
+                            groupObjs.push(currentShape.startArrowCap);
+
+                        // 치수선 중앙에 텍스트 추가
+                        objectCounters.textbox++;
+                        const centerX = (currentShape.x1 + currentShape.x2) / 2;
+                        const centerY = (currentShape.y1 + currentShape.y2) / 2;
+                        const textOffset = 40; // 텍스트를 위로 올릴 픽셀 수
+
+                        const arrowText = new fabric.Textbox("텍스트 입력", {
+                            left: centerX,
+                            top: centerY - textOffset,
+                            fill: currentShape.stroke || "#000000",
+                            backgroundColor: "transparent",
+                            fontFamily: "Arial",
+                            originX: "center",
+                            originY: "center",
+                            selectable: true,
+                            evented: true,
+                            hasControls: true,
+                            hasBorders: true,
+                            objectCaching: false,
+                            hoverCursor: "move",
+                            fontSize: 20,
+                            width: 100,
+                            textAlign: "center",
+                            customLabel: "텍스트" + objectCounters.textbox,
+                        });
+
+                        const group = new fabric.Group(groupObjs, {
+                            customLabel: currentShape.customLabel,
+                        });
+                        if (currentShape.arrowHead)
+                            fabricCanvas.remove(currentShape.arrowHead);
+                        if (currentShape.startArrowHead)
+                            fabricCanvas.remove(currentShape.startArrowHead);
+                        if (currentShape.arrowCap)
+                            fabricCanvas.remove(currentShape.arrowCap);
+                        if (currentShape.startArrowCap)
+                            fabricCanvas.remove(currentShape.startArrowCap);
+                        fabricCanvas.remove(currentShape);
+                        fabricCanvas.add(group);
+                        fabricCanvas.setActiveObject(group);
+                        saveHistory();
+                        setMode("none");
+                        shapeProperties.style.display = "none";
+                        // 텍스트 박스를 그룹에 포함하지 않고 별도로 추가
+                        fabricCanvas.add(arrowText);
+                        fabricCanvas.bringToFront(arrowText);
+
+                        fabricCanvas.renderAll();
+                        isDrawing = false;
+                        currentShape = null;
+                        return;
+                    }
+                    saveHistory();
+                    setMode("none");
+                    fabricCanvas.setActiveObject(currentShape);
+                    shapeProperties.style.display = "none";
+                    fabricCanvas.renderAll();
+                }
+                isDrawing = false;
+                currentShape = null;
+            });
+
+            function addText() {
+                objectCounters.textbox++;
+                const textbox = new fabric.Textbox("텍스트 입력", {
+                    left: 100,
+                    top: 100,
+                    fontSize: 20,
+                    fill: "#000000",
+                    backgroundColor: "transparent",
+                    hoverCursor: "move",
+                    customLabel: "텍스트" + objectCounters.textbox,
+                });
+                fabricCanvas.add(textbox);
+                fabricCanvas.setActiveObject(textbox);
+                // 항상 맨 위로 올리기
+                fabricCanvas.bringToFront(textbox);
+                saveHistory();
+            }
+            // window에 노출
+            window.addText = addText;
+
+            function undo() {
+                if (history.length > 1) {
+                    history.pop();
+                    const previousState = history[history.length - 1];
+
+                    // 배경 이미지 임시 저장
+                    const currentBg = fabricCanvas.backgroundImage;
+
+                    fabricCanvas.loadFromJSON(previousState, () => {
+                        // 배경 이미지 복원
+                        if (currentBg) {
+                            fabricCanvas.setBackgroundImage(currentBg, () => {
+                                fabricCanvas.renderAll();
+                            });
+                        } else {
+                            fabricCanvas.renderAll();
+                        }
+
+                        lastSavedJSON = JSON.stringify(fabricCanvas.toJSON(["customLabel"]));
+                        updateLayerList();
+                    });
+                }
+            }
+            /*function undo() {
+              if (history.length > 1) {
+                history.pop();
+                fabricCanvas.loadFromJSON(history[history.length - 1], () => {
+                  fabricCanvas.renderAll();
+                  // customLabel 속성을 포함하여 lastSavedJSON 업데이트
+                  lastSavedJSON = JSON.stringify(
+                    fabricCanvas.toJSON(["customLabel"])
+                  );
+                  updateLayerList();
+                });
+              }
+            }*/
+
+            // window에 노출
+            window.undo = undo;
+
+            // function saveImage() {
+            //   // 원본 크기 지정 (배경 이미지가 있으면 그 크기, 없으면 캔버스 크기)
+            //   const now = new Date();
+            //   const timestamp = now.toISOString().replace(/[:T]/g, '-').split('.')[0];
+            //
+            //   // let exportWidth = fabricCanvas.backgroundImage
+            //   //   ? fabricCanvas.backgroundImage.width
+            //   //   : fabricCanvas.width;
+            //   // let exportHeight = fabricCanvas.backgroundImage
+            //   //   ? fabricCanvas.backgroundImage.height
+            //   //   : fabricCanvas.height;
+            //   let exportWidth = fabricImgWidth;
+            //   let exportHeight = fabricImgHeight;
+            //   const dataURL = fabricCanvas.toDataURL({
+            //     format: "png",
+            //     width: exportWidth,
+            //     height: exportHeight,
+            //     left: 0,
+            //     top: 0,
+            //   });
+            //   const link = document.createElement("a");
+            //   link.href = dataURL;
+            //   link.download = "지도캡쳐-" + timestamp + ".png";
+            //   link.click();
+            // }
+            function saveImage() {
+                const now = new Date();
+                const timestamp = now.toISOString().replace(/[:T]/g, '-').split('.')[0];
+
+                console.log('=== 저장 시작 ===');
+                console.log('fabricImgWidth:', fabricImgWidth);
+                console.log('fabricImgHeight:', fabricImgHeight);
+                console.log('캔버스 크기:', fabricCanvas.width, 'x', fabricCanvas.height);
+
+                if (fabricCanvas.backgroundImage) {
+                    const bg = fabricCanvas.backgroundImage;
+                    console.log('배경 이미지:', {
+                        원본: `${bg.width} x ${bg.height}`,
+                        위치: `${bg.left}, ${bg.top}`,
+                        스케일: `${bg.scaleX} x ${bg.scaleY}`,
+                        표시크기: `${bg.getScaledWidth()} x ${bg.getScaledHeight()}`
+                    });
+                }
+
+                // 현재 캔버스에 표시된 크기 사용
+                let exportWidth = fabricCanvas.width;
+                let exportHeight = fabricCanvas.height;
+
+                console.log(`내보낼 크기: ${exportWidth} x ${exportHeight}`);
+
+                // 현재 캔버스 크기로 내보내기
+                const dataURL = fabricCanvas.toDataURL({
+                    format: "png",
+                    quality: 1.0
+                });
+
+                // Base64 이미지 크기 확인 (이전에 만든 함수 사용)
+                const img = new Image();
+                img.onload = function () {
+                    console.log(`실제 내보낸 크기: ${this.naturalWidth} x ${this.naturalHeight}`);
+                };
+                img.src = dataURL;
+
+                const link = document.createElement("a");
+                link.href = dataURL;
+                link.download = "지도캡쳐-" + timestamp + ".png";
+                link.click();
+
+                console.log('=== 저장 완료 ===');
+            }
+            // window에 노출
+            window.saveImage = saveImage;
+
+            function selectLayer(index) {
+                const obj = fabricCanvas.item(index);
+                fabricCanvas.setActiveObject(obj);
+                fabricCanvas.renderAll();
+                updateLayerList();
+            }
+            // window에 노출
+            window.selectLayer = selectLayer;
+
+            function getLayerIcon(obj) {
+                if (obj.type === "textbox") return "📝";
+                if (obj.type === "line") return "➖";
+                if (obj.type === "circle") return "⚪";
+                if (obj.type === "rect") return "⬛";
+                if (obj.type === "triangle") return "🔺";
+                if (obj.type === "path") return "✏️";
+                if (
+                    obj.type === "group" &&
+                    obj.customLabel &&
+                    obj.customLabel.startsWith("치수선")
+                )
+                    return "↔️";
+                return "❓";
+            }
+
+            function updateLayerList() {
+                const list = document.getElementById("layerList");
+                if (list) {
+                    list.innerHTML = "<strong>레이어 목록</strong>";
+                    const activeObjects = fabricCanvas.getActiveObjects();
+
+                    fabricCanvas.getObjects().forEach((obj, index) => {
+                        const label = obj.customLabel || "❓ 이름없음";
+                        const isDashed = obj.strokeDashArray ? " (점선)" : "";
+
+                        const item = document.createElement("div");
+                        item.className = "layer-item";
+                        if (activeObjects.includes(obj)) item.classList.add("selected");
+
+                        const title = document.createElement("div");
+                        title.className = "layer-label";
+                        const icon = getLayerIcon(obj);
+                        title.innerText = `${icon} ${label}${isDashed}`;
+
+                        const btnGroup = document.createElement("div");
+                        btnGroup.className = "layer-buttons";
+
+                        const selectBtn = document.createElement("button");
+                        selectBtn.innerText = "선택";
+                        selectBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            selectLayer(index);
+                        };
+
+                        const deleteBtn = document.createElement("button");
+                        deleteBtn.innerText = "삭제";
+                        deleteBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            deleteLayer(index);
+                        };
+
+                        btnGroup.appendChild(selectBtn);
+                        btnGroup.appendChild(deleteBtn);
+                        item.appendChild(title);
+                        item.appendChild(btnGroup);
+
+                        item.addEventListener("click", () => selectLayer(index));
+                        list.appendChild(item);
+                    });
+                }
+            }
+            // window에 노출
+            window.updateLayerList = updateLayerList;
+
+            function deleteLayer(index) {
+                const obj = fabricCanvas.item(index);
+                fabricCanvas.remove(obj);
+                fabricCanvas.discardActiveObject();
+                fabricCanvas.renderAll();
+                saveHistory();
+            }
+            // window에 노출
+            window.deleteLayer = deleteLayer;
+
+            // 이벤트 리스너 등록
+            document.addEventListener("keydown", fabricHandleKeyDown);
+
+            // popup_close 요소가 존재할 때만 이벤트 리스너 등록
+            const popupClose = document.getElementById('popup_close');
+            if (popupClose) {
+                popupClose.addEventListener('click', function () {
+                    document.removeEventListener("keydown", fabricHandleKeyDown);
+                });
+            }
+
+            fabricCanvas.upperCanvasEl.addEventListener(
+                "wheel",
+                function (e) {
+                    // 확대/축소 기능 제거
+                },
+                { passive: false }
+            );
+
+            fabricCanvas.upperCanvasEl.addEventListener("contextmenu", (e) => {
+                e.preventDefault();
+                console.log('우클릭 이벤트 발생');
+
+                // 마우스 위치 저장
+                window.lastMouseX = e.clientX;
+                window.lastMouseY = e.clientY;
+
+                // 우클릭한 위치에서 객체 찾기
+                const pointer = fabricCanvas.getPointer(e);
+                const clickedObject = fabricCanvas.findTarget(e);
+                console.log('클릭된 객체:', clickedObject);
+
+                if (clickedObject) {
+                    // 해당 객체를 활성화하고 속성편집 팝업 표시
+                    fabricCanvas.setActiveObject(clickedObject);
+                    fabricCanvas.renderAll();
+                    updateLayerList();
+                    showShapeProperties();
+                    console.log('속성편집 팝업 표시');
+                } else {
+                    console.log('객체가 선택되지 않음');
+                }
+            });
+
+            // 전역 변수로 이동
+            const shapeProperties = document.getElementById("shapeProperties");
+            const strokeColorInput = document.getElementById("strokeColor");
+            const strokeWidthInput = document.getElementById("strokeWidth");
+            const fillColorInput = document.getElementById("fillColor");
+            const fillSection = document.getElementById("fillSection");
+            const dashedSection = document.getElementById("dashedSection");
+            const dashedToggle = document.getElementById("dashedToggle");
+            const transparentBtn = document.getElementById("transparentBtn");
+            const textBackgroundSection = document.getElementById(
+                "textBackgroundSection"
+            );
+            const textBackgroundColorInput = document.getElementById(
+                "textBackgroundColor"
+            );
+            const textBackgroundTransparentBtn = document.getElementById(
+                "textBackgroundTransparentBtn"
+            );
+
+            // 드래그 기능 초기화
+            function initDrag() {
+                const header = shapeProperties.querySelector(".header");
+
+                header.addEventListener("mousedown", startDrag);
+                document.addEventListener("mousemove", drag);
+                document.addEventListener("mouseup", stopDrag);
+            }
+
+            function startDrag(e) {
+                if (e.target.classList.contains("close-btn")) return;
+
+                isDragging = true;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+
+                // 현재 팝업의 위치를 기준점으로 설정
+                const currentLeft = parseInt(shapeProperties.style.left) || 0;
+                const currentTop = parseInt(shapeProperties.style.top) || 0;
+                originalLeft = currentLeft;
+                originalTop = currentTop;
+
+                e.preventDefault();
+            }
+
+            function drag(e) {
+                if (!isDragging) return;
+
+                const deltaX = e.clientX - dragStartX;
+                const deltaY = e.clientY - dragStartY;
+
+                const newLeft = originalLeft + deltaX;
+                const newTop = originalTop + deltaY;
+
+                // 화면 경계 체크
+                const maxLeft = window.innerWidth - shapeProperties.offsetWidth;
+                const maxTop = window.innerHeight - shapeProperties.offsetHeight;
+
+                shapeProperties.style.left =
+                    Math.max(0, Math.min(newLeft, maxLeft)) + "px";
+                shapeProperties.style.top =
+                    Math.max(0, Math.min(newTop, maxTop)) + "px";
+            }
+
+            function stopDrag() {
+                isDragging = false;
+            }
+
+            // 페이지 로드 시 드래그 기능 초기화
+            initDrag();
+
+            function setLabelText(inputId, text) {
+                const input = document.querySelector(inputId);
+                if (input && input.previousElementSibling) {
+                    input.previousElementSibling.textContent = text;
+                }
+            }
+
+            function updateShapePropertiesPanel() {
+                const strokeColorInput = document.getElementById("strokeColor");
+                const strokeWidthInput = document.getElementById("strokeWidth");
+                const fillColorInput = document.getElementById("fillColor");
+
+                const activeObjects = fabricCanvas.getActiveObjects();
+                if (activeObjects.length === 0) {
+                    return;
+                }
+
+                // 단일 오브젝트 선택인 경우
+                if (activeObjects.length === 1) {
+                    const obj = activeObjects[0];
+                    if (strokeColorInput) strokeColorInput.value = obj.stroke || "#FF0000";
+                    if (strokeWidthInput) strokeWidthInput.value = obj.strokeWidth || 1;
+                    if (fillColorInput) fillColorInput.value =
+                        obj.fill && obj.fill !== "transparent" ? obj.fill : "#ffffff";
+                } else {
+                    // 여러 오브젝트 선택인 경우 - 공통 속성 표시
+                    const firstObj = activeObjects[0];
+                    const hasCommonStroke = activeObjects.every(
+                        (obj) => obj.stroke === firstObj.stroke
+                    );
+                    const hasCommonStrokeWidth = activeObjects.every(
+                        (obj) => obj.strokeWidth === firstObj.strokeWidth
+                    );
+                    const hasCommonFill = activeObjects.every(
+                        (obj) => obj.fill === firstObj.fill
+                    );
+
+                    // 공통 속성이 있으면 표시, 없으면 기본값
+                    strokeColorInput.value = hasCommonStroke
+                        ? firstObj.stroke || "#FF0000"
+                        : "#FF0000";
+                    strokeWidthInput.value = hasCommonStrokeWidth
+                        ? firstObj.strokeWidth || 1
+                        : 1;
+                    fillColorInput.value = hasCommonFill
+                        ? firstObj.fill && firstObj.fill !== "transparent"
+                            ? firstObj.fill
+                            : "#ffffff"
+                        : "#ffffff";
+                }
+
+                // UI 설정 (단일 오브젝트 선택인 경우에만 타입별 설정)
+                if (activeObjects.length === 1) {
+                    const obj = activeObjects[0];
+
+                    if (obj.type === "line") {
+                        fillSection.style.display = "none";
+                        dashedSection.style.display = "block";
+                        setLabelText("#strokeWidth", "선 두께:");
+                        const strokeColorLabel = document.getElementById("strokeColorLabel");
+                        if (strokeColorLabel) strokeColorLabel.textContent = "선 색상";
+                        strokeColorSection.setAttribute("data-label", "선 색상 설정");
+                        strokeWidthSection.setAttribute("data-label", "선 두께 설정");
+                        fillSection.setAttribute("data-label", "채우기 설정");
+                        dashedSection.setAttribute("data-label", "선 스타일 설정");
+                        textBackgroundSection.style.display = "none";
+                    } else if (
+                        obj.type === "circle" ||
+                        obj.type === "rect" ||
+                        obj.type === "triangle"
+                    ) {
+                        fillSection.style.display = "block";
+                        dashedSection.style.display = "block";
+                        setLabelText("#strokeWidth", "선 두께:");
+                        const strokeColorLabel = document.getElementById("strokeColorLabel");
+                        if (strokeColorLabel) strokeColorLabel.textContent = "선 색상";
+                        strokeColorSection.setAttribute("data-label", "선 색상 설정");
+                        strokeWidthSection.setAttribute("data-label", "선 두께 설정");
+                        fillSection.setAttribute("data-label", "채우기 설정");
+                        dashedSection.setAttribute("data-label", "선 스타일 설정");
+                        textBackgroundSection.style.display = "none";
+                    } else if (obj.type === "textbox") {
+                        fillSection.style.display = "none";
+                        dashedSection.style.display = "none";
+                        textBackgroundSection.style.display = "block";
+                        strokeColorInput.value = obj.fill || "#FF0000";
+                        strokeWidthInput.value = obj.fontSize || 20;
+                        textBackgroundColorInput.value =
+                            obj.backgroundColor && obj.backgroundColor !== "transparent"
+                                ? obj.backgroundColor
+                                : "#FFFFFF";
+                        setLabelText("#strokeWidth", "글자 크기:");
+                        const strokeColorLabel = document.getElementById("strokeColorLabel");
+                        if (strokeColorLabel) strokeColorLabel.textContent = "글자 색상";
+                        strokeColorSection.setAttribute("data-label", "글자 색상 설정");
+                        strokeWidthSection.setAttribute("data-label", "글자 크기 설정");
+                        textBackgroundSection.setAttribute(
+                            "data-label",
+                            "텍스트 배경 설정"
+                        );
+                        fillSection.setAttribute("data-label", "채우기 설정");
+                        dashedSection.setAttribute("data-label", "스타일 설정");
+                    } else if (
+                        obj.type === "group" &&
+                        obj.customLabel &&
+                        obj.customLabel.startsWith("치수선")
+                    ) {
+                        // 치수선 그룹 처리 - 첫 번째 선 객체의 속성을 사용
+                        const lineObj = obj
+                            .getObjects()
+                            .find((item) => item.type === "line");
+                        if (lineObj) {
+                            strokeColorInput.value = lineObj.stroke || "#FF0000";
+                            strokeWidthInput.value = lineObj.strokeWidth || 1;
+                        }
+                        fillSection.style.display = "none";
+                        dashedSection.style.display = "block";
+                        setLabelText("#strokeWidth", "선 두께:");
+                        const strokeColorLabel = document.getElementById("strokeColorLabel");
+                        if (strokeColorLabel) strokeColorLabel.textContent = "선 색상";
+                        strokeColorSection.setAttribute("data-label", "선 색상 설정");
+                        strokeWidthSection.setAttribute("data-label", "선 두께 설정");
+                        fillSection.setAttribute("data-label", "채우기 설정");
+                        dashedSection.setAttribute("data-label", "선 스타일 설정");
+                        textBackgroundSection.style.display = "none";
+                    } else {
+                        fillSection.style.display = "block";
+                        dashedSection.style.display = "none";
+                        textBackgroundSection.style.display = "none";
+                        setLabelText("#strokeWidth", "선 두께:");
+                        const strokeColorLabel = document.getElementById("strokeColorLabel");
+                        if (strokeColorLabel) strokeColorLabel.textContent = "선 색상";
+                        strokeColorSection.setAttribute("data-label", "선 색상 설정");
+                        strokeWidthSection.setAttribute("data-label", "선 두께 설정");
+                        textBackgroundSection.setAttribute(
+                            "data-label",
+                            "텍스트 배경 설정"
+                        );
+                        fillSection.setAttribute("data-label", "채우기 설정");
+                        dashedSection.setAttribute("data-label", "스타일 설정");
+                        textBackgroundSection.style.display = "none";
+                    }
+                } else {
+                    // 여러 오브젝트 선택인 경우 - 공통 UI 설정
+                    fillSection.style.display = "block";
+                    dashedSection.style.display = "block";
+                    textBackgroundSection.style.display = "none";
+                    setLabelText("#strokeWidth", "선 두께:");
+                    const strokeColorLabel = document.getElementById("strokeColorLabel");
+                    if (strokeColorLabel) strokeColorLabel.textContent = "선 색상";
+                    strokeColorSection.setAttribute("data-label", "선 색상 설정");
+                    strokeWidthSection.setAttribute("data-label", "선 두께 설정");
+                    textBackgroundSection.setAttribute(
+                        "data-label",
+                        "텍스트 배경 설정"
+                    );
+                    fillSection.setAttribute("data-label", "채우기 설정");
+                    dashedSection.setAttribute("data-label", "선 스타일 설정");
+                    textBackgroundSection.style.display = "none";
+                }
+
+                // 점선 토글 버튼 상태 업데이트
+                if (activeObjects.length === 1) {
+                    const obj = activeObjects[0];
+                    if (obj.strokeDashArray) {
+                        dashedToggle.textContent = "점선";
+                        dashedToggle.classList.add("active");
+                    } else {
+                        dashedToggle.textContent = "실선";
+                        dashedToggle.classList.remove("active");
+                    }
+                } else {
+                    // 여러 오브젝트 선택인 경우 - 공통 상태 확인
+                    const hasCommonDashArray = activeObjects.every(
+                        (obj) => obj.strokeDashArray === activeObjects[0].strokeDashArray
+                    );
+
+                    if (hasCommonDashArray && activeObjects[0].strokeDashArray) {
+                        dashedToggle.textContent = "점선";
+                        dashedToggle.classList.add("active");
+                    } else {
+                        dashedToggle.textContent = "실선";
+                        dashedToggle.classList.remove("active");
+                    }
+                }
+
+                // 팝업 제목 업데이트
+                const titleElement = shapeProperties.querySelector(".header strong");
+                if (activeObjects.length === 1) {
+                    titleElement.textContent = "속성 편집";
+                } else {
+                    titleElement.textContent = `속성 편집 (${activeObjects.length}개 선택)`;
+                }
+
+                // 투명 버튼 상태 업데이트
+                /* if (obj.fill === "transparent" || !obj.fill) {
+                transparentBtn.classList.add("active");
+              } else {
+                transparentBtn.classList.remove("active");
+              } */
+            }
+
+            function showShapeProperties() {
+                const shapeProperties = document.getElementById("shapeProperties");
+                if (!shapeProperties) {
+                    console.error('shapeProperties 요소를 찾을 수 없습니다.');
+                    return;
+                }
+
+                updateShapePropertiesPanel();
+                // 1. 먼저 숨김
+                shapeProperties.style.display = "none";
+                // 2. 위치 계산 (마우스 위치 기준)
+                const obj = fabricCanvas.getActiveObject();
+                if (obj) {
+                    // 마우스 위치를 기준으로 팝업 위치 설정
+                    const mouseX = window.lastMouseX || 0;
+                    const mouseY = window.lastMouseY || 0;
+
+                    // 팝업 크기 고려하여 위치 조정
+                    const popupWidth = 250; // 예상 팝업 너비
+                    const popupHeight = 300; // 예상 팝업 높이
+
+                    let left = mouseX + 10;
+                    let top = mouseY + 10;
+
+                    // 화면 경계 체크
+                    if (left + popupWidth > window.innerWidth) {
+                        left = mouseX - popupWidth - 10;
+                    }
+                    if (top + popupHeight > window.innerHeight) {
+                        top = mouseY - popupHeight - 10;
+                    }
+
+                    // 최소 위치 보장
+                    left = Math.max(10, left);
+                    top = Math.max(10, top);
+
+                    shapeProperties.style.left = left + "px";
+                    shapeProperties.style.top = top + "px";
+                }
+                // 3. 위치 지정 후 보이기
+                shapeProperties.style.display = "block";
+            }
+            // window에 노출
+            window.showShapeProperties = showShapeProperties;
+
+            function hideShapeProperties() {
+                shapeProperties.style.display = "none";
+            }
+            // window에 노출
+            window.hideShapeProperties = hideShapeProperties;
+
+            strokeColorInput.addEventListener("change", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length > 0) {
+                    selectedObjects.forEach((obj) => {
+                        if (obj.type === "textbox") {
+                            obj.set("fill", this.value);
+                        } else if (
+                            obj.type === "group" &&
+                            obj.customLabel &&
+                            obj.customLabel.startsWith("치수선")
+                        ) {
+                            // 치수선 그룹의 모든 객체에 색상 적용
+                            const groupObjects = obj.getObjects();
+                            const groupLeft = obj.left;
+                            const groupTop = obj.top;
+                            const customLabel = obj.customLabel;
+
+                            // 그룹 해제
+                            obj.toActiveSelection();
+                            fabricCanvas.discardActiveObject();
+
+                            // 각 객체에 색상 적용
+                            groupObjects.forEach((item) => {
+                                if (item.type === "line") {
+                                    item.set("stroke", this.value);
+                                } else if (item.type === "polygon") {
+                                    item.set("fill", this.value);
+                                }
+                            });
+
+                            // 다시 그룹화
+                            const newGroup = new fabric.Group(groupObjects, {
+                                left: groupLeft,
+                                top: groupTop,
+                                customLabel: customLabel,
+                            });
+
+                            // 기존 객체들 제거
+                            groupObjects.forEach((item) => fabricCanvas.remove(item));
+
+                            // 새 그룹 추가
+                            fabricCanvas.add(newGroup);
+                            fabricCanvas.setActiveObject(newGroup);
+                        } else if ("stroke" in obj) {
+                            obj.set("stroke", this.value);
+                        }
+                    });
+                    fabricCanvas.renderAll();
+                    saveHistory();
+                }
+            });
+
+            strokeColorInput.addEventListener("input", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length > 0) {
+                    selectedObjects.forEach((obj) => {
+                        if (obj.type === "textbox") {
+                            obj.set("fill", this.value);
+                        } else if (
+                            obj.type === "group" &&
+                            obj.customLabel &&
+                            obj.customLabel.startsWith("치수선")
+                        ) {
+                            // 치수선 그룹의 모든 객체에 색상 적용
+                            const groupObjects = obj.getObjects();
+                            groupObjects.forEach((item) => {
+                                if (item.type === "line") {
+                                    item.set("stroke", this.value);
+                                } else if (item.type === "polygon") {
+                                    item.set("fill", this.value);
+                                }
+                            });
+                            // 그룹 자체도 업데이트
+                            obj.setCoords();
+                            // 강제로 캔버스 다시 렌더링
+                            fabricCanvas.requestRenderAll();
+                        } else if ("stroke" in obj) {
+                            obj.set("stroke", this.value);
+                        }
+                    });
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            strokeWidthInput.addEventListener("change", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length > 0) {
+                    selectedObjects.forEach((obj) => {
+                        if (obj.type === "textbox") {
+                            obj.set("fontSize", parseInt(this.value) || 20);
+                        } else if ("strokeWidth" in obj && obj.type !== "textbox") {
+                            obj.set("strokeWidth", parseInt(this.value));
+                        } else if (
+                            obj.type === "group" &&
+                            obj.customLabel &&
+                            obj.customLabel.startsWith("치수선")
+                        ) {
+                            // 치수선 그룹의 선 객체에 선 두께 적용
+                            obj.getObjects().forEach((item) => {
+                                if (item.type === "line") {
+                                    item.set("strokeWidth", parseInt(this.value) || 1);
+                                }
+                            });
+                        }
+                    });
+                    fabricCanvas.renderAll();
+                    saveHistory();
+                }
+            });
+
+            strokeWidthInput.addEventListener("input", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length > 0) {
+                    selectedObjects.forEach((obj) => {
+                        if (obj.type === "textbox") {
+                            obj.set("fontSize", parseInt(this.value) || 20);
+                        } else if ("strokeWidth" in obj && obj.type !== "textbox") {
+                            obj.set("strokeWidth", parseInt(this.value) || 1);
+                        } else if (
+                            obj.type === "group" &&
+                            obj.customLabel &&
+                            obj.customLabel.startsWith("치수선")
+                        ) {
+                            // 치수선 그룹의 선 객체에 선 두께 적용
+                            obj.getObjects().forEach((item) => {
+                                if (item.type === "line") {
+                                    item.set("strokeWidth", parseInt(this.value) || 1);
+                                }
+                            });
+                        }
+                    });
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            fillColorInput.addEventListener("change", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length > 0) {
+                    selectedObjects.forEach((obj) => {
+                        if (
+                            obj.type !== "line" &&
+                            obj.type !== "textbox" &&
+                            "fill" in obj
+                        ) {
+                            obj.set("fill", this.value);
+                        }
+                    });
+                    fabricCanvas.renderAll();
+                    saveHistory();
+                }
+            });
+
+            fillColorInput.addEventListener("input", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length > 0) {
+                    selectedObjects.forEach((obj) => {
+                        if (
+                            obj.type !== "line" &&
+                            obj.type !== "textbox" &&
+                            "fill" in obj
+                        ) {
+                            obj.set("fill", this.value);
+                        }
+                    });
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            dashedToggle.addEventListener("click", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length === 0) return;
+                selectedObjects.forEach((obj) => {
+                    if (["line", "circle", "rect", "triangle"].includes(obj.type)) {
+                        const current = obj.strokeDashArray;
+                        let dashArray = null;
+                        if (!current) {
+                            if (obj.type === "line") dashArray = [10, 5];
+                            else dashArray = [8, 4]; // circle, rect, triangle
+                        }
+                        obj.set("strokeDashArray", dashArray);
+                    } else if (
+                        obj.type === "group" &&
+                        obj.customLabel &&
+                        obj.customLabel.startsWith("치수선")
+                    ) {
+                        // 치수선 그룹의 선 객체에 점선 적용 (캡은 제외)
+                        obj.getObjects().forEach((item) => {
+                            if (item.type === "line") {
+                                // 캡(세로선)인지 확인 - isArrowCap 속성으로 식별
+                                if (item.isArrowCap) {
+                                    // 캡은 실선 유지
+                                    item.set("strokeDashArray", null);
+                                } else {
+                                    // 메인 선만 점선 적용
+                                    const current = item.strokeDashArray;
+                                    let dashArray = null;
+                                    if (!current) {
+                                        dashArray = [10, 5];
+                                    }
+                                    item.set("strokeDashArray", dashArray);
+                                }
+                            }
+                        });
+                    }
+                });
+                fabricCanvas.renderAll();
+                saveHistory();
+
+                // 버튼 상태 업데이트 (첫 번째 오브젝트 기준)
+                const obj = selectedObjects[0];
+                if (obj && obj.strokeDashArray) {
+                    this.textContent = "점선";
+                    this.classList.add("active");
+                } else if (
+                    obj.type === "group" &&
+                    obj.customLabel &&
+                    obj.customLabel.startsWith("치수선")
+                ) {
+                    // 치수선 그룹의 선 객체 확인
+                    const lineObj = obj
+                        .getObjects()
+                        .find((item) => item.type === "line");
+                    if (lineObj && lineObj.strokeDashArray) {
+                        this.textContent = "점선";
+                        this.classList.add("active");
+                    } else {
+                        this.textContent = "실선";
+                        this.classList.remove("active");
+                    }
+                } else {
+                    this.textContent = "실선";
+                    this.classList.remove("active");
+                }
+            });
+
+            transparentBtn.addEventListener("click", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length === 0) return;
+                selectedObjects.forEach((obj) => {
+                    if (obj.type !== "line" && "fill" in obj) {
+                        obj.set("fill", "transparent");
+                    }
+                });
+                fabricCanvas.renderAll();
+                saveHistory();
+
+                // 버튼 상태 업데이트
+                this.classList.add("active");
+            });
+
+            // 텍스트 배경색 변경 이벤트
+            textBackgroundColorInput.addEventListener("change", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length > 0) {
+                    selectedObjects.forEach((obj) => {
+                        if (obj.type === "textbox") {
+                            obj.set("backgroundColor", this.value);
+                        }
+                    });
+                    fabricCanvas.renderAll();
+                    saveHistory();
+                }
+            });
+
+            textBackgroundColorInput.addEventListener("input", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length > 0) {
+                    selectedObjects.forEach((obj) => {
+                        if (obj.type === "textbox") {
+                            obj.set("backgroundColor", this.value);
+                        }
+                    });
+                    fabricCanvas.renderAll();
+                }
+            });
+
+            // 텍스트 배경 투명 버튼
+            textBackgroundTransparentBtn.addEventListener("click", function () {
+                const selectedObjects = fabricCanvas.getActiveObjects();
+                if (selectedObjects.length === 0) return;
+                selectedObjects.forEach((obj) => {
+                    if (obj.type === "textbox") {
+                        obj.set("backgroundColor", "transparent");
+                    }
+                });
+                fabricCanvas.renderAll();
+                saveHistory();
+
+                // 버튼 상태 업데이트
+                this.classList.add("active");
+            });
+
+            fabricCanvas.on("selection:created", () => {
+                updateLayerList();
+            });
+
+            fabricCanvas.on("selection:updated", () => {
+                updateLayerList();
+            });
+
+            fabricCanvas.on("selection:cleared", () => {
+                updateLayerList();
+                hideShapeProperties();
+            });
+
+            let clipboard = null;
+
+            function copyObjects() {
+                const activeObjects = fabricCanvas.getActiveObjects();
+                if (activeObjects.length > 0) {
+                    clipboard = [];
+                    activeObjects.forEach((obj) => {
+                        obj.clone((cloned) => {
+                            clipboard.push(cloned);
+                        });
+                    });
+                }
+            }
+
+            function pasteObjects() {
+                if (!clipboard || clipboard.length === 0) return;
+                clipboard.forEach((cloneObj) => {
+                    cloneObj.clone(function (cloned) {
+                        // 타입별 카운터 증가 및 customLabel 부여
+                        if (cloned.type === "line") {
+                            objectCounters.line++;
+                            cloned.customLabel = "직선" + objectCounters.line;
+                        } else if (cloned.type === "rect") {
+                            objectCounters.rect++;
+                            cloned.customLabel = "사각형" + objectCounters.rect;
+                        } else if (cloned.type === "triangle") {
+                            objectCounters.triangle++;
+                            cloned.customLabel = "삼각형" + objectCounters.triangle;
+                        } else if (cloned.type === "circle") {
+                            objectCounters.circle++;
+                            cloned.customLabel = "원" + objectCounters.circle;
+                        } else if (cloned.type === "textbox") {
+                            objectCounters.textbox++;
+                            cloned.customLabel = "텍스트" + objectCounters.textbox;
+                        } else if (cloned.type === "path") {
+                            objectCounters.pan++;
+                            cloned.customLabel = "자유곡선" + objectCounters.pan;
+                        } else if (
+                            cloned.type === "group" &&
+                            cloned.customLabel &&
+                            cloned.customLabel.startsWith("치수선")
+                        ) {
+                            objectCounters.arrow++;
+                            cloned.customLabel = "치수선" + objectCounters.arrow;
+                        } else {
+                            cloned.customLabel = "이름없음";
+                        }
+                        cloned.set({
+                            left: (cloned.left || 0) + 20,
+                            top: (cloned.top || 0) + 20,
+                            evented: true,
+                        });
+                        fabricCanvas.add(cloned);
+                        fabricCanvas.setActiveObject(cloned);
+                        fabricCanvas.renderAll();
+                        saveHistory();
+                    });
+                });
+            }
+
+            // 팔레트 버튼 연동
+            function setupColorPalette(paletteId, inputId, applyColorFn) {
+                const palette = document.getElementById(paletteId);
+                if (!palette) return;
+                palette.querySelectorAll(".color-btn").forEach((btn) => {
+                    btn.addEventListener("click", function () {
+                        const color = this.getAttribute("data-color");
+                        const input = document.getElementById(inputId);
+                        if (input) {
+                            input.value = color;
+                            input.dispatchEvent(new Event("input"));
+                        }
+                        if (typeof applyColorFn === "function") applyColorFn(color);
+                    });
+                });
+            }
+
+            // 선 색상 팔레트 연동 (텍스트면 글자색, 아니면 선색)
+            setupColorPalette(
+                "strokeColorPalette",
+                "strokeColor",
+                function (color) {
+                    const obj = fabricCanvas.getActiveObject();
+                    if (obj) {
+                        if (obj.type === "textbox") {
+                            obj.set("fill", color);
+                        } else {
+                            obj.set("stroke", color);
+                        }
+                        fabricCanvas.renderAll();
+                        saveHistory();
+                    }
+                }
+            );
+
+            // 채우기 색상 팔레트 연동
+            setupColorPalette("fillColorPalette", "fillColor", function (color) {
+                const obj = fabricCanvas.getActiveObject();
+                if (obj && obj.type !== "line") {
+                    obj.set("fill", color);
+                    fabricCanvas.renderAll();
+                    saveHistory();
+                }
+            });
+
+            // 색상 선택 탭 연동 함수
+            function setupColorTabs(tabGroupId, tabPrefix) {
+                const tabs = document.getElementById(tabGroupId);
+                if (!tabs) return;
+                tabs.querySelectorAll(".tab-btn").forEach((btn) => {
+                    btn.addEventListener("click", function () {
+                        // 모든 탭 비활성화
+                        tabs
+                            .querySelectorAll(".tab-btn")
+                            .forEach((b) => b.classList.remove("active"));
+                        // 모든 컨텐츠 숨김
+                        ["theme", "standard", "custom"].forEach((tab) => {
+                            const content = document.getElementById(tabPrefix + "-" + tab);
+                            if (content) content.style.display = "none";
+                        });
+                        // 현재 탭 활성화 및 컨텐츠 표시
+                        this.classList.add("active");
+                        const showContent = document.getElementById(
+                            tabPrefix + "-" + this.dataset.tab
+                        );
+                        if (showContent) showContent.style.display = "";
+                    });
+                });
+            }
+            setupColorTabs("strokeColorTabs", "stroke-tab");
+            setupColorTabs("fillColorTabs", "fill-tab");
+
+            // 팔레트 팝업 show/hide 및 색상 연동 (클릭만, 한 번에 하나만 열림)
+            function setupPalettePopup(
+                triggerId,
+                popupId,
+                inputId,
+                applyColorFn,
+                allPopupIds
+            ) {
+                const trigger = document.getElementById(triggerId);
+                const popup = document.getElementById(popupId);
+                const input = document.getElementById(inputId);
+                if (!trigger || !popup) return;
+
+                // 팝업 show/hide (토글)
+                function showPopup() {
+                    // 다른 팔레트 닫기
+                    if (Array.isArray(allPopupIds)) {
+                        allPopupIds.forEach((id) => {
+                            if (id !== popupId) {
+                                const el = document.getElementById(id);
+                                if (el) el.style.display = "none";
+                            }
+                        });
+                    }
+                    if (popup.style.display === "block") {
+                        popup.style.display = "none";
+                        return;
+                    }
+                    // 위치 계산: 클릭한 버튼 위치에서 바로 표시
+                    const rect = trigger.getBoundingClientRect();
+                    popup.style.position = "fixed";
+                    popup.style.left = rect.left + "px";
+                    popup.style.top = rect.bottom + "px";
+                    popup.style.display = "block";
+                }
+                function hidePopup() {
+                    popup.style.display = "none";
+                }
+                trigger.addEventListener("click", function (e) {
+                    e.stopPropagation();
+                    showPopup();
+                });
+
+                // 외부 클릭 시 닫기
+                document.addEventListener("mousedown", function (e) {
+                    if (!popup.contains(e.target) && e.target !== trigger) {
+                        hidePopup();
+                    }
+                });
+
+                // 색상 선택 연동
+                popup.querySelectorAll(".color-btn").forEach((btn) => {
+                    btn.addEventListener("click", function () {
+                        const color = this.getAttribute("data-color");
+                        if (input) {
+                            input.value = color;
+                            input.dispatchEvent(new Event("input"));
+                        }
+                        if (typeof applyColorFn === "function") applyColorFn(color);
+                        hidePopup();
+                    });
+                });
+            }
+
+            // 모든 팔레트 id 목록
+            const allPopupIds = [
+                "strokeThemePalette",
+                "strokeStandardPalette",
+                "fillThemePalette",
+                "fillStandardPalette",
+                "textBackgroundThemePalette",
+                "textBackgroundStandardPalette",
+            ];
+
+            // 선 색상
+            setupPalettePopup(
+                "strokeThemeBtn",
+                "strokeThemePalette",
+                "strokeColor",
+                function (color) {
+                    const obj = fabricCanvas.getActiveObject();
+                    if (obj) {
+                        if (obj.type === "textbox") {
+                            obj.set("fill", color);
+                        } else {
+                            obj.set("stroke", color);
+                        }
+                        fabricCanvas.renderAll();
+                        saveHistory();
+                    }
+                },
+                allPopupIds
+            );
+            setupPalettePopup(
+                "strokeStandardBtn",
+                "strokeStandardPalette",
+                "strokeColor",
+                function (color) {
+                    const obj = fabricCanvas.getActiveObject();
+                    if (obj) {
+                        if (obj.type === "textbox") {
+                            obj.set("fill", color);
+                        } else {
+                            obj.set("stroke", color);
+                        }
+                        fabricCanvas.renderAll();
+                        saveHistory();
+                    }
+                },
+                allPopupIds
+            );
+            // 채우기 색상
+            setupPalettePopup(
+                "fillThemeBtn",
+                "fillThemePalette",
+                "fillColor",
+                function (color) {
+                    const obj = fabricCanvas.getActiveObject();
+                    if (obj && obj.type !== "line") {
+                        obj.set("fill", color);
+                        fabricCanvas.renderAll();
+                        saveHistory();
+                    }
+                },
+                allPopupIds
+            );
+            setupPalettePopup(
+                "fillStandardBtn",
+                "fillStandardPalette",
+                "fillColor",
+                function (color) {
+                    const obj = fabricCanvas.getActiveObject();
+                    if (obj && obj.type !== "line") {
+                        obj.set("fill", color);
+                        fabricCanvas.renderAll();
+                        saveHistory();
+                    }
+                },
+                allPopupIds
+            );
+
+            // 텍스트 배경색 팔레트
+            setupPalettePopup(
+                "textBackgroundThemeBtn",
+                "textBackgroundThemePalette",
+                "textBackgroundColor",
+                function (color) {
+                    const obj = fabricCanvas.getActiveObject();
+                    if (obj && obj.type === "textbox") {
+                        obj.set("backgroundColor", color);
+                        fabricCanvas.renderAll();
+                        saveHistory();
+                    }
+                },
+                allPopupIds
+            );
+            setupPalettePopup(
+                "textBackgroundStandardBtn",
+                "textBackgroundStandardPalette",
+                "textBackgroundColor",
+                function (color) {
+                    const obj = fabricCanvas.getActiveObject();
+                    if (obj && obj.type === "textbox") {
+                        obj.set("backgroundColor", color);
+                        fabricCanvas.renderAll();
+                        saveHistory();
+                    }
+                },
+                allPopupIds
+            );
+
+            // 배경 이미지 업로드 기능
+            document
+                .getElementById("bgImageInput")
+                .addEventListener("change", function (e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = function (evt) {
+                        // 배경 이미지 변경 시 레이어 초기화
+                        clearLayers();
+                        fabric.Image.fromURL(evt.target.result, function (img) {
+                            fabricCanvas.setBackgroundImage(
+                                img,
+                                function () {
+                                    fitImageToContainer();
+                                    lastSavedJSON = JSON.stringify(fabricCanvas.toJSON());
+                                    history.push(fabricCanvas.toJSON());
+                                },
+                                {
+                                    scaleX: 1,
+                                    scaleY: 1,
+                                }
+                            );
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                });
+
+            function clearLayers() {
+                // 배경 이미지는 남기고 오브젝트만 삭제
+                fabricCanvas
+                    .getObjects()
+                    .slice()
+                    .forEach((obj) => fabricCanvas.remove(obj));
+                fabricCanvas.discardActiveObject();
+                fabricCanvas.renderAll();
+                saveHistory();
+                updateLayerList();
+                hideShapeProperties();
+            }
+            // window에 노출
+            window.clearLayers = clearLayers;
+
+            // 레이어 순서 조정 기능
+            document.getElementById("bringToFrontBtn").onclick = function () {
+                fabricCanvas
+                    .getActiveObjects()
+                    .forEach((obj) => fabricCanvas.bringToFront(obj));
+                fabricCanvas.renderAll();
+                updateLayerList();
+            };
+            document.getElementById("sendToBackBtn").onclick = function () {
+                fabricCanvas
+                    .getActiveObjects()
+                    .forEach((obj) => fabricCanvas.sendToBack(obj));
+                fabricCanvas.renderAll();
+                updateLayerList();
+            };
+
+            // 단축키 도움말 툴팁 위치 조정
+            function adjustTooltipPosition() {
+                const shortcutHelp = document.querySelector(".shortcut-help");
+                const tooltip = document.querySelector(".shortcut-tooltip");
+
+                if (!shortcutHelp || !tooltip) return;
+
+                shortcutHelp.addEventListener("mouseenter", function () {
+                    // 약간의 지연 후 위치 계산 (렌더링 완료 대기)
+                    setTimeout(() => {
+                        const helpRect = shortcutHelp.getBoundingClientRect();
+                        const tooltipRect = tooltip.getBoundingClientRect();
+                        const viewportWidth = window.innerWidth;
+                        const viewportHeight = window.innerHeight;
+
+                        // 기본 위치 (중앙 정렬)
+                        let left = "50%";
+                        let transform = "translateX(-50%)";
+
+                        // 오른쪽으로 넘어가는 경우
+                        if (helpRect.left + tooltipRect.width / 2 > viewportWidth) {
+                            left = "auto";
+                            tooltip.style.right = "0";
+                            transform = "none";
+                        }
+
+                        // 왼쪽으로 넘어가는 경우
+                        if (helpRect.left - tooltipRect.width / 2 < 0) {
+                            left = "0";
+                            tooltip.style.right = "auto";
+                            transform = "none";
+                        }
+
+                        // 아래쪽으로 넘어가는 경우 (위쪽에 표시)
+                        if (helpRect.bottom + tooltipRect.height + 20 > viewportHeight) {
+                            tooltip.style.top = "auto";
+                            tooltip.style.bottom = "100%";
+                            tooltip.style.marginTop = "0";
+                            tooltip.style.marginBottom = "8px";
+                            tooltip.style.setProperty("--arrow-direction", "bottom");
+                        } else {
+                            tooltip.style.top = "100%";
+                            tooltip.style.bottom = "auto";
+                            tooltip.style.marginTop = "8px";
+                            tooltip.style.marginBottom = "0";
+                            tooltip.style.setProperty("--arrow-direction", "top");
+                        }
+
+                        tooltip.style.left = left;
+                        tooltip.style.transform = transform;
+                    }, 50);
+                });
+            }
+
+            // 페이지 로드 시 툴팁 위치 조정 초기화
+            document.addEventListener("DOMContentLoaded", function () {
+                adjustTooltipPosition();
+
+                // 초기 스크롤 설정
+                const container = document.getElementById("container");
+                const containerWidth = container.clientWidth;
+                const containerHeight = container.clientHeight;
+
+                // 캔버스 크기에 따라 스크롤 필요 여부 확인 (여유 공간 20px)
+                if (
+                    fabricCanvas.width > containerWidth - 20 ||
+                    fabricCanvas.height > containerHeight - 20
+                ) {
+                    container.classList.add("scrollable");
+                } else {
+                    container.classList.remove("scrollable");
+                }
+
+                // 초기에는 스크롤 제거
+                setTimeout(() => {
+                    container.classList.remove("scrollable");
+                }, 100);
+            });
+        })();
+
+        // 모달 열기
+        function openSaveModal() {
+            document.getElementById("saveModal").style.display = "block";
+            document.getElementById("fabricFileName").focus();
+            const fabricBack = document.getElementById("fabric-back");
+            if (fabricBack) fabricBack.style.display = "block";
+        }
+
+        // 모달 닫기
+        function closeSaveModal() {
+            document.getElementById("saveModal").style.display = "none";
+            const fabricBack = document.getElementById("fabric-back");
+            if (fabricBack) fabricBack.style.display = "none";
+        }
+
+        // 키보드 이벤트 핸들러
+        function fabricHandleKeyDown(event) {
+            // ESC 키로 선택 해제
+            if (event.key === 'Escape') {
+                fabricCanvas.discardActiveObject();
+                fabricCanvas.renderAll();
+            }
+            // Delete 키로 선택된 객체 삭제
+            else if (event.key === 'Delete' || event.key === 'Backspace') {
+                const activeObjects = fabricCanvas.getActiveObjects();
+                if (activeObjects.length > 0) {
+                    fabricCanvas.remove(...activeObjects);
+                    fabricCanvas.discardActiveObject();
+                    fabricCanvas.renderAll();
+                }
+            }
+        }
+
+        // 이미지 저장
+        function downloadCanvasImage() {
+            const fabricFileNameInput = document.getElementById("fabricFileName");
+            let fabricFileName = fabricFileNameInput ? fabricFileNameInput.value : "";
+            if (fabricType == "d_img_storage") {
+                fabricDImageAdd(fabricFileName);
+            } else if (fabricType == "d_cross_section_storage") {
+                fabricDCrossImageAdd(fabricFileName);
+            }
+
+            closeSaveModal();
+
+            // popup_close 요소가 존재할 때만 클릭 이벤트 실행
+            const popupClose = document.getElementById('popup_close');
+            if (popupClose) {
+                popupClose.click();
+            }
+
+            document.removeEventListener("keydown", fabricHandleKeyDown);
+            showTopToast(fabricFileName + " 이미지가 추가되었습니다!");
+        }
+
+        // 지도 영역 이미지 로드 함수 (외부에서 호출)
+        function loadMapAreaImage(imageDataURL) {
+            try {
+                if (fabricCanvas && fabric) {
+                    // 1. 기존 캔버스 내용만 초기화 (캔버스 재생성하지 않음)
+                    fabricCanvas.clear();
+                    fabricCanvas.setBackgroundImage(null, fabricCanvas.renderAll.bind(fabricCanvas));
+
+                    // 2. 모든 객체 제거
+                    fabricCanvas.getObjects().forEach(obj => {
+                        fabricCanvas.remove(obj);
+                    });
+
+                    // 3. 캔버스 상태 초기화
+                    fabricCanvas.discardActiveObject();
+                    fabricCanvas.renderAll();
+
+                    // 4. 캔버스 좌표계 초기화
+                    fabricCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+                    fabricCanvas.setZoom(1);
+                    // setPan은 지원되지 않으므로 제거
+
+                    // 5. 이미지 로드
+                    loadImageToCanvas(imageDataURL);
+                } else {
+                    console.error('Fabric.js 캔버스가 아직 초기화되지 않았습니다.');
+                }
+            } catch (error) {
+                console.error('이미지 로드 중 오류 발생:', error);
+            }
+        }
+
+        // 이미지를 캔버스에 로드하는 별도 함수
+        function loadImageToCanvas(imageDataURL) {
+            try {
+                // 이미지 로드 전 검증
+                if (!imageDataURL || imageDataURL === '' || imageDataURL === 'data:,' || imageDataURL.length < 100) {
+                    console.error('이미지 데이터 URL이 유효하지 않습니다:', imageDataURL ? imageDataURL.substring(0, 50) + '...' : 'null');
+                    hideLoadingMessage();
+                    alert('유효하지 않은 이미지 데이터입니다. 다시 시도해주세요.');
+                    return;
+                }
+
+                console.log('이미지 로드 시작, URL 길이:', imageDataURL.length);
+
+                // 로딩 메시지 표시
+                showLoadingMessage('캡처 이미지를 불러오는 중입니다...');
+
+                // 이미지 로드 타임아웃 설정
+                const loadTimeout = setTimeout(() => {
+                    console.error('이미지 로드 타임아웃');
+                    hideLoadingMessage();
+                }, 10000); // 10초 타임아웃
+
+                // 이미지 로드 재시도 로직
+                let retryCount = 0;
+                const maxRetries = 3;
+
+                function attemptImageLoad() {
+                    console.log(`이미지 로드 시도 ${retryCount + 1}/${maxRetries + 1}`);
+
+                    fabric.Image.fromURL(imageDataURL, function (img) {
+                        clearTimeout(loadTimeout);
+                        hideLoadingMessage(); // 로딩 메시지 숨기기
+
+                        if (img && img.width > 0 && img.height > 0) {
+                            console.log('이미지 로드 성공:', img.width, 'x', img.height);
+
+                            // 원본 이미지 크기 저장
+                            fabricImgWidth = img.width;
+                            fabricImgHeight = img.height;
+                            console.log('원본 이미지 크기 저장:', fabricImgWidth, 'x', fabricImgHeight);
+
+                            // 이미지 비율 유지하면서 캔버스 크기 조정
+                            const container = document.getElementById("container");
+                            const containerWidth = container.clientWidth - 40; // 여백 고려
+                            const containerHeight = container.clientHeight - 40;
+
+                            // 이미지 비율 계산
+                            const imageRatio = img.width / img.height;
+                            const containerRatio = containerWidth / containerHeight;
+
+                            let canvasWidth, canvasHeight;
+
+                            // 원본 이미지 크기 우선 사용
+                            canvasWidth = img.width;
+                            canvasHeight = img.height;
+
+                            // 컨테이너를 벗어나지 않도록 조정
+                            if (canvasWidth > containerWidth) {
+                                canvasWidth = containerWidth;
+                                canvasHeight = canvasWidth / imageRatio;
+                            }
+                            if (canvasHeight > containerHeight) {
+                                canvasHeight = containerHeight;
+                                canvasWidth = canvasHeight * imageRatio;
+                            }
+
+                            // 최소 편집 가능한 크기 보장 (원본이 너무 작을 때만)
+                            const minWidth = 500;
+                            const minHeight = 400;
+
+                            if (canvasWidth < minWidth && canvasHeight < minHeight) {
+                                // 원본이 너무 작을 때만 확대
+                                if (imageRatio > 1) {
+                                    canvasWidth = minWidth;
+                                    canvasHeight = canvasWidth / imageRatio;
+                                } else {
+                                    canvasHeight = minHeight;
+                                    canvasWidth = canvasHeight * imageRatio;
+                                }
+                            }
+
+                            // 캔버스 크기 설정
+                            fabricCanvas.setWidth(canvasWidth);
+                            fabricCanvas.setHeight(canvasHeight);
+
+                            // 배경 이미지 설정
+                            fabricCanvas.setBackgroundImage(img, function () {
+                                console.log('배경 이미지 설정 완료');
+
+                                try {
+                                    // 캔버스 컨테이너 스타일 조정
+                                    const canvasContainer = document.querySelector('.canvas-container');
+                                    if (canvasContainer) {
+                                        canvasContainer.style.width = canvasWidth + 'px';
+                                        canvasContainer.style.height = canvasHeight + 'px';
+                                        canvasContainer.style.margin = 'auto';
+                                    }
+
+                                    // 스크롤 설정
+                                    if (canvasWidth > containerWidth || canvasHeight > containerHeight) {
+                                        container.classList.add("scrollable");
+                                    } else {
+                                        container.classList.remove("scrollable");
+                                    }
+
+                                    // 캔버스 좌표계 재설정
+                                    setTimeout(() => {
+                                        fabricCanvas.calcOffset();
+                                        fabricCanvas.renderAll();
+
+                                        console.log('캔버스 설정 완료');
+                                        console.log('캔버스 크기:', fabricCanvas.width, 'x', fabricCanvas.height);
+
+                                        // 로딩 메시지 숨기기
+                                        hideLoadingMessage();
+                                    }, 100);
+                                } catch (error) {
+                                    console.error('배경 이미지 설정 후 처리 중 오류:', error);
+                                }
+                            }, {
+                                scaleX: canvasWidth / img.width,
+                                scaleY: canvasHeight / img.height
+                            });
+                        } else {
+                            console.error('이미지 로드 실패 또는 유효하지 않은 이미지');
+                            if (retryCount < maxRetries) {
+                                retryCount++;
+                                console.log(`${retryCount}초 후 재시도...`);
+                                setTimeout(() => {
+                                    attemptImageLoad();
+                                }, retryCount * 1000);
+                            } else {
+                                console.error('최대 재시도 횟수 초과, fallback 사용');
+                                clearTimeout(loadTimeout);
+                                // 대체 방법: 직접 이미지 요소 생성
+                                loadImageWithFallback(imageDataURL);
+                            }
+                        }
+                    }, {
+                        crossOrigin: 'anonymous'
+                    });
+                }
+
+                // 첫 번째 시도
+                attemptImageLoad();
+            } catch (error) {
+                console.error('이미지 로드 중 오류 발생:', error);
+            }
+        }
+
+        // 대체 이미지 로드 함수
+        function loadImageWithFallback(imageDataURL) {
+            console.log('대체 방법으로 이미지 로드 시도');
+
+            const imgElement = new Image();
+            imgElement.crossOrigin = 'anonymous';
+
+            const fallbackTimeout = setTimeout(() => {
+                console.error('대체 방법 이미지 로드 타임아웃');
+                hideLoadingMessage();
+                alert('이미지 로드에 실패했습니다. 다시 시도해주세요.');
+            }, 8000); // 타임아웃 시간 증가
+
+            imgElement.onload = function () {
+                clearTimeout(fallbackTimeout);
+                hideLoadingMessage(); // 로딩 메시지 숨기기
+                console.log('대체 방법으로 이미지 로드 성공:', imgElement.width, 'x', imgElement.height);
+
+                // 원본 이미지 크기 저장
+                fabricImgWidth = imgElement.width;
+                fabricImgHeight = imgElement.height;
+                console.log('원본 이미지 크기 저장 (fallback):', fabricImgWidth, 'x', fabricImgHeight);
+
+                try {
+                    // 캔버스 크기 조정
+                    const container = document.getElementById("container");
+                    const containerWidth = container.clientWidth - 40;
+                    const containerHeight = container.clientHeight - 40;
+
+                    const imageRatio = imgElement.width / imgElement.height;
+                    const containerRatio = containerWidth / containerHeight;
+
+                    let canvasWidth, canvasHeight;
+
+                    // 원본 이미지 크기 우선 사용
+                    canvasWidth = imgElement.width;
+                    canvasHeight = imgElement.height;
+
+                    // 컨테이너를 벗어나지 않도록 조정
+                    if (canvasWidth > containerWidth) {
+                        canvasWidth = containerWidth;
+                        canvasHeight = canvasWidth / imageRatio;
+                    }
+                    if (canvasHeight > containerHeight) {
+                        canvasHeight = containerHeight;
+                        canvasWidth = canvasHeight * imageRatio;
+                    }
+
+                    // 최소 편집 가능한 크기 보장 (원본이 너무 작을 때만)
+                    const minWidth = 500;
+                    const minHeight = 400;
+
+                    if (canvasWidth < minWidth && canvasHeight < minHeight) {
+                        // 원본이 너무 작을 때만 확대
+                        if (imageRatio > 1) {
+                            canvasWidth = minWidth;
+                            canvasHeight = canvasWidth / imageRatio;
+                        } else {
+                            canvasHeight = minHeight;
+                            canvasWidth = canvasHeight * imageRatio;
+                        }
+                    }
+
+                    // 캔버스 크기 설정
+                    fabricCanvas.setWidth(canvasWidth);
+                    fabricCanvas.setHeight(canvasHeight);
+
+                    // Fabric 이미지 객체 생성
+                    const fabricImg = new fabric.Image(imgElement, {
+                        scaleX: canvasWidth / imgElement.width,
+                        scaleY: canvasHeight / imgElement.height,
+                        left: 0,
+                        top: 0,
+                        selectable: false,
+                        evented: false
+                    });
+
+                    // 배경 이미지로 설정
+                    fabricCanvas.setBackgroundImage(fabricImg, function () {
+                        fabricCanvas.renderAll();
+                        console.log('대체 방법 배경 이미지 설정 완료');
+                    });
+
+                } catch (error) {
+                    console.error('대체 방법 이미지 처리 중 오류:', error);
+                }
+            };
+
+            imgElement.onerror = function () {
+                clearTimeout(fallbackTimeout);
+                console.error('대체 방법으로도 이미지 로드 실패');
+            };
+
+            imgElement.src = imageDataURL;
+        }
+
+        // 캔버스 이벤트 리스너 설정 함수
+        function setupCanvasEventListeners() {
+            try {
+                // 캔버스와 DOM 요소 확인
+                if (!fabricCanvas) {
+                    console.error('캔버스가 초기화되지 않았습니다.');
+                    return;
+                }
+
+                if (!fabricCanvas.upperCanvasEl || !fabricCanvas.lowerCanvasEl) {
+                    console.error('캔버스 DOM 요소가 연결되지 않았습니다.');
+                    return;
+                }
+
+                // 기존 이벤트 리스너 제거
+                fabricCanvas.off('mouse:down');
+                fabricCanvas.off('mouse:up');
+                fabricCanvas.off('mouse:move');
+                fabricCanvas.off('mouse:wheel');
+
+                // 마우스 이벤트 재등록
+                fabricCanvas.on('mouse:down', function (opt) {
+                    const pointer = fabricCanvas.getPointer(opt.e);
+                    console.log('마우스 다운 좌표:', pointer);
+                });
+
+                fabricCanvas.on('mouse:up', function (opt) {
+                    const pointer = fabricCanvas.getPointer(opt.e);
+                    console.log('마우스 업 좌표:', pointer);
+                });
+
+                fabricCanvas.on('mouse:move', function (opt) {
+                    // 마우스 이동 이벤트 처리
+                });
+
+                // 휠 이벤트 재등록
+                fabricCanvas.on('mouse:wheel', function (opt) {
+                    const delta = opt.e.deltaY;
+                    let zoom = fabricCanvas.getZoom();
+                    zoom *= 0.999 ** delta;
+                    if (zoom > 20) zoom = 20;
+                    if (zoom < 0.01) zoom = 0.01;
+                    fabricCanvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+                    opt.e.preventDefault();
+                    opt.e.stopPropagation();
+                });
+
+                console.log('캔버스 이벤트 리스너 재등록 완료');
+            } catch (error) {
+                console.error('이벤트 리스너 설정 중 오류:', error);
+            }
+        }
+
+        // 로딩 메시지 표시 함수
+        function showLoadingMessage(message) {
+            console.log('로딩 메시지 표시 시작:', message);
+
+            // 기존 로딩 메시지 제거
+            hideLoadingMessage();
+
+            // 캔버스 컨테이너 찾기 (여러 방법 시도)
+            let canvasContainer = document.getElementById('canvasContainer');
+            if (!canvasContainer) {
+                canvasContainer = document.querySelector('.canvas-container');
+                console.log('canvas-container 클래스 찾기:', canvasContainer);
+            }
+            if (!canvasContainer) {
+                canvasContainer = document.querySelector('#canvas');
+                console.log('canvas 요소 찾기:', canvasContainer);
+            }
+            if (!canvasContainer) {
+                canvasContainer = document.querySelector('canvas');
+                console.log('canvas 태그 찾기:', canvasContainer);
+            }
+            if (!canvasContainer) {
+                canvasContainer = document.getElementById('container');
+                console.log('container 요소 찾기:', canvasContainer);
+            }
+
+            if (!canvasContainer) {
+                console.error('캔버스 컨테이너를 찾을 수 없습니다. 전체 화면에 표시합니다.');
+                // 전체 화면에 표시
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = 'loading-message';
+                loadingDiv.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.85);
+                    color: white;
+                    padding: 15px 25px;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    z-index: 10000;
+                    text-align: center;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+                    pointer-events: none;
+                    min-width: 200px;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                `;
+                loadingDiv.innerHTML = `
+                    <div style="margin-bottom: 8px; font-size: 18px;">⏳</div>
+                    <div style="font-weight: 500;">${message}</div>
+                `;
+                document.body.appendChild(loadingDiv);
+                return;
+            }
+
+            console.log('캔버스 컨테이너 찾음:', canvasContainer);
+
+            // 로딩 메시지 생성
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loading-message';
+            loadingDiv.style.cssText = `
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(30, 41, 59, 0.9);
+                color: white;
+                padding: 20px 30px;
+                border-radius: 8px;
+                font-size: 14px;
+                z-index: 1000;
+                text-align: center;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+                pointer-events: none;
+                min-width: 200px;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+            `;
+            loadingDiv.innerHTML = `
+                <div style="margin-bottom: 8px; font-size: 18px; animation: spin 1s linear infinite;">⏳</div>
+                <div style="font-weight: 500;">${message}</div>
+            `;
+
+            // 캔버스 컨테이너에 상대적 위치로 추가
+            canvasContainer.style.position = 'relative';
+            canvasContainer.appendChild(loadingDiv);
+
+            console.log('로딩 메시지 추가 완료');
+        }
+
+        // 로딩 메시지 숨기기 함수
+        function hideLoadingMessage() {
+            const loadingDiv = document.getElementById('loading-message');
+            if (loadingDiv) {
+                loadingDiv.remove();
+            }
+        }
+
+        // 페이지 로드 시 초기 로딩 메시지 표시
+        document.addEventListener('DOMContentLoaded', function () {
+            showLoadingMessage('편집기를 준비하는 중입니다...');
+        });
+
+        // 전역 함수로 노출
+        window.loadMapAreaImage = loadMapAreaImage;
+        window.fabric = fabric;
+        window.canvas = fabricCanvas;
+        window.setupCanvasEventListeners = setupCanvasEventListeners;
+        window.showLoadingMessage = showLoadingMessage;
+        window.hideLoadingMessage = hideLoadingMessage;
+    </script>
+</body>
+
+</html>

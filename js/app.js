@@ -6,6 +6,7 @@ import {
   hideLoading,
   initializeHeaderToggle,
 } from "./modules/ui.js";
+import { initializeAreaSelector } from "./modules/map/map-area-selector.js";
 import { makeAjaxRequest, utils } from "./utils/helpers.js";
 
 // 앱 초기화
@@ -22,6 +23,11 @@ document.addEventListener("DOMContentLoaded", function () {
   initializeNavigation();
   initializeLayerPanel();
   initializeHeaderToggle();
+
+  // 지도 영역 선택 기능 초기화 (맵 로드 완료 후)
+  setTimeout(() => {
+    initializeAreaSelector();
+  }, 1000);
 
   // 앱 초기화 완료 플래그 설정
   window.appInitialized = true;
