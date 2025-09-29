@@ -547,9 +547,26 @@ function captureMapArea() {
         // 임시 캔버스를 이미지로 변환
         const imageDataURL = tempCanvas.toDataURL("image/png", 1.0);
 
-        // 이미지 데이터 URL 검증
-        if (!imageDataURL || imageDataURL === "data:,") {
-          console.error("이미지 캡처 실패: 빈 데이터 URL");
+        // 이미지 데이터 URL 검증 (더 엄격한 검증)
+        if (
+          !imageDataURL ||
+          imageDataURL === "data:," ||
+          imageDataURL.length < 100
+        ) {
+          console.error(
+            "이미지 캡처 실패: 빈 데이터 URL 또는 너무 짧은 데이터"
+          );
+          console.error(
+            "데이터 URL 길이:",
+            imageDataURL ? imageDataURL.length : "null"
+          );
+          alert("지도 이미지 캡처에 실패했습니다. 다시 시도해주세요.");
+          return;
+        }
+
+        // 추가 검증: 이미지 데이터가 실제로 유효한지 확인
+        if (!imageDataURL.startsWith("data:image/")) {
+          console.error("이미지 캡처 실패: 유효하지 않은 이미지 형식");
           alert("지도 이미지 캡처에 실패했습니다. 다시 시도해주세요.");
           return;
         }
@@ -583,6 +600,16 @@ function captureMapArea() {
 
 // Fabric.js 편집기 열기 (이미지와 함께)
 function openFabricEditorWithImage(imageDataURL) {
+  // 이미지 데이터 재검증
+  if (!imageDataURL || imageDataURL === "data:," || imageDataURL.length < 100) {
+    console.error(
+      "이미지 데이터가 유효하지 않습니다:",
+      imageDataURL ? imageDataURL.substring(0, 50) + "..." : "null"
+    );
+    alert("유효하지 않은 이미지 데이터입니다. 다시 시도해주세요.");
+    return;
+  }
+
   // 새 창에서 기존 fabric-editor.html 열기
   const editorWindow = window.open(
     "html/fabric/fabric-editor.html",
@@ -591,30 +618,50 @@ function openFabricEditorWithImage(imageDataURL) {
   );
 
   if (editorWindow) {
-    // 창이 완전히 로드된 후 이미지 설정
-    editorWindow.addEventListener("load", function () {
-      // 즉시 로딩 메시지 표시
-      setTimeout(() => {
-        if (editorWindow.showLoadingMessage) {
-          editorWindow.showLoadingMessage("캡처 이미지를 불러오는 중입니다...");
-        }
-      }, 100);
+    let retryCount = 0;
+    const maxRetries = 15;
 
-      // fabric-editor.html이 로드된 후 실행
-      setTimeout(() => {
-        try {
-          // fabric-editor.html의 loadMapAreaImage 함수 호출
-          if (editorWindow.loadMapAreaImage) {
+    // 창이 완전히 로드될 때까지 대기하는 함수
+    function waitForEditorReady() {
+      if (retryCount >= maxRetries) {
+        console.error("편집기 로드 시간 초과");
+        alert("편집기 로드에 시간이 너무 오래 걸립니다. 다시 시도해주세요.");
+        return;
+      }
+
+      if (editorWindow.loadMapAreaImage && editorWindow.showLoadingMessage) {
+        console.log("편집기 준비 완료, 이미지 로드 시작");
+
+        // 로딩 메시지 표시
+        editorWindow.showLoadingMessage("캡처 이미지를 불러오는 중입니다...");
+
+        // 이미지 로드 시도
+        setTimeout(() => {
+          try {
             editorWindow.loadMapAreaImage(imageDataURL);
             console.log("지도 영역 이미지가 편집기에 로드되었습니다.");
-          } else {
-            console.error("loadMapAreaImage 함수를 찾을 수 없습니다.");
+          } catch (error) {
+            console.error("이미지 로드 중 오류:", error);
+            alert("이미지 로드 중 오류가 발생했습니다.");
           }
-        } catch (error) {
-          console.error("이미지 로드 중 오류 발생:", error);
-        }
-      }, 1500); // fabric-editor.html 완전 로드 대기
+        }, 200);
+      } else {
+        retryCount++;
+        console.log(`편집기 로드 대기 중... (${retryCount}/${maxRetries})`);
+        setTimeout(waitForEditorReady, 300);
+      }
+    }
+
+    // 창이 로드된 후 편집기 준비 대기
+    editorWindow.addEventListener("load", function () {
+      console.log("편집기 창 로드 완료");
+      setTimeout(waitForEditorReady, 100);
     });
+
+    // 창이 이미 로드된 경우를 위한 대비
+    setTimeout(waitForEditorReady, 100);
+  } else {
+    alert("편집기 창을 열 수 없습니다. 팝업 차단을 해제해주세요.");
   }
 }
 

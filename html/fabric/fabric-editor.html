@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8" />
-    <title>Fabric.js 도형 툴</title>
+    <title>지도 편집기</title>
     <style>
         * {
             box-sizing: border-box;
@@ -228,6 +228,49 @@
             font-size: 14px;
         }
 
+        /* 캔버스 리사이즈 핸들 */
+        .canvas-resize-handle {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #007bff;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: se-resize;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .canvas-resize-handle:hover {
+            background: #0056b3;
+            transform: scale(1.1);
+        }
+
+        .canvas-resize-handle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 1px;
+        }
+
+        .canvas-resize-handle::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+            width: 12px;
+            height: 2px;
+            background: white;
+            border-radius: 1px;
+        }
+
         .tooltip-content {
             padding: 12px 15px;
         }
@@ -395,14 +438,15 @@
             position: absolute;
             top: 20px;
             right: 20px;
-            width: 320px;
+            width: 240px;
+            min-width: 225px;
             background: white;
             border: none;
             border-radius: 16px;
             font-size: 14px;
             display: none;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-            z-index: 1000;
+            z-index: 99999;
             cursor: move;
             user-select: none;
             max-height: 500px;
@@ -412,7 +456,7 @@
 
         #shapeProperties .header {
             cursor: move;
-            padding: 20px 20px 15px 20px;
+            padding: 15px 15px 12px 15px;
             border-bottom: 1px solid #f1f5f9;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 16px 16px 0 0;
@@ -422,9 +466,9 @@
         }
 
         #shapeProperties .body {
-            max-height: 400px;
+            max-height: 350px;
             overflow-y: auto;
-            padding: 20px;
+            padding: 15px;
             background: #fafbfc;
         }
 
@@ -460,11 +504,11 @@
         }
 
         #shapeProperties .property-group {
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             cursor: default;
             border: 1px solid #e2e8f0;
             border-radius: 12px;
-            padding: 16px;
+            padding: 12px;
             background: white;
             position: relative;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -636,7 +680,7 @@
             }
 
             #shapeProperties {
-                width: 280px;
+                width: 220px;
             }
         }
 
@@ -907,13 +951,7 @@
                         <button class="palette-trigger styled-btn" id="strokeStandardBtn" style="flex: 1">
                             표준색
                         </button>
-                        <div class="color-palette-popup" id="strokeThemePalette" style="
-                  display: none;
-                  position: absolute;
-                  top: 40px;
-                  left: 0;
-                  z-index: 10;
-                ">
+                        <div class="color-palette-popup" id="strokeThemePalette" style="display: none;">
                             <div class="palette-row">
                                 <button class="color-btn" data-color="#ffffff" style="background: #ffffff"></button>
                                 <button class="color-btn" data-color="#f2f2f2" style="background: #f2f2f2"></button>
@@ -933,12 +971,7 @@
                                 <button class="color-btn" data-color="#548235" style="background: #548235"></button>
                             </div>
                         </div>
-                        <div class="color-palette-popup" id="strokeStandardPalette" style="
-                  display: none;
-                  position: absolute;
-                  top: 40px;
-                  z-index: 10;
-                ">
+                        <div class="color-palette-popup" id="strokeStandardPalette" style="display: none;">
                             <div class="palette-row">
                                 <button class="color-btn" data-color="#ff0000" style="background: #ff0000"></button>
                                 <button class="color-btn" data-color="#ffff00" style="background: #ffff00"></button>
@@ -969,13 +1002,7 @@
                         <button class="palette-trigger styled-btn" id="textBackgroundStandardBtn" style="flex: 1">
                             표준색
                         </button>
-                        <div class="color-palette-popup" id="textBackgroundThemePalette" style="
-                  display: none;
-                  position: absolute;
-                  top: 40px;
-                  left: 0;
-                  z-index: 10;
-                ">
+                        <div class="color-palette-popup" id="textBackgroundThemePalette" style="display: none;">
                             <div class="palette-row">
                                 <button class="color-btn" data-color="#ffffff" style="background: #ffffff"></button>
                                 <button class="color-btn" data-color="#f2f2f2" style="background: #f2f2f2"></button>
@@ -995,12 +1022,7 @@
                                 <button class="color-btn" data-color="#548235" style="background: #548235"></button>
                             </div>
                         </div>
-                        <div class="color-palette-popup" id="textBackgroundStandardPalette" style="
-                  display: none;
-                  position: absolute;
-                  top: 40px;
-                  z-index: 10;
-                ">
+                        <div class="color-palette-popup" id="textBackgroundStandardPalette" style="display: none;">
                             <div class="palette-row">
                                 <button class="color-btn" data-color="#ff0000" style="background: #ff0000"></button>
                                 <button class="color-btn" data-color="#ffff00" style="background: #ffff00"></button>
@@ -1038,13 +1060,7 @@
                         <button class="palette-trigger styled-btn" id="fillStandardBtn" style="flex: 1">
                             표준색
                         </button>
-                        <div class="color-palette-popup" id="fillThemePalette" style="
-                  display: none;
-                  position: absolute;
-                  top: 40px;
-                  left: 0;
-                  z-index: 10;
-                ">
+                        <div class="color-palette-popup" id="fillThemePalette" style="display: none;">
                             <div class="palette-row">
                                 <button class="color-btn" data-color="#ffffff" style="background: #ffffff"></button>
                                 <button class="color-btn" data-color="#f2f2f2" style="background: #f2f2f2"></button>
@@ -1064,12 +1080,7 @@
                                 <button class="color-btn" data-color="#548235" style="background: #548235"></button>
                             </div>
                         </div>
-                        <div class="color-palette-popup" id="fillStandardPalette" style="
-                  display: none;
-                  position: absolute;
-                  top: 40px;
-                  z-index: 10;
-                ">
+                        <div class="color-palette-popup" id="fillStandardPalette" style="display: none;">
                             <div class="palette-row">
                                 <button class="color-btn" data-color="#ff0000" style="background: #ff0000"></button>
                                 <button class="color-btn" data-color="#ffff00" style="background: #ffff00"></button>
@@ -1355,18 +1366,32 @@
                 const maxWidth = container.clientWidth;
                 const maxHeight = container.clientHeight;
                 const img = fabricCanvas.backgroundImage;
+
                 if (img) {
-                    const scale = Math.min(
-                        maxWidth / img.width,
-                        maxHeight / img.height,
-                        1
-                    );
-                    const newWidth = img.width * scale;
-                    const newHeight = img.height * scale;
+                    // 원본 크기 유지 (리사이징 시에도)
+                    let newWidth = img.width;
+                    let newHeight = img.height;
+
+                    // 컨테이너를 벗어나지 않도록 조정
+                    if (newWidth > maxWidth) {
+                        newWidth = maxWidth;
+                        newHeight = newWidth * (img.height / img.width);
+                    }
+                    if (newHeight > maxHeight) {
+                        newHeight = maxHeight;
+                        newWidth = newHeight * (img.width / img.height);
+                    }
+
+                    console.log('리사이즈 시 원본 크기 유지:', newWidth, 'x', newHeight);
+
                     fabricCanvas.setWidth(newWidth);
                     fabricCanvas.setHeight(newHeight);
-                    img.scaleX = scale;
-                    img.scaleY = scale;
+
+                    // 이미지 스케일 조정
+                    const scaleX = newWidth / img.width;
+                    const scaleY = newHeight / img.height;
+                    img.scaleX = scaleX;
+                    img.scaleY = scaleY;
                     img.left = 0;
                     img.top = 0;
                     img.setCoords?.();
@@ -1378,6 +1403,114 @@
             }
             // window에 노출
             window.fitImageToContainer = fitImageToContainer;
+
+            // 캔버스 리사이즈 기능
+            let isResizing = false;
+            let resizeHandle = null;
+            let resizeStartX, resizeStartY, resizeStartWidth, resizeStartHeight;
+
+            function createResizeHandle() {
+                if (resizeHandle) return; // 이미 존재하면 생성하지 않음
+
+                resizeHandle = document.createElement('div');
+                resizeHandle.className = 'canvas-resize-handle';
+                resizeHandle.style.display = 'block'; // 처음부터 표시
+                document.body.appendChild(resizeHandle);
+
+                // 마우스 다운 이벤트
+                resizeHandle.addEventListener('mousedown', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    isResizing = true;
+                    resizeStartX = e.clientX;
+                    resizeStartY = e.clientY;
+                    resizeStartWidth = fabricCanvas.width;
+                    resizeStartHeight = fabricCanvas.height;
+
+                    document.addEventListener('mousemove', handleResize);
+                    document.addEventListener('mouseup', stopResize);
+                });
+            }
+
+            function updateResizeHandlePosition() {
+                if (!resizeHandle) return;
+
+                const canvas = fabricCanvas.getElement();
+                const rect = canvas.getBoundingClientRect();
+
+                resizeHandle.style.left = (rect.right - 10) + 'px';
+                resizeHandle.style.top = (rect.bottom - 10) + 'px';
+                resizeHandle.style.display = 'block';
+            }
+
+            function handleResize(e) {
+                if (!isResizing) return;
+
+                const deltaX = e.clientX - resizeStartX;
+                const deltaY = e.clientY - resizeStartY;
+
+                // 최소 크기 제한
+                const minSize = 100;
+                const newWidth = Math.max(minSize, resizeStartWidth + deltaX);
+                const newHeight = Math.max(minSize, resizeStartHeight + deltaY);
+
+                // 캔버스 크기 업데이트
+                fabricCanvas.setWidth(newWidth);
+                fabricCanvas.setHeight(newHeight);
+
+                // 배경 이미지가 있으면 스케일 조정
+                const bg = fabricCanvas.backgroundImage;
+                if (bg) {
+                    const scaleX = newWidth / bg.width;
+                    const scaleY = newHeight / bg.height;
+                    bg.scaleX = scaleX;
+                    bg.scaleY = scaleY;
+                    bg.setCoords();
+                }
+
+                fabricCanvas.renderAll();
+                updateResizeHandlePosition();
+                setContainerScrollableIfNeeded(newWidth, newHeight);
+            }
+
+            function stopResize() {
+                isResizing = false;
+                document.removeEventListener('mousemove', handleResize);
+                document.removeEventListener('mouseup', stopResize);
+            }
+
+            // 캔버스에 마우스 이벤트 추가
+            fabricCanvas.on('mouse:over', function () {
+                createResizeHandle();
+                updateResizeHandlePosition();
+            });
+
+            // 캔버스 로드 시 즉시 리사이즈 핸들 생성
+            createResizeHandle();
+            updateResizeHandlePosition();
+
+            fabricCanvas.on('mouse:out', function () {
+                // 리사이즈 핸들을 항상 표시하도록 수정
+                if (resizeHandle && !isResizing) {
+                    // 핸들을 숨기지 않고 유지
+                    updateResizeHandlePosition();
+                }
+            });
+
+            // 캔버스 크기 변경 시 핸들 위치 업데이트
+            const originalSetWidth = fabricCanvas.setWidth;
+            const originalSetHeight = fabricCanvas.setHeight;
+
+            fabricCanvas.setWidth = function (width) {
+                originalSetWidth.call(this, width);
+                updateResizeHandlePosition();
+            };
+
+            fabricCanvas.setHeight = function (height) {
+                originalSetHeight.call(this, height);
+                updateResizeHandlePosition();
+            };
 
             // 컨테이너 스크롤 필요 여부 설정
             function setContainerScrollableIfNeeded(imgWidth, imgHeight) {
@@ -1931,15 +2064,18 @@
                     });
                 }
 
-                // 현재 캔버스에 표시된 크기 사용
-                let exportWidth = fabricCanvas.width;
-                let exportHeight = fabricCanvas.height;
+                // 원본 이미지 크기로 저장 (편집 편의를 위해 확대된 경우에도 원본 크기로 저장)
+                let exportWidth = fabricImgWidth || fabricCanvas.width;
+                let exportHeight = fabricImgHeight || fabricCanvas.height;
 
-                console.log(`내보낼 크기: ${exportWidth} x ${exportHeight}`);
+                console.log(`원본 크기로 저장: ${exportWidth} x ${exportHeight}`);
+                console.log(`현재 캔버스 크기: ${fabricCanvas.width} x ${fabricCanvas.height}`);
 
-                // 현재 캔버스 크기로 내보내기
+                // 원본 크기로 내보내기 (화질 유지)
                 const dataURL = fabricCanvas.toDataURL({
                     format: "png",
+                    width: exportWidth,
+                    height: exportHeight,
                     quality: 1.0
                 });
 
@@ -2370,26 +2506,32 @@
                 updateShapePropertiesPanel();
                 // 1. 먼저 숨김
                 shapeProperties.style.display = "none";
-                // 2. 위치 계산 (마우스 위치 기준)
+                // 2. 위치 계산 (도형 위치 기준)
                 const obj = fabricCanvas.getActiveObject();
                 if (obj) {
-                    // 마우스 위치를 기준으로 팝업 위치 설정
-                    const mouseX = window.lastMouseX || 0;
-                    const mouseY = window.lastMouseY || 0;
+                    // 도형의 캔버스 좌표를 화면 좌표로 변환
+                    const canvasRect = fabricCanvas.getElement().getBoundingClientRect();
+                    const objCoords = obj.getBoundingRect();
+
+                    // 도형의 오른쪽 가장자리 위치 계산
+                    const objRightX = canvasRect.left + objCoords.left + objCoords.width;
+                    const objTopY = canvasRect.top + objCoords.top;
 
                     // 팝업 크기 고려하여 위치 조정
-                    const popupWidth = 250; // 예상 팝업 너비
-                    const popupHeight = 300; // 예상 팝업 높이
+                    const popupWidth = 180; // 예상 팝업 너비
+                    const popupHeight = 200; // 예상 팝업 높이
 
-                    let left = mouseX + 10;
-                    let top = mouseY + 10;
+                    let left = objRightX + 10; // 도형 오른쪽에서 10px 떨어진 위치
+                    // 도형의 상하 중앙에 팝업 배치
+                    let top = objTopY + (objCoords.height / 2) - (popupHeight / 2);
 
-                    // 화면 경계 체크
+                    // 화면 경계 체크 - 오른쪽에 공간이 없으면 왼쪽에 표시
                     if (left + popupWidth > window.innerWidth) {
-                        left = mouseX - popupWidth - 10;
+                        left = canvasRect.left + objCoords.left - popupWidth - 10;
                     }
+                    // 화면 경계 체크 - 아래쪽에 공간이 없으면 위쪽에 표시
                     if (top + popupHeight > window.innerHeight) {
-                        top = mouseY - popupHeight - 10;
+                        top = objTopY - popupHeight + objCoords.height;
                     }
 
                     // 최소 위치 보장
@@ -2878,13 +3020,45 @@
                     }
                     // 위치 계산: 클릭한 버튼 위치에서 바로 표시
                     const rect = trigger.getBoundingClientRect();
+
+                    // 팔레트를 body에 직접 추가하여 위치 계산 정확성 향상
+                    if (popup.parentNode !== document.body) {
+                        document.body.appendChild(popup);
+                    }
+
                     popup.style.position = "fixed";
-                    popup.style.left = rect.left + "px";
-                    popup.style.top = rect.bottom + "px";
+                    popup.style.zIndex = "10000";
+
+                    // 팔레트 크기 고려하여 위치 조정
+                    const popupWidth = 200; // 팔레트 예상 너비
+                    const popupHeight = 150; // 팔레트 예상 높이
+
+                    let left = rect.left;
+                    let top = rect.bottom + 5;
+
+                    // 화면 경계 체크
+                    if (left + popupWidth > window.innerWidth) {
+                        left = rect.right - popupWidth;
+                    }
+                    if (top + popupHeight > window.innerHeight) {
+                        top = rect.top - popupHeight - 5;
+                    }
+
+                    // 최소 위치 보장
+                    left = Math.max(10, left);
+                    top = Math.max(10, top);
+
+                    popup.style.left = left + "px";
+                    popup.style.top = top + "px";
                     popup.style.display = "block";
                 }
                 function hidePopup() {
                     popup.style.display = "none";
+                    // 팔레트를 원래 위치로 되돌리기
+                    const originalParent = document.querySelector('#shapeProperties .property-group');
+                    if (originalParent && popup.parentNode === document.body) {
+                        originalParent.appendChild(popup);
+                    }
                 }
                 trigger.addEventListener("click", function (e) {
                     e.stopPropagation();
@@ -3269,10 +3443,25 @@
 
                 // 이미지 로드 재시도 로직
                 let retryCount = 0;
-                const maxRetries = 3;
+                const maxRetries = 5; // 재시도 횟수 증가
 
                 function attemptImageLoad() {
                     console.log(`이미지 로드 시도 ${retryCount + 1}/${maxRetries + 1}`);
+
+                    // 이미지 로드 전 추가 검증
+                    if (!imageDataURL || imageDataURL.length < 100) {
+                        console.error('이미지 데이터가 유효하지 않습니다.');
+                        if (retryCount < maxRetries) {
+                            retryCount++;
+                            setTimeout(attemptImageLoad, 1000);
+                            return;
+                        } else {
+                            clearTimeout(loadTimeout);
+                            hideLoadingMessage();
+                            alert('이미지 로드에 실패했습니다. 다시 시도해주세요.');
+                            return;
+                        }
+                    }
 
                     fabric.Image.fromURL(imageDataURL, function (img) {
                         clearTimeout(loadTimeout);
@@ -3311,20 +3500,8 @@
                                 canvasWidth = canvasHeight * imageRatio;
                             }
 
-                            // 최소 편집 가능한 크기 보장 (원본이 너무 작을 때만)
-                            const minWidth = 500;
-                            const minHeight = 400;
-
-                            if (canvasWidth < minWidth && canvasHeight < minHeight) {
-                                // 원본이 너무 작을 때만 확대
-                                if (imageRatio > 1) {
-                                    canvasWidth = minWidth;
-                                    canvasHeight = canvasWidth / imageRatio;
-                                } else {
-                                    canvasHeight = minHeight;
-                                    canvasWidth = canvasHeight * imageRatio;
-                                }
-                            }
+                            // 원본 크기 유지 (최소 크기 확대 제거)
+                            console.log('원본 크기 유지:', canvasWidth, 'x', canvasHeight);
 
                             // 캔버스 크기 설정
                             fabricCanvas.setWidth(canvasWidth);
@@ -3360,6 +3537,17 @@
 
                                         // 로딩 메시지 숨기기
                                         hideLoadingMessage();
+
+                                        // 리사이즈 핸들 표시
+                                        setTimeout(() => {
+                                            if (window.updateResizeHandlePosition) {
+                                                window.updateResizeHandlePosition();
+                                            }
+                                            // 리사이즈 핸들 생성 및 표시
+                                            if (window.createResizeHandle) {
+                                                window.createResizeHandle();
+                                            }
+                                        }, 200);
                                     }, 100);
                                 } catch (error) {
                                     console.error('배경 이미지 설정 후 처리 중 오류:', error);
@@ -3379,6 +3567,7 @@
                             } else {
                                 console.error('최대 재시도 횟수 초과, fallback 사용');
                                 clearTimeout(loadTimeout);
+                                hideLoadingMessage();
                                 // 대체 방법: 직접 이미지 요소 생성
                                 loadImageWithFallback(imageDataURL);
                             }
@@ -3392,6 +3581,8 @@
                 attemptImageLoad();
             } catch (error) {
                 console.error('이미지 로드 중 오류 발생:', error);
+                hideLoadingMessage();
+                alert('이미지 로드 중 오류가 발생했습니다. 다시 시도해주세요.');
             }
         }
 
@@ -3443,20 +3634,13 @@
                         canvasWidth = canvasHeight * imageRatio;
                     }
 
-                    // 최소 편집 가능한 크기 보장 (원본이 너무 작을 때만)
-                    const minWidth = 500;
-                    const minHeight = 400;
+                    // 원본 크기 유지 (fallback, 최소 크기 확대 제거)
+                    console.log('원본 크기 유지 (fallback):', canvasWidth, 'x', canvasHeight);
 
-                    if (canvasWidth < minWidth && canvasHeight < minHeight) {
-                        // 원본이 너무 작을 때만 확대
-                        if (imageRatio > 1) {
-                            canvasWidth = minWidth;
-                            canvasHeight = canvasWidth / imageRatio;
-                        } else {
-                            canvasHeight = minHeight;
-                            canvasWidth = canvasHeight * imageRatio;
-                        }
-                    }
+                    // 원본 이미지 크기 저장 (fallback)
+                    fabricImgWidth = imgElement.width;
+                    fabricImgHeight = imgElement.height;
+                    console.log('원본 이미지 크기 저장 (fallback):', fabricImgWidth, 'x', fabricImgHeight);
 
                     // 캔버스 크기 설정
                     fabricCanvas.setWidth(canvasWidth);
@@ -3655,6 +3839,8 @@
         window.setupCanvasEventListeners = setupCanvasEventListeners;
         window.showLoadingMessage = showLoadingMessage;
         window.hideLoadingMessage = hideLoadingMessage;
+        window.updateResizeHandlePosition = updateResizeHandlePosition;
+        window.createResizeHandle = createResizeHandle;
     </script>
 </body>
 
