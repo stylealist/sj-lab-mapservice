@@ -3354,14 +3354,23 @@
                 fabricCanvas.discardActiveObject();
                 fabricCanvas.renderAll();
             }
-            // Delete 키로 선택된 객체 삭제
-            else if (event.key === 'Delete' || event.key === 'Backspace') {
+            // Delete 키로만 선택된 객체 삭제 (Backspace 제거)
+            else if (event.key === 'Delete') {
                 const activeObjects = fabricCanvas.getActiveObjects();
                 if (activeObjects.length > 0) {
+                    // 이벤트 전파 방지
+                    event.preventDefault();
+                    event.stopPropagation();
+
                     fabricCanvas.remove(...activeObjects);
                     fabricCanvas.discardActiveObject();
                     fabricCanvas.renderAll();
                 }
+            }
+            // Backspace 키는 브라우저 기본 동작 허용 (뒤로가기 방지)
+            else if (event.key === 'Backspace') {
+                // 아무것도 하지 않음 - 브라우저 기본 동작 허용
+                return;
             }
         }
 
