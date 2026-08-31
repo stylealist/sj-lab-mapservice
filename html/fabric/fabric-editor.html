@@ -647,7 +647,7 @@
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
             padding: 16px;
             position: fixed;
-            z-index: 9999;
+            z-index: 100001;
             display: none;
             width: auto;
             backdrop-filter: blur(10px);
@@ -2258,6 +2258,7 @@
                 isDragging = true;
                 dragStartX = e.clientX;
                 dragStartY = e.clientY;
+                hideAllColorPalettes();
 
                 // 현재 팝업의 위치를 기준점으로 설정
                 const currentLeft = parseInt(shapeProperties.style.left) || 0;
@@ -2549,6 +2550,7 @@
 
             function hideShapeProperties() {
                 shapeProperties.style.display = "none";
+                hideAllColorPalettes();
             }
             // window에 노출
             window.hideShapeProperties = hideShapeProperties;
@@ -2860,63 +2862,113 @@
 
             let clipboard = null;
 
-            function copyObjects() {
-                const activeObjects = fabricCanvas.getActiveObjects();
-                if (activeObjects.length > 0) {
-                    clipboard = [];
-                    activeObjects.forEach((obj) => {
-                        obj.clone((cloned) => {
-                            clipboard.push(cloned);
-                        });
-                    });
+            function assignPastedLabel(cloned) {
+                if (cloned.type === "line") {
+                    objectCounters.line++;
+                    cloned.customLabel = "직선" + objectCounters.line;
+                } else if (cloned.type === "rect") {
+                    objectCounters.rect++;
+                    cloned.customLabel = "사각형" + objectCounters.rect;
+                } else if (cloned.type === "triangle") {
+                    objectCounters.triangle++;
+                    cloned.customLabel = "삼각형" + objectCounters.triangle;
+                } else if (cloned.type === "circle") {
+                    objectCounters.circle++;
+                    cloned.customLabel = "원" + objectCounters.circle;
+                } else if (cloned.type === "textbox") {
+                    objectCounters.textbox++;
+                    cloned.customLabel = "텍스트" + objectCounters.textbox;
+                } else if (cloned.type === "path") {
+                    objectCounters.pan++;
+                    cloned.customLabel = "자유곡선" + objectCounters.pan;
+                } else if (
+                    cloned.type === "group" &&
+                    cloned.customLabel &&
+                    cloned.customLabel.startsWith("치수선")
+                ) {
+                    objectCounters.arrow++;
+                    cloned.customLabel = "치수선" + objectCounters.arrow;
+                } else {
+                    cloned.customLabel = cloned.customLabel || "이름없음";
                 }
             }
 
+            function cloneObject(obj) {
+                return new Promise(function (resolve) {
+                    obj.clone(function (cloned) {
+                        resolve(cloned);
+                    }, ["customLabel"]);
+                });
+            }
+
+            function copyObjects() {
+                const activeObjects = fabricCanvas.getActiveObjects();
+                if (activeObjects.length === 0) return Promise.resolve();
+                return Promise.all(activeObjects.map(cloneObject)).then(function (
+                    cloned
+                ) {
+                    clipboard = cloned;
+                    return clipboard;
+                });
+            }
+
             function pasteObjects() {
-                if (!clipboard || clipboard.length === 0) return;
-                clipboard.forEach((cloneObj) => {
-                    cloneObj.clone(function (cloned) {
-                        // 타입별 카운터 증가 및 customLabel 부여
-                        if (cloned.type === "line") {
-                            objectCounters.line++;
-                            cloned.customLabel = "직선" + objectCounters.line;
-                        } else if (cloned.type === "rect") {
-                            objectCounters.rect++;
-                            cloned.customLabel = "사각형" + objectCounters.rect;
-                        } else if (cloned.type === "triangle") {
-                            objectCounters.triangle++;
-                            cloned.customLabel = "삼각형" + objectCounters.triangle;
-                        } else if (cloned.type === "circle") {
-                            objectCounters.circle++;
-                            cloned.customLabel = "원" + objectCounters.circle;
-                        } else if (cloned.type === "textbox") {
-                            objectCounters.textbox++;
-                            cloned.customLabel = "텍스트" + objectCounters.textbox;
-                        } else if (cloned.type === "path") {
-                            objectCounters.pan++;
-                            cloned.customLabel = "자유곡선" + objectCounters.pan;
-                        } else if (
-                            cloned.type === "group" &&
-                            cloned.customLabel &&
-                            cloned.customLabel.startsWith("치수선")
-                        ) {
-                            objectCounters.arrow++;
-                            cloned.customLabel = "치수선" + objectCounters.arrow;
-                        } else {
-                            cloned.customLabel = "이름없음";
-                        }
+                if (!clipboard || clipboard.length === 0) return Promise.resolve();
+                return Promise.all(clipboard.map(cloneObject)).then(function (
+                    pasted
+                ) {
+                    pasted.forEach(function (cloned) {
+                        assignPastedLabel(cloned);
                         cloned.set({
                             left: (cloned.left || 0) + 20,
                             top: (cloned.top || 0) + 20,
                             evented: true,
                         });
                         fabricCanvas.add(cloned);
-                        fabricCanvas.setActiveObject(cloned);
-                        fabricCanvas.renderAll();
-                        saveHistory();
                     });
+                    // 연속 붙여넣기 시 조금씩 어긋나도록 클립보드 위치도 갱신
+                    clipboard.forEach(function (cloneObj) {
+                        cloneObj.set({
+                            left: (cloneObj.left || 0) + 20,
+                            top: (cloneObj.top || 0) + 20,
+                        });
+                    });
+                    if (pasted.length === 1) {
+                        fabricCanvas.setActiveObject(pasted[0]);
+                    } else if (pasted.length > 1) {
+                        const selection = new fabric.ActiveSelection(pasted, {
+                            canvas: fabricCanvas,
+                        });
+                        fabricCanvas.setActiveObject(selection);
+                    }
+                    fabricCanvas.requestRenderAll();
+                    saveHistory();
+                    updateLayerList();
+                    return pasted;
                 });
             }
+
+            function selectAllObjects() {
+                const objects = fabricCanvas.getObjects().filter(function (obj) {
+                    return obj.selectable !== false;
+                });
+                if (objects.length === 0) return;
+                fabricCanvas.discardActiveObject();
+                if (objects.length === 1) {
+                    fabricCanvas.setActiveObject(objects[0]);
+                } else {
+                    const selection = new fabric.ActiveSelection(objects, {
+                        canvas: fabricCanvas,
+                    });
+                    fabricCanvas.setActiveObject(selection);
+                }
+                fabricCanvas.requestRenderAll();
+                updateLayerList();
+            }
+
+            window.copyObjects = copyObjects;
+            window.pasteObjects = pasteObjects;
+            window.selectAllObjects = selectAllObjects;
 
             // 팔레트 버튼 연동
             function setupColorPalette(paletteId, inputId, applyColorFn) {
@@ -2991,6 +3043,80 @@
             setupColorTabs("fillColorTabs", "fill-tab");
 
             // 팔레트 팝업 show/hide 및 색상 연동 (클릭만, 한 번에 하나만 열림)
+            function hideAllColorPalettes() {
+                document.querySelectorAll(".color-palette-popup").forEach(function (el) {
+                    el.style.display = "none";
+                });
+            }
+
+            function positionColorPalette(popup, trigger) {
+                const GAP = 8;
+                if (popup.parentNode !== document.body) {
+                    document.body.appendChild(popup);
+                }
+                popup.style.position = "fixed";
+                popup.style.zIndex = "100001";
+                popup.style.left = "0px";
+                popup.style.top = "0px";
+                popup.style.display = "block";
+                popup.style.visibility = "hidden";
+
+                const popupWidth = popup.offsetWidth;
+                const popupHeight = popup.offsetHeight;
+                const triggerRect = trigger.getBoundingClientRect();
+                const panel = document.getElementById("shapeProperties");
+                const panelRect = panel
+                    ? panel.getBoundingClientRect()
+                    : triggerRect;
+                const vw = window.innerWidth;
+                const vh = window.innerHeight;
+
+                function inViewport(left, top) {
+                    return (
+                        left >= GAP &&
+                        top >= GAP &&
+                        left + popupWidth <= vw - GAP &&
+                        top + popupHeight <= vh - GAP
+                    );
+                }
+
+                const candidates = [
+                    {
+                        left: panelRect.left - popupWidth - GAP,
+                        top: triggerRect.top,
+                    },
+                    {
+                        left: panelRect.right + GAP,
+                        top: triggerRect.top,
+                    },
+                    {
+                        left: triggerRect.left,
+                        top: triggerRect.top - popupHeight - GAP,
+                    },
+                    {
+                        left: triggerRect.left,
+                        top: triggerRect.bottom + GAP,
+                    },
+                ];
+                const chosen =
+                    candidates.find(function (pos) {
+                        return inViewport(pos.left, pos.top);
+                    }) || {
+                        left: Math.min(
+                            Math.max(GAP, panelRect.left - popupWidth - GAP),
+                            vw - popupWidth - GAP
+                        ),
+                        top: Math.min(
+                            Math.max(GAP, triggerRect.top),
+                            vh - popupHeight - GAP
+                        ),
+                    };
+
+                popup.style.left = chosen.left + "px";
+                popup.style.top = chosen.top + "px";
+                popup.style.visibility = "visible";
+            }
+
             function setupPalettePopup(
                 triggerId,
                 popupId,
@@ -3002,6 +3128,7 @@
                 const popup = document.getElementById(popupId);
                 const input = document.getElementById(inputId);
                 if (!trigger || !popup) return;
+                const originalParent = popup.parentNode;
 
                 // 팝업 show/hide (토글)
                 function showPopup() {
@@ -3015,48 +3142,15 @@
                         });
                     }
                     if (popup.style.display === "block") {
-                        popup.style.display = "none";
+                        hidePopup();
                         return;
                     }
-                    // 위치 계산: 클릭한 버튼 위치에서 바로 표시
-                    const rect = trigger.getBoundingClientRect();
-
-                    // 팔레트를 body에 직접 추가하여 위치 계산 정확성 향상
-                    if (popup.parentNode !== document.body) {
-                        document.body.appendChild(popup);
-                    }
-
-                    popup.style.position = "fixed";
-                    popup.style.zIndex = "10000";
-
-                    // 팔레트 크기 고려하여 위치 조정
-                    const popupWidth = 200; // 팔레트 예상 너비
-                    const popupHeight = 150; // 팔레트 예상 높이
-
-                    let left = rect.left;
-                    let top = rect.bottom + 5;
-
-                    // 화면 경계 체크
-                    if (left + popupWidth > window.innerWidth) {
-                        left = rect.right - popupWidth;
-                    }
-                    if (top + popupHeight > window.innerHeight) {
-                        top = rect.top - popupHeight - 5;
-                    }
-
-                    // 최소 위치 보장
-                    left = Math.max(10, left);
-                    top = Math.max(10, top);
-
-                    popup.style.left = left + "px";
-                    popup.style.top = top + "px";
-                    popup.style.display = "block";
+                    positionColorPalette(popup, trigger);
                 }
                 function hidePopup() {
                     popup.style.display = "none";
-                    // 팔레트를 원래 위치로 되돌리기
-                    const originalParent = document.querySelector('#shapeProperties .property-group');
-                    if (originalParent && popup.parentNode === document.body) {
+                    popup.style.visibility = "";
+                    if (originalParent && popup.parentNode !== originalParent) {
                         originalParent.appendChild(popup);
                     }
                 }
@@ -3067,7 +3161,11 @@
 
                 // 외부 클릭 시 닫기
                 document.addEventListener("mousedown", function (e) {
-                    if (!popup.contains(e.target) && e.target !== trigger) {
+                    if (
+                        popup.style.display === "block" &&
+                        !popup.contains(e.target) &&
+                        e.target !== trigger
+                    ) {
                         hidePopup();
                     }
                 });
@@ -3347,30 +3445,84 @@
             if (fabricBack) fabricBack.style.display = "none";
         }
 
+        function isFabricEditableTarget(target) {
+            if (!target) return false;
+            const tag = (target.tagName || "").toLowerCase();
+            if (tag === "input" || tag === "textarea" || tag === "select") return true;
+            if (target.isContentEditable) return true;
+            return false;
+        }
+
+        function isFabricShortcutKey(event, codeName, keyName) {
+            const code = event.code || "";
+            const key = (event.key || "").toLowerCase();
+            return code === codeName || key === keyName;
+        }
+
         // 키보드 이벤트 핸들러
         function fabricHandleKeyDown(event) {
+            const canvas = window.fabricCanvas;
+            if (!canvas) return;
+
             // ESC 키로 선택 해제
-            if (event.key === 'Escape') {
-                fabricCanvas.discardActiveObject();
-                fabricCanvas.renderAll();
+            if (event.key === "Escape") {
+                canvas.discardActiveObject();
+                canvas.renderAll();
+                return;
             }
             // Delete 키로만 선택된 객체 삭제 (Backspace 제거)
-            else if (event.key === 'Delete') {
-                const activeObjects = fabricCanvas.getActiveObjects();
+            if (event.key === "Delete") {
+                const activeObjects = canvas.getActiveObjects();
                 if (activeObjects.length > 0) {
-                    // 이벤트 전파 방지
                     event.preventDefault();
                     event.stopPropagation();
-
-                    fabricCanvas.remove(...activeObjects);
-                    fabricCanvas.discardActiveObject();
-                    fabricCanvas.renderAll();
+                    canvas.remove(...activeObjects);
+                    canvas.discardActiveObject();
+                    canvas.renderAll();
                 }
+                return;
             }
             // Backspace 키는 브라우저 기본 동작 허용 (뒤로가기 방지)
-            else if (event.key === 'Backspace') {
-                // 아무것도 하지 않음 - 브라우저 기본 동작 허용
+            if (event.key === "Backspace") {
                 return;
+            }
+
+            // 입력 필드/텍스트 편집 중에는 브라우저 기본 단축키를 유지
+            if (isFabricEditableTarget(event.target)) return;
+
+            const ctrl = event.ctrlKey || event.metaKey;
+            if (!ctrl) return;
+
+            if (isFabricShortcutKey(event, "KeyA", "a")) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof window.selectAllObjects === "function") {
+                    window.selectAllObjects();
+                }
+                return;
+            }
+            if (isFabricShortcutKey(event, "KeyC", "c")) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof window.copyObjects === "function") {
+                    window.copyObjects();
+                }
+                return;
+            }
+            if (isFabricShortcutKey(event, "KeyV", "v")) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof window.pasteObjects === "function") {
+                    window.pasteObjects();
+                }
+                return;
+            }
+            if (isFabricShortcutKey(event, "KeyZ", "z") && !event.shiftKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (typeof window.undo === "function") {
+                    window.undo();
+                }
             }
         }
 
