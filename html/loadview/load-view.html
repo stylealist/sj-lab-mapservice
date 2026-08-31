@@ -189,14 +189,19 @@
                     }
                 });
 
-                // URL에서 줌 레벨 가져오기 (기본값: 4)
-                const zoomLevel = parseInt(params.get('zoom')) || 4;
+                // URL에서 초기 줌 레벨 가져오기 (기본값: 4)
+                const initialZoomLevel = parseInt(params.get('zoom')) || 4;
 
-                // 좌측 하단 미니맵 생성 (전달받은 줌 레벨 적용)
+                // 좌측 하단 미니맵 생성 (초기 줌 레벨만 적용)
                 const miniMap = new kakao.maps.Map(document.getElementById('miniMap'), {
                     center: position,
-                    level: zoomLevel,
+                    level: initialZoomLevel,
                     mapTypeId: kakao.maps.MapTypeId.ROADMAP,
+                });
+
+                // 이후 줌 인/아웃은 카카오맵이 관리하는 현재 레벨을 그대로 유지
+                kakao.maps.event.addListener(miniMap, 'zoom_changed', function () {
+                    console.log('미니맵 줌 레벨 변경:', miniMap.getLevel());
                 });
 
                 // 로드뷰 커버리지(파란 영역) 표시
@@ -218,13 +223,11 @@
                 const marker = new kakao.maps.Marker({ position, image: markImage, draggable: true });
                 marker.setMap(miniMap);
 
-                // 미니맵 클릭 시 로드뷰 이동 및 마커/중심 동기화 (줌 레벨 유지)
+                // 미니맵 클릭 시 로드뷰 이동 및 마커/중심 동기화
                 kakao.maps.event.addListener(miniMap, 'click', function (mouseEvent) {
                     const newPos = mouseEvent.latLng;
                     marker.setPosition(newPos);
                     miniMap.setCenter(newPos);
-                    // 줌 레벨 유지
-                    miniMap.setLevel(zoomLevel);
                     findRoadviewWithProgressiveSearch(newPos, function (panoId) {
                         if (panoId) {
                             roadview.setPanoId(panoId, newPos);
@@ -234,12 +237,10 @@
                     });
                 });
 
-                // 마커 드래그 종료 시 로드뷰 이동 (줌 레벨 유지)
+                // 마커 드래그 종료 시 로드뷰 이동
                 kakao.maps.event.addListener(marker, 'dragend', function () {
                     const newPos = marker.getPosition();
                     miniMap.setCenter(newPos);
-                    // 줌 레벨 유지
-                    miniMap.setLevel(zoomLevel);
                     findRoadviewWithProgressiveSearch(newPos, function (panoId) {
                         if (panoId) {
                             roadview.setPanoId(panoId, newPos);
@@ -249,13 +250,11 @@
                     });
                 });
 
-                // 로드뷰 이동 시 마커/미니맵 동기화 (줌 레벨 유지)
+                // 로드뷰 이동 시 마커/미니맵 동기화
                 kakao.maps.event.addListener(roadview, 'position_changed', function () {
                     const pos = roadview.getPosition();
                     marker.setPosition(pos);
                     miniMap.setCenter(pos);
-                    // 줌 레벨 유지
-                    miniMap.setLevel(zoomLevel);
                     // 현재 위치 표시 업데이트
                     updateLocationDisplay(pos);
                 });

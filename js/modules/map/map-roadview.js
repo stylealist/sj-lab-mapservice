@@ -219,51 +219,64 @@ function ensureKakaoSdkLoaded(appkey, onReady, onError) {
   }
 }
 
+const VWORLD_MIN_ZOOM = 2;
+const VWORLD_MAX_ZOOM = 21;
+const KAKAO_MIN_LEVEL = 1;
+const KAKAO_MAX_LEVEL = 14;
+
 // OL 줌 -> Kakao level 변환
 function olZoomToKakaoLevel(vworldZoom) {
   // VWorld 줌 레벨이 0보다 작은 값이 들어올 경우를 대비해 0으로 보정합니다.
   const z = Math.max(0, Number(vworldZoom || 10));
-  console.log("vworldZoomToKakaoLevel 입력값:", z);
-
-  // VWorld 줌 레벨 범위: 2(멀리) ~ 21(가까움)
-  const vworldMinZoom = 2;
-  const vworldMaxZoom = 21;
-  const vworldZoomRange = vworldMaxZoom - vworldMinZoom; // 19
-
-  // 카카오맵 줌 레벨 범위: 14(멀리) ~ 1(가까움)
-  const kakaoMinLevel = 1;
-  const kakaoMaxLevel = 14;
-  const kakaoLevelRange = kakaoMaxLevel - kakaoMinLevel; // 13
+  const vworldZoomRange = VWORLD_MAX_ZOOM - VWORLD_MIN_ZOOM; // 19
+  const kakaoLevelRange = KAKAO_MAX_LEVEL - KAKAO_MIN_LEVEL; // 13
 
   let level;
 
   // 1. 줌 레벨이 VWorld의 최소/최대 범위를 벗어날 경우 고정값 반환
-  if (z <= vworldMinZoom) {
-    level = kakaoMaxLevel; // 카카오맵의 가장 먼 레벨(14)
-  } else if (z >= vworldMaxZoom) {
-    level = kakaoMinLevel; // 카카오맵의 가장 가까운 레벨(1)
+  if (z <= VWORLD_MIN_ZOOM) {
+    level = KAKAO_MAX_LEVEL; // 카카오맵의 가장 먼 레벨(14)
+  } else if (z >= VWORLD_MAX_ZOOM) {
+    level = KAKAO_MIN_LEVEL; // 카카오맵의 가장 가까운 레벨(1)
   } else {
     // 2. VWorld 줌 레벨 범위를 카카오맵 레벨 범위로 선형 변환
-    // 공식: 카카오맵_시작레벨 - ((VWorld_현재줌 - VWorld_시작줌) * 카카오맵_레벨범위) / VWorld_줌범위
     level = Math.round(
-      kakaoMaxLevel - ((z - vworldMinZoom) * kakaoLevelRange) / vworldZoomRange
+      KAKAO_MAX_LEVEL - ((z - VWORLD_MIN_ZOOM) * kakaoLevelRange) / vworldZoomRange
     );
   }
 
   // 3. 카카오맵 레벨 범위(1~14)를 벗어나지 않도록 보정
-  level = Math.max(kakaoMinLevel, Math.min(kakaoMaxLevel, level));
-
-  console.log("vworldZoomToKakaoLevel 결과:", level);
-  return level;
+  return Math.max(KAKAO_MIN_LEVEL, Math.min(KAKAO_MAX_LEVEL, level));
 }
 
-function syncKakaoMapWithOL() {
+// Kakao level -> OL 줌 변환
+function kakaoLevelToOlZoom(kakaoLevel) {
+  const level = Math.max(
+    KAKAO_MIN_LEVEL,
+    Math.min(KAKAO_MAX_LEVEL, Number(kakaoLevel || 4))
+  );
+  const vworldZoomRange = VWORLD_MAX_ZOOM - VWORLD_MIN_ZOOM;
+  const kakaoLevelRange = KAKAO_MAX_LEVEL - KAKAO_MIN_LEVEL;
+  const z =
+    VWORLD_MIN_ZOOM +
+    ((KAKAO_MAX_LEVEL - level) * vworldZoomRange) / kakaoLevelRange;
+  return Math.max(VWORLD_MIN_ZOOM, Math.min(VWORLD_MAX_ZOOM, z));
+}
+
+function constrainOlZoom(view, zoom) {
+  const minZ =
+    view && typeof view.getMinZoom === "function" ? view.getMinZoom() : 7;
+  const maxZ =
+    view && typeof view.getMaxZoom === "function" ? view.getMaxZoom() : 19;
+  return Math.max(minZ, Math.min(maxZ, zoom));
+}
+
+function syncKakaoCenterFromOL() {
   if (!kakaoOverlayMap || isSyncingFromKakao) return;
   isSyncingFromOL = true;
   const map = getMap();
   const center3857 = map.getView().getCenter();
   const [lon, lat] = ol.proj.toLonLat(center3857);
-  const kz = olZoomToKakaoLevel(map.getView().getZoom()) + kakaoLevelOffset;
   const kCenter = kakaoOverlayMap.getCenter();
   if (
     !kCenter ||
@@ -272,11 +285,28 @@ function syncKakaoMapWithOL() {
   ) {
     kakaoOverlayMap.setCenter(new kakao.maps.LatLng(lat, lon));
   }
-  // 보정된 레벨을 반영
+  isSyncingFromOL = false;
+}
+
+function syncKakaoZoomFromOL() {
+  if (!kakaoOverlayMap || isSyncingFromKakao) return;
+  isSyncingFromOL = true;
+  const kz = Math.max(
+    KAKAO_MIN_LEVEL,
+    Math.min(
+      KAKAO_MAX_LEVEL,
+      olZoomToKakaoLevel(getMap().getView().getZoom()) + kakaoLevelOffset
+    )
+  );
   if (kakaoOverlayMap.getLevel() !== kz) {
     kakaoOverlayMap.setLevel(kz);
   }
   isSyncingFromOL = false;
+}
+
+function syncKakaoMapWithOL() {
+  syncKakaoCenterFromOL();
+  syncKakaoZoomFromOL();
 }
 
 function enableRoadviewPicker(options = {}) {
@@ -359,8 +389,18 @@ function enableRoadviewPicker(options = {}) {
           isSyncingFromKakao = false;
         };
         const syncFromKakaoZoom = function () {
-          // 로드뷰 선택 모드에서는 카카오 줌 변경이 OL 줌을 강제로 바꾸지 않도록 무시
-          return;
+          if (isSyncingFromOL) return;
+          isSyncingFromKakao = true;
+          const kakaoLevel = kakaoOverlayMap.getLevel();
+          const view = map.getView();
+          const olZoom = constrainOlZoom(view, kakaoLevelToOlZoom(kakaoLevel));
+          if (view.getZoom() !== olZoom) {
+            view.setZoom(olZoom);
+          }
+          // OL 줌 제약으로 카카오 레벨과 어긋나도, 이후 패닝 시 카카오 줌이 되돌아가지 않도록 오프셋 유지
+          kakaoLevelOffset =
+            kakaoLevel - olZoomToKakaoLevel(view.getZoom());
+          isSyncingFromKakao = false;
         };
         kakao.maps.event.addListener(
           kakaoOverlayMap,
@@ -373,10 +413,11 @@ function enableRoadviewPicker(options = {}) {
           syncFromKakaoZoom
         );
 
-        // OL 뷰 변화 동기화 및 초기 오프셋 보정
+        // 패닝은 중심만, 줌은 resolution 변경 시에만 동기화 (moveend에서 줌을 되돌리지 않음)
         const view = map.getView();
-        const c1 = map.on("moveend", syncKakaoMapWithOL);
-        olViewListenersForKakao.push(c1);
+        const c1 = map.on("moveend", syncKakaoCenterFromOL);
+        const c2 = view.on("change:resolution", syncKakaoZoomFromOL);
+        olViewListenersForKakao.push(c1, c2);
         // 현재 카카오 레벨과 변환 기대값의 차이를 offset으로 저장
         kakaoLevelOffset =
           kakaoOverlayMap.getLevel() - olZoomToKakaoLevel(view.getZoom());
@@ -400,11 +441,17 @@ function disableRoadviewPicker() {
     // 이벤트 해제
     if (olViewListenersForKakao && olViewListenersForKakao.length) {
       olViewListenersForKakao.forEach((key) => {
-        if (key && map && map.un) {
-          try {
-            map.un("moveend", syncKakaoMapWithOL);
-          } catch {}
-        }
+        try {
+          if (
+            typeof ol !== "undefined" &&
+            ol.Observable &&
+            ol.Observable.unByKey
+          ) {
+            ol.Observable.unByKey(key);
+          } else if (map && map.un) {
+            map.un("moveend", syncKakaoCenterFromOL);
+          }
+        } catch {}
       });
       olViewListenersForKakao = [];
     }
@@ -419,6 +466,7 @@ function disableRoadviewPicker() {
     kakaoOverlayDiv = null;
     kakaoOverlayMap = null;
     kakaoRoadviewClient = null;
+    kakaoLevelOffset = 0;
     roadviewPickerActive = false;
     if (typeof window !== "undefined") window.roadviewPickerActive = false;
   } catch (e) {
@@ -438,4 +486,5 @@ export {
   disableRoadviewPicker,
   toggleRoadviewBtn,
   olZoomToKakaoLevel,
+  kakaoLevelToOlZoom,
 };
