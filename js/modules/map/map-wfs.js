@@ -134,7 +134,13 @@ const getMaxFeaturesByZoom = (zoomLevel) => {
 };
 
 // 균등 분포와 중앙 가중치를 결합한 샘플링 함수
-const spatialSampling = (features, maxCount, extent) => {
+// getCoordinates: OL Feature뿐 아니라 파싱 전 원본 GeoJSON 피처에도 재사용할 수 있도록 좌표 추출 방식을 주입받음
+const spatialSampling = (
+  features,
+  maxCount,
+  extent,
+  getCoordinates = (feature) => feature.getGeometry().getCoordinates()
+) => {
   if (features.length <= maxCount) {
     return features;
   }
@@ -160,10 +166,9 @@ const spatialSampling = (features, maxCount, extent) => {
   const cellDistances = {}; // 각 셀의 중심점까지의 거리
 
   features.forEach((feature) => {
-    const geometry = feature.getGeometry();
-    if (!geometry) return;
+    const coord = getCoordinates(feature);
+    if (!coord) return;
 
-    const coord = geometry.getCoordinates();
     const gridX = Math.floor((coord[0] - extent[0]) / cellWidth);
     const gridY = Math.floor((coord[1] - extent[1]) / cellHeight);
 
@@ -232,6 +237,70 @@ const spatialSampling = (features, maxCount, extent) => {
 
   return selectedFeatures;
 };
+
+// 원본 GeoJSON 피처(파싱 전) 중 확장영역과 겹치는 Point 피처만 남기는 저비용 사전 필터
+// OL Feature 객체를 만들기 전에 필터링해서 최초 로드 시 불필요한 readFeatures 비용을 줄이는 용도.
+// readFeatures가 좌표를 변환하지 않고 그대로 사용하므로(아래 loadWfsData 주석 참고),
+// 여기서 쓰는 extent도 원본 좌표와 같은 좌표계(=뷰 좌표계)여야 함.
+const filterRawPointFeaturesByExtent = (rawFeatures, extent) => {
+  return rawFeatures.filter((rawFeature) => {
+    const geometry = rawFeature && rawFeature.geometry;
+    // Point가 아니거나 좌표를 알 수 없는 피처는 안전하게 포함시켜 데이터 누락을 방지
+    if (
+      !geometry ||
+      geometry.type !== "Point" ||
+      !Array.isArray(geometry.coordinates)
+    ) {
+      return true;
+    }
+    const [x, y] = geometry.coordinates;
+    return x >= extent[0] && x <= extent[2] && y >= extent[1] && y <= extent[3];
+  });
+};
+
+// 초기 화면에 필요 없는 나머지 원본 피처를 백그라운드에서 청크 단위로 파싱해 캐시를 채움
+// (팬/줌 시 wfs-move 핸들러가 wfsDataCache를 참조하므로, 메인 스레드를 막지 않고 점진적으로 채워넣음)
+function scheduleBackgroundFeatureCaching(
+  layerName,
+  rawFeatures,
+  format,
+  featureProjection,
+  chunkSize = 1000
+) {
+  if (!rawFeatures.length) return;
+
+  const scheduleIdle =
+    typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback
+      : (callback) => setTimeout(callback, 16);
+
+  let index = 0;
+
+  const processChunk = () => {
+    const chunk = rawFeatures.slice(index, index + chunkSize);
+    index += chunkSize;
+
+    const parsedChunk = format.readFeatures(
+      { type: "FeatureCollection", features: chunk },
+      { dataProjection: "EPSG:4326", featureProjection }
+    );
+
+    if (!wfsDataCache[layerName]) {
+      wfsDataCache[layerName] = [];
+    }
+    wfsDataCache[layerName].push(...parsedChunk);
+
+    if (index < rawFeatures.length) {
+      scheduleIdle(processChunk);
+    } else {
+      console.log(
+        `${WFS_CONFIG[layerName].name}: 백그라운드 캐싱 완료 (총 ${wfsDataCache[layerName].length}개)`
+      );
+    }
+  };
+
+  scheduleIdle(processChunk);
+}
 
 // WFS 레이어 초기화
 function initializeWfsLayers() {
@@ -590,80 +659,28 @@ function loadWfsData(layerName) {
     return Promise.resolve();
   }
 
-  // 로딩 시작 표시
-  showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
-  updateLoadingProgress(10);
-
-  // 점진적 로딩 진행을 위한 타이머 (더 자연스러운 진행률)
-  let progressInterval = setInterval(() => {
-    const currentProgress = parseInt(
-      document.querySelector("#wfs-progress")?.style.width || "0%"
-    );
-
-    // 서버 응답을 기다리는 동안 10%에서 70%까지 천천히 증가
-    if (currentProgress < 70) {
-      // 진행률이 낮을 때는 빠르게, 높을 때는 천천히 증가
-      let increment = 0.5; // 기본 증가값
-
-      // 진행률 구간별 증가값 조정 (더 명확한 구간 설정)
-      if (currentProgress < 30) {
-        increment = 1.2; // 서버 연결 중 (10-30%) - 더 빠르게
-      } else if (currentProgress < 50) {
-        increment = 1.0; // 데이터 요청 중 (30-50%) - 확실히 진행
-      } else if (currentProgress < 70) {
-        increment = 0.8; // 서버 응답 대기 중 (50-70%) - 적당히
-      }
-
-      // 서버 응답 시간이 길어질수록 더 천천히 증가
-      const elapsedTime = Date.now() - startTime;
-      if (elapsedTime > 5000) {
-        // 5초 이상 걸리면 더 천천히
-        increment *= 0.4;
-      } else if (elapsedTime > 3000) {
-        // 3초 이상 걸리면 더 천천히
-        increment *= 0.6;
-      } else if (elapsedTime > 2000) {
-        // 2초 이상 걸리면 조금 천천히
-        increment *= 0.8;
-      }
-
-      // 최소 증가값 보장 (너무 느리지 않도록)
-      increment = Math.max(increment, 0.4);
-
-      updateLoadingProgress(currentProgress + increment);
-
-      // 디버깅용 로그 (개발 중에만 사용)
-      console.log(
-        `진행률: ${currentProgress.toFixed(1)}% → ${(
-          currentProgress + increment
-        ).toFixed(1)}% (${config.name}) - 구간: ${
-          currentProgress < 30
-            ? "서버 연결"
-            : currentProgress < 50
-            ? "데이터 요청"
-            : "서버 응답 대기"
-        }`
-      );
-
-      // 로딩 메시지 업데이트 (진행 상황에 따라)
-      if (currentProgress < 30) {
-        showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
-      } else if (currentProgress < 50) {
-        showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
-      } else {
-        showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
-      }
-    }
-  }, 100); // 100ms마다 업데이트 (더 부드러운 진행)
-
   // 서버 요청 시작 시간 기록
   const startTime = Date.now();
-  let isServerResponded = false;
+
+  // 최초 로드에만 이 경로를 타므로(이후에는 위 캐시 분기에서 즉시 반환) 안내 문구를 함께 표시
+  const firstLoadHint = "⚡ 처음 한 번만 기다리면 돼요. 다시 켤 때는 바로 표시됩니다.";
+
+  // 로딩 시작 표시
+  let progress = 10; // 진행률은 DOM을 다시 읽지 않고 이 변수로만 추적 (재파싱 시 소수점이 잘려 같은 값에 멈추던 문제 방지)
+  updateLoadingProgress(progress);
+  showLoadingMessage(`${config.name} 데이터를 불러오는 중...`, firstLoadHint);
+
+  // 점진적 로딩 진행 타이머: 실제 진행률이 아니라 "아직 작업 중"임을 알리는 용도.
+  // 서버 응답을 기다리는 동안 진행률 바가 계속 조금씩 움직이도록 해서 멈춘 것처럼 보이지 않게 함
+  const progressInterval = setInterval(() => {
+    if (progress < 75) {
+      progress = Math.min(progress + 0.8, 75);
+      updateLoadingProgress(progress);
+    }
+  }, 300);
 
   return fetch(config.url)
     .then((response) => {
-      // 서버 응답 시작
-      isServerResponded = true;
       const responseTime = Date.now() - startTime;
       console.log(`${config.name} 서버 응답 시간: ${responseTime}ms`);
 
@@ -674,103 +691,101 @@ function loadWfsData(layerName) {
     })
     .then((data) => {
       // 점진적 로딩 타이머 정리
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
+      clearInterval(progressInterval);
 
-      // 서버 응답 후 데이터 처리 시작 (70%에서 90%로 점진적 증가)
-      let dataProcessInterval = setInterval(() => {
-        const currentProgress = parseInt(
-          document.querySelector("#wfs-progress")?.style.width || "70%"
+      progress = 80;
+      updateLoadingProgress(progress);
+      showLoadingMessage(`${config.name} 데이터를 표시하는 중...`, firstLoadHint);
+
+      const format = vectorSource.getFormat();
+      // 기존 동작 유지: vectorSource.getProjection()은 null이라 readFeatures가 좌표를 변환하지 않고
+      // 원본 좌표를 그대로 사용함(응답 좌표가 이미 뷰 좌표계). 여기에 실제 투영을 넘기면 좌표가 어긋나 레이어가 표시되지 않음.
+      const featureProjection = vectorSource.getProjection();
+      const rawFeatures = Array.isArray(data.features) ? data.features : [];
+
+      console.log(`${config.name} 원본 데이터 수신: ${rawFeatures.length}개`);
+
+      // 최초 화면에 필요한 만큼만 먼저 골라 파싱해서 빠르게 표시 (전체 데이터를 한 번에 readFeatures 하지 않음)
+      let initialRawFeatures = rawFeatures;
+
+      const mapSize = map && map.getSize ? map.getSize() : null;
+
+      if (map && map.getView && mapSize && rawFeatures.length > 0) {
+        const currentExtent = map.getView().calculateExtent(mapSize);
+        const zoomLevel = map.getView().getZoom();
+        const maxFeatures = getMaxFeaturesByZoom(zoomLevel);
+
+        const viewportRawFeatures = filterRawPointFeaturesByExtent(
+          rawFeatures,
+          currentExtent
         );
 
-        if (currentProgress < 90) {
-          updateLoadingProgress(currentProgress + 1); // 더 작은 증가값
+        initialRawFeatures =
+          viewportRawFeatures.length > maxFeatures
+            ? spatialSampling(
+                viewportRawFeatures,
+                maxFeatures,
+                currentExtent,
+                (rawFeature) => rawFeature.geometry.coordinates
+              )
+            : viewportRawFeatures;
 
-          // 데이터 처리 단계 메시지 업데이트
-          if (currentProgress < 80) {
-            showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
-          } else {
-            showLoadingMessage(`${config.name} 데이터를 불러오는 중...`);
-          }
+        // 사전 필터링 결과가 0개면(좌표계가 예상과 다른 경우 등) 레이어가 아예 안 보이게 되므로 전체 데이터로 폴백
+        if (initialRawFeatures.length === 0) {
+          console.warn(
+            `${config.name}: 뷰포트 사전 필터링 결과가 0개 - 전체 데이터로 폴백 (뷰포트: ${currentExtent})`
+          );
+          initialRawFeatures = rawFeatures;
         } else {
-          clearInterval(dataProcessInterval);
+          console.log(
+            `${config.name}: 빠른 초기 표시 - 전체 ${rawFeatures.length}개 중 ${initialRawFeatures.length}개 우선 파싱 (줌 레벨: ${zoomLevel})`
+          );
         }
-      }, 80); // 더 빠른 업데이트로 부드러운 진행
+      }
 
-      const features = vectorSource.getFormat().readFeatures(data, {
-        dataProjection: "EPSG:4326",
-        featureProjection: vectorSource.getProjection(),
-      });
-
-      // 데이터를 캐시에 저장
-      wfsDataCache[layerName] = features;
-      wfsDataLoaded[layerName] = true;
-
-      // 초기 로드 시에는 모든 데이터를 추가하지 않고, 줌/이동 이벤트에서 필터링
-      console.log(
-        `${config.name} 데이터 로드 완료: ${features.length} 개 피처 (캐시에 저장됨)`
+      const initialFeatures = format.readFeatures(
+        { type: "FeatureCollection", features: initialRawFeatures },
+        { dataProjection: "EPSG:4326", featureProjection }
       );
 
-      // 첫 번째 피처의 속성 확인 (디버깅용)
-      if (features.length > 0) {
-        const firstFeature = features[0];
-        console.log("첫 번째 피처 속성:", firstFeature.getProperties());
-      }
+      vectorSource.addFeatures(initialFeatures);
 
-      // 초기 뷰포트에 맞는 데이터만 표시
-      if (map && map.getView) {
-        const currentExtent = map.getView().calculateExtent(map.getSize());
-        const zoomLevel = map.getView().getZoom();
+      // 화면에 표시된 데이터로 우선 캐시를 채우고, 나머지는 백그라운드에서 이어서 채움
+      wfsDataCache[layerName] = initialFeatures.slice();
+      wfsDataLoaded[layerName] = true;
 
-        // 현재 뷰포트에 맞는 데이터만 필터링
-        const viewportFeatures = features.filter((feature) => {
-          const geometry = feature.getGeometry();
-          if (!geometry) return false;
-          return geometry.intersectsExtent(currentExtent);
-        });
+      console.log(
+        `${config.name} 초기 표시 완료: ${initialFeatures.length}개 (나머지는 백그라운드 캐싱)`
+      );
 
-        // 줌 레벨에 따른 최대 표출 개수 제한
-        const maxFeatures = getMaxFeaturesByZoom(zoomLevel);
-        let filteredFeatures = viewportFeatures;
-
-        if (viewportFeatures.length > maxFeatures) {
-          // 공간적 균등 분포를 고려한 샘플링
-          filteredFeatures = spatialSampling(
-            viewportFeatures,
-            maxFeatures,
-            currentExtent
-          );
-          console.log(
-            `${config.name}: 초기 로드 - 뷰포트 내 ${viewportFeatures.length}개 중 ${maxFeatures}개 표출 (줌 레벨: ${zoomLevel})`
-          );
-        } else {
-          console.log(
-            `${config.name}: 초기 로드 - 뷰포트 내 ${viewportFeatures.length}개 모두 표출 (줌 레벨: ${zoomLevel})`
-          );
-        }
-
-        // 필터링된 피처만 추가
-        vectorSource.addFeatures(filteredFeatures);
-      }
-
-      // 데이터 처리 완료 후 진행률을 100%로 설정
-      clearInterval(dataProcessInterval);
+      // 진행률을 100%로 설정하고 완료 메시지 표시
       updateLoadingProgress(100);
-
-      // 완료 메시지 표시
-      showLoadingMessage(`${config.name} 데이터 로딩 완료!`);
+      showLoadingMessage(
+        `${config.name} 데이터 로딩 완료!`,
+        "이제 껐다 켜도 기다림 없이 바로 표시됩니다."
+      );
 
       // 완료 후 잠시 대기 후 팝업 숨기기
       setTimeout(() => {
         hideLoadingMessage();
       }, 800); // 완료 메시지를 더 오래 보여줌
+
+      // 초기 표시에 쓰이지 않은 나머지 원본 피처는 백그라운드에서 청크 단위로 파싱해 캐시에 채워
+      // 이후 팬/줌 시 wfs-move 핸들러가 전체 데이터를 사용할 수 있게 함 (메인 스레드 블로킹 없이)
+      const initialRawSet = new Set(initialRawFeatures);
+      const remainingRawFeatures = rawFeatures.filter(
+        (rawFeature) => !initialRawSet.has(rawFeature)
+      );
+      scheduleBackgroundFeatureCaching(
+        layerName,
+        remainingRawFeatures,
+        format,
+        featureProjection
+      );
     })
     .catch((error) => {
       // 점진적 로딩 타이머 정리
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
+      clearInterval(progressInterval);
 
       console.error(`${config.name} 데이터 로드 실패:`, error);
       hideLoadingMessage();
@@ -1930,8 +1945,8 @@ function closeWfsPopup() {
   }
 }
 
-// 로딩 메시지 표시 함수
-function showLoadingMessage(message) {
+// 로딩 메시지 표시 함수 (hint: 메시지 아래에 작게 표시되는 보조 안내 문구, 생략 시 숨김)
+function showLoadingMessage(message, hint) {
   let loadingDiv = document.getElementById("wfs-loading");
   if (!loadingDiv) {
     loadingDiv = document.createElement("div");
@@ -1950,6 +1965,7 @@ function showLoadingMessage(message) {
       font-size: 14px;
       text-align: center;
       min-width: 200px;
+      max-width: 320px;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     `;
     document.body.appendChild(loadingDiv);
@@ -1965,7 +1981,15 @@ function showLoadingMessage(message) {
       <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.3); border-radius: 2px;">
         <div id="wfs-progress" style="width: 0%; height: 100%; background: #ff6b35; border-radius: 2px; transition: width 0.3s ease;"></div>
       </div>
+      <div class="loading-hint" style="margin-top: 10px; font-size: 12px; line-height: 1.4; opacity: 0.75; display: none;"></div>
     `;
+  }
+
+  // 보조 안내 문구 갱신 (없으면 숨김)
+  const hintDiv = loadingDiv.querySelector(".loading-hint");
+  if (hintDiv) {
+    hintDiv.textContent = hint || "";
+    hintDiv.style.display = hint ? "block" : "none";
   }
 
   loadingDiv.style.display = "block";
