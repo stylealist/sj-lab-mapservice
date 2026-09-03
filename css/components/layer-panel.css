@@ -4,7 +4,7 @@
 .layer-panel {
   position: absolute;
   top: 0;
-  left: 77.22px;
+  left: 0;
   width: 320px;
   height: 100vh;
   background: #ffffff;
@@ -17,81 +17,6 @@
 
 .layer-panel.collapsed {
   transform: translateX(-316px);
-}
-
-.layer-panel.collapsed .fixed-tabs {
-  transform: translateX(0);
-}
-
-/* 고정 탭 영역 */
-.fixed-tabs {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  z-index: 1602;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 0.5rem;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.fixed-tab {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 8px;
-  padding: 0.75rem 0.5rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  min-width: 48px;
-  backdrop-filter: blur(10px);
-}
-
-.fixed-tab:hover {
-  background: rgba(255, 255, 255, 1);
-  transform: translateX(2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-}
-
-.fixed-tab.active {
-  background: rgb(30, 41, 59);
-  color: white;
-  border-color: rgb(30, 41, 59);
-  box-shadow: 0 4px 12px rgba(30, 41, 59, 0.3);
-}
-
-.home-tab {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
-.home-tab:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-  transform: translateX(2px);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
-}
-
-.tab-icon {
-  font-size: 1.2rem;
-  line-height: 1;
-}
-
-.tab-label {
-  font-size: 0.7rem;
-  font-weight: 500;
-  text-align: center;
-  line-height: 1;
 }
 
 .panel-header {
@@ -509,11 +434,7 @@
   }
 
   .layer-panel.collapsed {
-    transform: translateX(-240px);
-  }
-
-  .layer-panel.collapsed .fixed-tabs {
-    transform: translateX(0);
+    transform: translateX(-256px);
   }
 
   .panel-toggle {
@@ -529,24 +450,6 @@
     transform: translateY(-50%);
     width: 20px;
     height: 40px;
-  }
-
-  .fixed-tabs {
-    padding: 0.4rem;
-    left: -52px;
-  }
-
-  .fixed-tab {
-    padding: 0.6rem 0.4rem;
-    min-width: 44px;
-  }
-
-  .tab-icon {
-    font-size: 1.1rem;
-  }
-
-  .tab-label {
-    font-size: 0.65rem;
   }
 }
 
@@ -556,11 +459,7 @@
   }
 
   .layer-panel.collapsed {
-    transform: translateX(-220px);
-  }
-
-  .layer-panel.collapsed .fixed-tabs {
-    transform: translateX(0);
+    transform: translateX(-236px);
   }
 
   .panel-toggle {
@@ -576,23 +475,5 @@
     transform: translateY(-50%);
     width: 18px;
     height: 36px;
-  }
-
-  .fixed-tabs {
-    padding: 0.3rem;
-    left: -48px;
-  }
-
-  .fixed-tab {
-    padding: 0.5rem 0.3rem;
-    min-width: 40px;
-  }
-
-  .tab-icon {
-    font-size: 1rem;
-  }
-
-  .tab-label {
-    font-size: 0.6rem;
   }
 }

@@ -165,7 +165,6 @@ function initializeLayerPanel() {
   const panelToggle = document.getElementById("panelToggle");
   const tabButtons = document.querySelectorAll(".tab-btn");
   const tabPanes = document.querySelectorAll(".tab-pane");
-  const fixedTabs = document.querySelectorAll(".fixed-tab");
   const backgroundRadios = document.querySelectorAll(
     'input[name="background"]'
   );
@@ -176,41 +175,6 @@ function initializeLayerPanel() {
     layerPanel.classList.toggle("collapsed");
   });
 
-  // 고정 탭 기능
-  fixedTabs.forEach((button) => {
-    button.addEventListener("click", function () {
-      const targetTab = this.getAttribute("data-tab");
-
-      // 고정 탭 활성화
-      fixedTabs.forEach((tab) => tab.classList.remove("active"));
-      this.classList.add("active");
-
-      // 패널이 접혀있으면 펼치기
-      if (layerPanel.classList.contains("collapsed")) {
-        layerPanel.classList.remove("collapsed");
-      }
-
-      // 패널 제목 업데이트
-      const panelTitle = document.getElementById("panelTitle");
-      const tabLabels = {
-        route: "길찾기",
-        layers: "레이어",
-        search: "검색",
-        bookmark: "즐겨찾기",
-        measure: "측정",
-        draw: "그리기",
-        export: "내보내기",
-        "map-edit": "지도편집",
-      };
-      if (panelTitle && tabLabels[targetTab]) {
-        panelTitle.textContent = tabLabels[targetTab];
-      }
-
-      // 내부 탭 전환
-      switchTab(targetTab, tabButtons, tabPanes);
-    });
-  });
-
   // 내부 탭 기능
   tabButtons.forEach((button) => {
     button.addEventListener("click", function () {
@@ -218,27 +182,6 @@ function initializeLayerPanel() {
       switchTab(targetTab, tabButtons, tabPanes);
     });
   });
-
-  // 초기 활성 고정 탭에 맞춰 패널 초기 상태 동기화
-  const initialActiveFixed = document.querySelector(".fixed-tab.active");
-  let initialTab = initialActiveFixed
-    ? initialActiveFixed.getAttribute("data-tab")
-    : "route";
-
-  const panelTitle = document.getElementById("panelTitle");
-  const tabLabels = {
-    route: "길찾기",
-    layers: "레이어",
-    search: "검색",
-    bookmark: "즐겨찾기",
-    measure: "측정",
-    draw: "그리기",
-    export: "내보내기",
-  };
-  if (panelTitle && tabLabels[initialTab]) {
-    panelTitle.textContent = tabLabels[initialTab];
-  }
-  switchTab(initialTab, tabButtons, tabPanes);
 
   // 배경지도 라디오 버튼 이벤트
   backgroundRadios.forEach((radio) => {
@@ -274,21 +217,9 @@ function initializeLayerPanel() {
   });
 
   // 홈 이동 함수
-  function goToHome() {
-    const homeUrl = window.location.origin;
-    window.location.href = homeUrl;
-  }
-
-  // 홈 이동 함수
   function goToMap() {
     const homeUrl = window.location.origin + "/map";
     window.location.href = homeUrl;
-  }
-
-  // 홈 버튼 이벤트
-  const homeBtn = document.getElementById("homeBtn");
-  if (homeBtn) {
-    homeBtn.addEventListener("click", goToHome);
   }
 
   // 로고 클릭 이벤트
