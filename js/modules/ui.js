@@ -159,6 +159,69 @@ function navigateToPage(pageName, navButtons, pages) {
   }
 }
 
+// 사이드 탭(.cadastral-control)의 서브메뉴 목록 - 트리거 버튼과 서브메뉴 짝
+const CADASTRAL_SUBMENUS = [
+  { buttonId: "cadastralBtn", submenuId: "cadastralSubmenu" },
+  { buttonId: "wfsAmenitiesBtn", submenuId: "amenitiesSubmenu" },
+  { buttonId: "wfsTransportBtn", submenuId: "transportSubmenu" },
+];
+
+// 지정한 서브메뉴를 제외한 나머지 서브메뉴를 닫음 (서브메뉴끼리 영역이 겹치는 것을 방지)
+// 표시 상태만 되돌리고 측정 초기화 같은 기능 단위 동작은 건드리지 않음
+function closeOtherCadastralSubmenus(currentSubmenuId) {
+  CADASTRAL_SUBMENUS.forEach(({ buttonId, submenuId }) => {
+    if (submenuId === currentSubmenuId) return;
+
+    const submenu = document.getElementById(submenuId);
+    const button = document.getElementById(buttonId);
+
+    if (submenu) submenu.classList.remove("show");
+    if (button) button.classList.remove("active");
+  });
+}
+
+// 서브메뉴를 트리거 버튼과 같은 높이에 맞춤
+// .cadastral-control이 offsetParent이므로 버튼의 offsetTop을 그대로 쓰면 정렬됨
+// (버튼 순서·개수가 바뀌어도 자동으로 맞으므로 top 값을 하드코딩하지 말 것)
+function positionCadastralSubmenu(button, submenu) {
+  submenu.style.top = `${button.offsetTop}px`;
+
+  // 지도 영역 아래로 넘쳐 잘리는 경우 위로 끌어올림
+  const mapContainer = document.querySelector(".map-container");
+  if (!mapContainer) return;
+
+  const overflow =
+    submenu.getBoundingClientRect().bottom -
+    (mapContainer.getBoundingClientRect().bottom - 10);
+
+  if (overflow > 0) {
+    submenu.style.top = `${Math.max(button.offsetTop - overflow, 0)}px`;
+  }
+}
+
+// 사이드 탭 서브메뉴 토글 (열려 있던 다른 서브메뉴는 닫고, 트리거 버튼 옆에 정렬)
+// 반환값: 토글 후 서브메뉴가 열린 상태인지 여부
+function toggleCadastralSubmenu(buttonId, submenuId) {
+  const button = document.getElementById(buttonId);
+  const submenu = document.getElementById(submenuId);
+
+  if (!button || !submenu) return false;
+
+  const willShow = !submenu.classList.contains("show");
+
+  closeOtherCadastralSubmenus(submenuId);
+
+  button.classList.toggle("active", willShow);
+  submenu.classList.toggle("show", willShow);
+
+  // 위치 계산은 서브메뉴가 화면에 표시된 뒤에 해야 크기를 잴 수 있음
+  if (willShow) {
+    positionCadastralSubmenu(button, submenu);
+  }
+
+  return willShow;
+}
+
 // 레이어 패널 초기화
 function initializeLayerPanel() {
   const layerPanel = document.getElementById("layerPanel");
@@ -230,20 +293,16 @@ function initializeLayerPanel() {
 
   // 지적 기능 버튼 이벤트
   const cadastralBtn = document.getElementById("cadastralBtn");
-  const cadastralSubmenu = document.getElementById("cadastralSubmenu");
 
   if (cadastralBtn) {
     cadastralBtn.addEventListener("click", function () {
-      // 버튼 활성화/비활성화 토글
-      this.classList.toggle("active");
-
-      // 서브메뉴 토글
-      if (cadastralSubmenu) {
-        cadastralSubmenu.classList.toggle("show");
-      }
+      // 버튼 활성화 상태와 서브메뉴 표시를 함께 토글 (다른 서브메뉴는 닫힘)
+      const isActive = toggleCadastralSubmenu(
+        "cadastralBtn",
+        "cadastralSubmenu"
+      );
 
       // 지적 기능 비활성화 시 측정 초기화
-      const isActive = this.classList.contains("active");
       console.log("지적 기능:", isActive ? "활성화" : "비활성화");
 
       if (!isActive) {
@@ -292,21 +351,12 @@ function initializeLayerPanel() {
 
   // 교통 서브메뉴 토글 함수
   window.toggleTransportSubmenu = function () {
-    const transportBtn = document.getElementById("wfsTransportBtn");
-    const transportSubmenu = document.getElementById("transportSubmenu");
+    const isShown = toggleCadastralSubmenu(
+      "wfsTransportBtn",
+      "transportSubmenu"
+    );
 
-    if (transportBtn && transportSubmenu) {
-      // 버튼 활성화/비활성화 토글
-      transportBtn.classList.toggle("active");
-
-      // 서브메뉴 토글
-      transportSubmenu.classList.toggle("show");
-
-      console.log(
-        "교통 서브메뉴:",
-        transportSubmenu.classList.contains("show") ? "표시" : "숨김"
-      );
-    }
+    console.log("교통 서브메뉴:", isShown ? "표시" : "숨김");
   };
 
   // 지도편집 버튼 이벤트
@@ -323,21 +373,12 @@ function initializeLayerPanel() {
 
   // 편의시설 서브메뉴 토글 함수
   window.toggleAmenitiesSubmenu = function () {
-    const amenitiesBtn = document.getElementById("wfsAmenitiesBtn");
-    const amenitiesSubmenu = document.getElementById("amenitiesSubmenu");
+    const isShown = toggleCadastralSubmenu(
+      "wfsAmenitiesBtn",
+      "amenitiesSubmenu"
+    );
 
-    if (amenitiesBtn && amenitiesSubmenu) {
-      // 버튼 활성화/비활성화 토글
-      amenitiesBtn.classList.toggle("active");
-
-      // 서브메뉴 토글
-      amenitiesSubmenu.classList.toggle("show");
-
-      console.log(
-        "편의시설 서브메뉴:",
-        amenitiesSubmenu.classList.contains("show") ? "표시" : "숨김"
-      );
-    }
+    console.log("편의시설 서브메뉴:", isShown ? "표시" : "숨김");
   };
 
   // 편의점 서브메뉴 토글 함수
