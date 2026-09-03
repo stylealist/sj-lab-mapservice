@@ -37,6 +37,9 @@ window.MapEventManager.debugHandlers()
 - 인라인 HTML(`onclick=...`)이나 다른 모듈에서 호출해야 하는 새 함수는 `js/modules/map/map.js`에서 `window.*`에 등록할 것. 등록을 빠뜨리면 모듈 안에서만 동작하고 인라인 핸들러에서는 `ReferenceError`가 남.
 - `window.appInitialized` / `window.mapModulesInitialized` / `window.mapInitializationInProgress` 가드를 제거·우회하지 말 것 — `DOMContentLoaded`가 중복 발생하거나 모듈이 재호출되면 이벤트 리스너·레이어가 중복 등록됨.
 - 존재하지 않는 빌드/린트/테스트 명령을 만들어내지 말 것. 변경 검증은 정적 서버(`python -m http.server`)로 띄운 뒤 브라우저에서 직접 확인.
+- 함수, 변수의 이름은 카멜 형식으로 명명 할것
+- 코드 추가 및 수정중에 CLAUDE.md 혹은 README.md에 추가되어야 할 내용인경우 코드 변경후에 바로 추가
+- 답변을 해줄 때 한글로 답변 할것
 
 ## 참고
 
