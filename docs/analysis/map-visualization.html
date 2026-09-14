@@ -1,0 +1,2488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SJ-Lab MapService 지도 모듈 분석 대시보드</title>
+  <style>
+    :root {
+      --bg-primary: #0f172a;
+      --bg-secondary: #1e293b;
+      --bg-tertiary: #334155;
+      --bg-card: #1e293b;
+      --bg-card-hover: #273549;
+      --bg-graph: #090d16;
+      --border-color: #334155;
+      --border-focus: #38bdf8;
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-primary: #0284c7;
+      --accent-hover: #0369a1;
+      --accent-active: #38bdf8;
+      --edge-import: #38bdf8;
+      --edge-window: #f59e0b;
+      --edge-popup: #c084fc;
+      --badge-high-bg: rgba(239, 68, 68, 0.2);
+      --badge-high-text: #f87171;
+      --badge-high-border: #ef4444;
+      --badge-medium-bg: rgba(245, 158, 11, 0.2);
+      --badge-medium-text: #fbbf24;
+      --badge-medium-border: #f59e0b;
+      --badge-low-bg: rgba(14, 165, 233, 0.2);
+      --badge-low-text: #38bdf8;
+      --badge-low-border: #0ea5e9;
+      --badge-ok-bg: rgba(34, 197, 94, 0.2);
+      --badge-ok-text: #4ade80;
+      --badge-ok-border: #22c55e;
+      --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f8fafc;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #f1f5f9;
+      --bg-card: #ffffff;
+      --bg-card-hover: #f8fafc;
+      --bg-graph: #f1f5f9;
+      --border-color: #e2e8f0;
+      --border-focus: #0284c7;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #94a3b8;
+      --accent-primary: #0284c7;
+      --accent-hover: #0369a1;
+      --accent-active: #0284c7;
+      --edge-import: #0284c7;
+      --edge-window: #d97706;
+      --edge-popup: #9333ea;
+      --badge-high-bg: #fee2e2;
+      --badge-high-text: #dc2626;
+      --badge-high-border: #ef4444;
+      --badge-medium-bg: #fef3c7;
+      --badge-medium-text: #b45309;
+      --badge-medium-border: #f59e0b;
+      --badge-low-bg: #e0f2fe;
+      --badge-low-text: #0369a1;
+      --badge-low-border: #0ea5e9;
+      --badge-ok-bg: #dcfce7;
+      --badge-ok-text: #15803d;
+      --badge-ok-border: #22c55e;
+      --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Pretendard", Apple SD Gothic Neo, "Malgun Gothic", sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      overflow-x: hidden;
+      width: 100%;
+      min-width: 320px;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 16px 20px 48px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding-bottom: 20px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .header-title-group h1 {
+      font-size: clamp(20px, 3.5vw, 28px);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-title-group p {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .theme-toggle-btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .theme-toggle-btn:hover {
+      background: var(--bg-tertiary);
+    }
+
+    /* Summary Cards */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .summary-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px 20px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+      cursor: pointer;
+    }
+
+    .summary-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent-primary);
+    }
+
+    .summary-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .summary-card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .summary-card-icon {
+      font-size: 20px;
+    }
+
+    .summary-card-val {
+      font-size: 32px;
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 6px;
+      color: var(--text-primary);
+    }
+
+    .summary-card-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    .nav-tab-btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .nav-tab-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .nav-tab-btn.active {
+      background: var(--accent-primary);
+      color: #ffffff;
+      border-color: var(--accent-primary);
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.4);
+    }
+
+    .tab-badge {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+    }
+
+    .nav-tab-btn:not(.active) .tab-badge {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+    }
+
+    /* View Sections */
+    .view-section {
+      display: none;
+      animation: fadeIn 0.2s ease-in-out;
+    }
+
+    .view-section.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    /* Common Card / Panel */
+    .card-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--card-shadow);
+      margin-bottom: 20px;
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+    }
+
+    .search-input {
+      padding: 8px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      font-size: 13px;
+      flex: 1;
+      min-width: 180px;
+      max-width: 360px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-input:focus {
+      border-color: var(--accent-primary);
+    }
+
+    .filter-btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .filter-btn {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .filter-btn:hover {
+      background: var(--border-color);
+      color: var(--text-primary);
+    }
+
+    .filter-btn.active {
+      background: var(--accent-primary);
+      color: #ffffff;
+      border-color: var(--accent-primary);
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+
+    .badge-high {
+      background: var(--badge-high-bg);
+      color: var(--badge-high-text);
+      border: 1px solid var(--badge-high-border);
+    }
+
+    .badge-medium {
+      background: var(--badge-medium-bg);
+      color: var(--badge-medium-text);
+      border: 1px solid var(--badge-medium-border);
+    }
+
+    .badge-low {
+      background: var(--badge-low-bg);
+      color: var(--badge-low-text);
+      border: 1px solid var(--badge-low-border);
+    }
+
+    .badge-ok {
+      background: var(--badge-ok-bg);
+      color: var(--badge-ok-text);
+      border: 1px solid var(--badge-ok-border);
+    }
+
+    .badge-import {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--edge-import);
+      border: 1px solid var(--edge-import);
+    }
+
+    .badge-window {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--edge-window);
+      border: 1px solid var(--edge-window);
+    }
+
+    .badge-popup {
+      background: rgba(192, 132, 252, 0.15);
+      color: var(--edge-popup);
+      border: 1px solid var(--edge-popup);
+    }
+
+    .code-tag {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    /* Alert Banner */
+    .alert-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: 10px;
+      margin-bottom: 18px;
+      line-height: 1.5;
+      font-size: 13px;
+    }
+
+    .alert-danger {
+      background: var(--badge-high-bg);
+      border: 1px solid var(--badge-high-border);
+      color: var(--badge-high-text);
+    }
+
+    .alert-warning {
+      background: var(--badge-medium-bg);
+      border: 1px solid var(--badge-medium-border);
+      color: var(--badge-medium-text);
+    }
+
+    .alert-info {
+      background: var(--badge-low-bg);
+      border: 1px solid var(--badge-low-border);
+      color: var(--badge-low-text);
+    }
+
+    .alert-icon {
+      font-size: 18px;
+      line-height: 1;
+      margin-top: 1px;
+    }
+
+    /* View 1: Graph Layout */
+    .graph-wrapper {
+      position: relative;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-graph);
+      overflow: hidden;
+      display: flex;
+      height: 720px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .graph-svg-area {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    .graph-svg-area:active {
+      cursor: grabbing;
+    }
+
+    #graph-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      user-select: none;
+    }
+
+    /* Graph Toolbar */
+    .graph-toolbar {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+    }
+
+    [data-theme="light"] .graph-toolbar {
+      background: rgba(255, 255, 255, 0.85);
+    }
+
+    .graph-tool-btn {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+    }
+
+    .graph-tool-btn:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .graph-legend {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      z-index: 10;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(8px);
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+    }
+
+    [data-theme="light"] .graph-legend {
+      background: rgba(255, 255, 255, 0.85);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .legend-line {
+      width: 24px;
+      height: 3px;
+      border-radius: 2px;
+    }
+
+    .legend-line.import {
+      background: var(--edge-import);
+    }
+
+    .legend-line.window {
+      background: var(--edge-window);
+      border-top: 2px dashed var(--edge-window);
+      height: 0;
+    }
+
+    .legend-line.popup {
+      background: var(--edge-popup);
+      border-top: 2px dotted var(--edge-popup);
+      height: 0;
+    }
+
+    /* Side Panel */
+    .graph-side-panel {
+      width: 400px;
+      height: 100%;
+      border-left: 1px solid var(--border-color);
+      background: var(--bg-card);
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: -4px 0 16px rgba(0, 0, 0, 0.15);
+      z-index: 15;
+    }
+
+    .side-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 12px;
+    }
+
+    .side-panel-close {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px;
+      line-height: 1;
+      border-radius: 4px;
+    }
+
+    .side-panel-close:hover {
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+
+    .side-panel-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .side-panel-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .side-panel-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .side-panel-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* SVG Elements */
+    .svg-edge {
+      fill: none;
+      transition: stroke 0.2s, stroke-width 0.2s, opacity 0.2s;
+    }
+
+    .svg-edge.kind-import {
+      stroke: var(--edge-import);
+      stroke-width: 2px;
+    }
+
+    .svg-edge.kind-window {
+      stroke: var(--edge-window);
+      stroke-width: 2px;
+      stroke-dasharray: 6, 4;
+    }
+
+    .svg-edge.kind-popup {
+      stroke: var(--edge-popup);
+      stroke-width: 2.5px;
+      stroke-dasharray: 3, 3;
+    }
+
+    .svg-edge:hover, .svg-edge.hovered {
+      stroke-width: 3.5px !important;
+      filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.4));
+      cursor: pointer;
+    }
+
+    .svg-node {
+      cursor: pointer;
+      transition: transform 0.15s ease, opacity 0.2s;
+    }
+
+    .svg-node rect {
+      transition: stroke 0.2s, stroke-width 0.2s, fill 0.2s, filter 0.2s;
+    }
+
+    .svg-node:hover rect {
+      filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.3));
+    }
+
+    .svg-node.is-bridge rect {
+      stroke: #38bdf8;
+      stroke-width: 2.5px;
+    }
+
+    .svg-node.selected rect {
+      stroke: #38bdf8 !important;
+      stroke-width: 3.5px !important;
+      filter: drop-shadow(0 0 12px rgba(56, 189, 248, 0.6)) !important;
+    }
+
+    .svg-node.dimmed, .svg-edge.dimmed {
+      opacity: 0.12 !important;
+    }
+
+    /* View 2: Timeline */
+    .timeline-container {
+      position: relative;
+      padding: 10px 0 20px 24px;
+      border-left: 3px solid var(--accent-primary);
+      margin-left: 20px;
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 24px;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -33px;
+      top: 6px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--bg-primary);
+      border: 3px solid var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--bg-card);
+    }
+
+    .timeline-item.has-delay .timeline-dot {
+      border-color: #f59e0b;
+      background: #f59e0b;
+    }
+
+    .timeline-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .timeline-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .timeline-step-order {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--accent-primary);
+    }
+
+    .timeline-step-text {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .guards-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .guards-table th, .guards-table td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .guards-table th {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    /* View 3: Layer Stack */
+    .layer-stack-visual {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stack-group {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: var(--card-shadow);
+    }
+
+    .stack-group.collision {
+      border-color: #f59e0b;
+      background: rgba(245, 158, 11, 0.03);
+    }
+
+    .stack-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .stack-group-title {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .layer-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 12px;
+    }
+
+    .layer-card {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 13px;
+    }
+
+    .layer-card-title {
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .layer-card-source {
+      font-size: 11px;
+      color: var(--text-muted);
+      word-break: break-all;
+      font-family: ui-monospace, Consolas, monospace;
+    }
+
+    /* View 4: Table View */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--bg-card);
+      box-shadow: var(--card-shadow);
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    .data-table th {
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-weight: 600;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+
+    .data-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    .data-table tr:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .data-table tr.row-danger {
+      background: rgba(239, 68, 68, 0.08) !important;
+      border-left: 4px solid #ef4444;
+    }
+
+    .data-table tr.row-warning {
+      background: rgba(245, 158, 11, 0.08) !important;
+      border-left: 4px solid #f59e0b;
+    }
+
+    /* View 5: Risks List */
+    .risks-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .risk-item-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px 18px;
+      box-shadow: var(--card-shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .risk-item-card:hover {
+      transform: translateY(-1px);
+    }
+
+    .risk-item-card.severity-high {
+      border-left: 4px solid #ef4444;
+    }
+
+    .risk-item-card.severity-medium {
+      border-left: 4px solid #f59e0b;
+    }
+
+    .risk-item-card.severity-low {
+      border-left: 4px solid #0ea5e9;
+    }
+
+    .risk-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .risk-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .risk-detail {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Edge Tooltip */
+    #edge-tooltip {
+      position: absolute;
+      display: none;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(6px);
+      color: #ffffff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 100;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-color);
+      max-width: 280px;
+    }
+
+    /* Responsive Rules (400px constraint) */
+    @media (max-width: 850px) {
+      .graph-wrapper {
+        flex-direction: column;
+        height: auto;
+      }
+      .graph-svg-area {
+        height: 480px;
+      }
+      .graph-side-panel {
+        width: 100%;
+        height: 320px;
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 12px 10px 36px;
+      }
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .nav-tab-btn {
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+      .graph-toolbar {
+        top: 8px;
+        left: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-title-group">
+        <h1>🗺️ SJ-Lab MapService 분석 시각화</h1>
+        <p>OpenLayers 지도 서비스 모듈 의존관계, 초기화 라이프사이클, 레이어 스택 및 위험도 가시화</p>
+      </div>
+      <div class="header-actions">
+        <button id="theme-toggle-btn" class="theme-toggle-btn" onclick="toggleTheme()">
+          <span id="theme-icon">☀️</span> <span id="theme-text">라이트 모드</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Top Summary Cards -->
+    <div class="summary-grid">
+      <div class="summary-card" onclick="switchTab('graph')">
+        <div class="summary-card-header">
+          <span class="summary-card-title">모듈 (Modules)</span>
+          <span class="summary-card-icon">📦</span>
+        </div>
+        <div class="summary-card-val" id="summary-modules-count">16</div>
+        <div class="summary-card-sub">JS 12개 · HTML 3개 · 유틸 1개</div>
+      </div>
+      <div class="summary-card" onclick="switchTab('bridge')">
+        <div class="summary-card-header">
+          <span class="summary-card-title">전역 브리지/함수</span>
+          <span class="summary-card-icon">🌐</span>
+        </div>
+        <div class="summary-card-val" id="summary-bridge-count">36</div>
+        <div class="summary-card-sub">map.js 등록 31개 + 인라인 전용 5개</div>
+      </div>
+      <div class="summary-card" onclick="switchTab('layers')">
+        <div class="summary-card-header">
+          <span class="summary-card-title">지도 레이어</span>
+          <span class="summary-card-icon">🥞</span>
+        </div>
+        <div class="summary-card-val" id="summary-layers-count">13</div>
+        <div class="summary-card-sub">WFS 6 · XYZ 3 · WMS 1 · Vector 3 (⚠️ 8개 충돌)</div>
+      </div>
+      <div class="summary-card" onclick="switchTab('risks')">
+        <div class="summary-card-header">
+          <span class="summary-card-title">식별된 위험/불일치</span>
+          <span class="summary-card-icon">⚠️</span>
+        </div>
+        <div class="summary-card-val" id="summary-risks-count" style="color: #f87171;">21</div>
+        <div class="summary-card-sub">High 1 · Medium 6 · Low 14</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-tab-btn active" data-tab="graph" onclick="switchTab('graph')">
+        <span>🕸️ 모듈 의존관계 그래프</span> <span class="tab-badge">16 노드 / 39 엣지</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="timeline" onclick="switchTab('timeline')">
+        <span>⏱️ 초기화 시퀀스 & 가드</span> <span class="tab-badge">17 단계</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="layers" onclick="switchTab('layers')">
+        <span>🥞 레이어 스택 & zIndex</span> <span class="tab-badge">13 레이어</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="bridge" onclick="switchTab('bridge')">
+        <span>🌐 window 전역 브리지 표</span> <span class="tab-badge">36 항목</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="risks" onclick="switchTab('risks')">
+        <span>⚠️ 위험 및 불일치 목록</span> <span class="tab-badge">21건</span>
+      </button>
+    </nav>
+
+    <!-- TAB 1: Module Graph -->
+    <section id="view-graph" class="view-section active">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">모듈 의존관계 그래프</h2>
+          <p class="section-desc">중심의 map.js 배럴 브리지를 축으로 import(실선 청록), window(점선 주황), popup(대시 보라) 관계를 표현합니다. 노드를 클릭하면 상세 속성이 표시됩니다.</p>
+        </div>
+      </div>
+
+      <div class="graph-wrapper">
+        <div class="graph-toolbar">
+          <button class="graph-tool-btn" onclick="filterGraphEdges('all')">전체 (39)</button>
+          <button class="graph-tool-btn" onclick="filterGraphEdges('import')">import (23)</button>
+          <button class="graph-tool-btn" onclick="filterGraphEdges('window')">window (14)</button>
+          <button class="graph-tool-btn" onclick="filterGraphEdges('popup')">popup (2)</button>
+          <button class="graph-tool-btn" onclick="zoomGraphBy(1.2)">➕ 확대</button>
+          <button class="graph-tool-btn" onclick="zoomGraphBy(0.8)">➖ 축소</button>
+          <button class="graph-tool-btn" onclick="resetGraphZoom()">🔄 리셋</button>
+          <button class="graph-tool-btn" onclick="focusBridgeNode()">🎯 map.js 중심</button>
+        </div>
+
+        <div class="graph-legend">
+          <div class="legend-item" onclick="filterGraphEdges('import')">
+            <span class="legend-line import"></span>
+            <span>import (ES 모듈 의존)</span>
+          </div>
+          <div class="legend-item" onclick="filterGraphEdges('window')">
+            <span class="legend-line window"></span>
+            <span>window (전역 브리지 호출)</span>
+          </div>
+          <div class="legend-item" onclick="filterGraphEdges('popup')">
+            <span class="legend-line popup"></span>
+            <span>popup (iframe / 새 창 팝업)</span>
+          </div>
+        </div>
+
+        <div class="graph-svg-area" id="graph-svg-area">
+          <svg id="graph-svg" viewBox="0 0 1200 820">
+            <defs>
+              <!-- Arrow Markers -->
+              <marker id="arrow-import" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#38bdf8"></path>
+              </marker>
+              <marker id="arrow-window" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#f59e0b"></path>
+              </marker>
+              <marker id="arrow-popup" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#c084fc"></path>
+              </marker>
+            </defs>
+            <g id="viewport-group">
+              <g id="edges-layer"></g>
+              <g id="nodes-layer"></g>
+            </g>
+          </svg>
+        </div>
+
+        <!-- Graph Side Detail Panel -->
+        <div class="graph-side-panel" id="graph-side-panel">
+          <div class="side-panel-header">
+            <div>
+              <h3 id="panel-module-title" style="font-size: 16px; font-weight: 800;">모듈 선택 대기</h3>
+              <span id="panel-module-file" class="code-tag" style="margin-top: 4px; display: inline-block;">그래프에서 노드를 클릭하세요</span>
+            </div>
+            <button class="side-panel-close" onclick="deselectModule()" title="선택 해제">✕</button>
+          </div>
+
+          <div id="panel-body">
+            <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+              노드를 클릭하면 해당 모듈의 역할, 줄 수, windowExports, eventHandlers, 레이어 목록, 연결 의존관계 및 관련 위험이 여기에 표시됩니다.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Init Sequence & Guards -->
+    <section id="view-timeline" class="view-section">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">초기화 시퀀스 타임라인 & 가드 플래그</h2>
+          <p class="section-desc">DOMContentLoaded 이후 실행되는 17단계의 순서, 비동기 지연(delayMs) 및 플래그 검사/설정 흐름을 표시합니다.</p>
+        </div>
+      </div>
+
+      <!-- Guards Flag Matrix -->
+      <div class="card-panel">
+        <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;">🛡️ 초기화 가드 플래그 현황 (Guards)</h3>
+        <table class="guards-table">
+          <thead>
+            <tr>
+              <th>플래그 이름</th>
+              <th>검사 위치</th>
+              <th>설정 위치</th>
+              <th>해제 위치</th>
+              <th>아키텍처 유의점</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>window.appInitialized</code></td>
+              <td>js/app.js:17</td>
+              <td>js/app.js:33</td>
+              <td>없음</td>
+              <td>초기화 완료 후에만 true로 설정되므로 진행 중 중복 호출은 방어하지 못함</td>
+            </tr>
+            <tr>
+              <td><code>window.mapModulesInitialized</code></td>
+              <td>js/modules/map/map.js:48</td>
+              <td>js/modules/map/map.js:75</td>
+              <td>없음</td>
+              <td>지도 모듈 초기화 완료 가드 (정상 동작)</td>
+            </tr>
+            <tr>
+              <td><code>window.mapInitializationInProgress</code></td>
+              <td>js/modules/map/map.js:54</td>
+              <td>js/modules/map/map.js:60</td>
+              <td>js/modules/map/map.js:76</td>
+              <td>⚠️ try/finally가 없어 초기화 중 예외 발생 시 true로 영구 고착됨</td>
+            </tr>
+            <tr>
+              <td><code>wfsInitialized</code> (로컬)</td>
+              <td>js/modules/map/map-wfs.js:310</td>
+              <td>js/modules/map/map-wfs.js:603</td>
+              <td>없음</td>
+              <td>모듈 스코프 가드로 중복 초기화 방지</td>
+            </tr>
+            <tr>
+              <td><code>window.wfsLayersInitialized</code></td>
+              <td>js/modules/map/map-wfs.js:316</td>
+              <td>js/modules/map/map-wfs.js:604</td>
+              <td>없음</td>
+              <td>전역 플래그로 2차 중복 호출 방지</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Timeline List -->
+      <div class="timeline-container" id="timeline-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 3: Layer Stack -->
+    <section id="view-layers" class="view-section">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">레이어 스택 & zIndex 충돌 분석</h2>
+          <p class="section-desc">OpenLayers 레이어 13종의 zIndex 계층 구조와 렌더링 순서 충돌 위험을 분석합니다.</p>
+        </div>
+      </div>
+
+      <div class="alert-banner alert-danger">
+        <span class="alert-icon">🚨</span>
+        <div>
+          <strong>동일 zIndex(1000) 8개 레이어 충돌 경고:</strong><br>
+          WFS POI 벡터 레이어 6종, WMS 편의점 타일 1종, 영역 선택 사각형 레이어가 모두 <code>zIndex: 1000</code>으로 동일합니다.
+          OpenLayers에서는 동일 zIndex일 경우 레이어가 지도에 추가된 순서에 따라 렌더링되므로, 레이어 켜기/끄기 시 POI 마커가 타일에 가려지거나 선택 사각형 뒤로 숨겨지는 예기치 않은 순서 역전이 발생할 수 있습니다.
+        </div>
+      </div>
+
+      <div class="alert-banner alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div>
+          <strong>측정 레이어(measureLayer) zIndex 미지정 경고:</strong><br>
+          <code>measureLayer</code>(map-measure.js:66)는 zIndex가 지정되지 않아 기본값(0)으로 렌더링됩니다. 이로 인해 사용자가 측정한 선이나 면이 POI 아이콘(1000) 아래로 그려질 수 있습니다.
+        </div>
+      </div>
+
+      <!-- Stack Visual Cards -->
+      <div class="layer-stack-visual" id="layer-stack-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 4: Global Bridge Table -->
+    <section id="view-bridge" class="view-section">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">window 전역 브리지 & 인라인 핸들러 표</h2>
+          <p class="section-desc">map.js가 등록하는 window.* 전역 함수(31개)와 HTML/JS의 인라인 핸들러(10개)를 통합한 표입니다. registered=false 또는 런타임 결함 항목이 강조됩니다.</p>
+        </div>
+      </div>
+
+      <div class="controls-bar">
+        <input type="text" id="bridge-search-input" class="search-input" placeholder="함수명, 모듈명, 소스 검색..." oninput="filterBridgeTable()">
+        <div class="filter-btn-group">
+          <button class="filter-btn active" data-filter="all" onclick="setBridgeFilter('all')">전체 (36)</button>
+          <button class="filter-btn" data-filter="registered" onclick="setBridgeFilter('registered')">등록 완료 (31)</button>
+          <button class="filter-btn" data-filter="warning" onclick="setBridgeFilter('warning')">주의/위험 항목 (5)</button>
+          <button class="filter-btn" data-filter="unregistered" onclick="setBridgeFilter('unregistered')">registered=false 항목</button>
+          <button class="filter-btn" data-filter="exports" onclick="setBridgeFilter('exports')">windowExports (31)</button>
+          <button class="filter-btn" data-filter="inline" onclick="setBridgeFilter('inline')">inlineHandlers (10)</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>함수 / 객체명</th>
+              <th>분류</th>
+              <th>담당 모듈</th>
+              <th>등록 상태 (registered)</th>
+              <th>소스 / 파일 위치</th>
+              <th>특이사항 / 비고</th>
+            </tr>
+          </thead>
+          <tbody id="bridge-table-body">
+            <!-- Rendered dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 5: Risks List -->
+    <section id="view-risks" class="view-section">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">위험 및 불일치 정밀 분석 (Risks)</h2>
+          <p class="section-desc">정적 코드 분석을 통해 발견된 21건의 결함, 잠재적 런타임 예외 및 아키텍처 불일치 항목입니다.</p>
+        </div>
+      </div>
+
+      <div class="controls-bar">
+        <input type="text" id="risks-search-input" class="search-input" placeholder="위험 제목, 파일, 내용 검색..." oninput="filterRisksList()">
+        <div class="filter-btn-group">
+          <button class="filter-btn active" data-severity="all" onclick="setRisksSeverityFilter('all')">전체 (21)</button>
+          <button class="filter-btn" data-severity="high" onclick="setRisksSeverityFilter('high')">🔴 High (1)</button>
+          <button class="filter-btn" data-severity="medium" onclick="setRisksSeverityFilter('medium')">🟡 Medium (6)</button>
+          <button class="filter-btn" data-severity="low" onclick="setRisksSeverityFilter('low')">🔵 Low (14)</button>
+        </div>
+      </div>
+
+      <div class="risks-grid" id="risks-list-container">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Edge Tooltip -->
+  <div id="edge-tooltip"></div>
+
+  <!-- Embedded JSON Data -->
+  <script id="map-analysis-data" type="application/json">
+{
+  "modules": [
+    { "id": "index-html", "file": "index.html", "lines": 560, "role": "SPA 진입 HTML. 지도 컨테이너(#map), 우측 사이드 탭(.cadastral-control) 마크업, 인라인 onclick 3개, ol.js/hls.js 전역 스크립트와 js/app.js 모듈 로드, window.KAKAO_APP_KEY 설정" },
+    { "id": "app", "file": "js/app.js", "lines": 45, "role": "최상위 초기화. DOMContentLoaded에서 지도 모듈 → 네비게이션 → 레이어 패널 → 헤더 토글 → (1초 후) 영역 선택 순으로 초기화, window.appInitialized 가드" },
+    { "id": "ui", "file": "js/modules/ui.js", "lines": 703, "role": "SPA 페이지 전환, 레이어 패널/사이드 탭 이벤트, 서브메뉴 토글. window.* 전역을 통해 지도 기능(레이어/측정/로드뷰/WFS/영역선택)을 호출" },
+    { "id": "helpers", "file": "js/utils/helpers.js", "lines": 63, "role": "AJAX 래퍼·좌표 변환 등 범용 유틸 (app.js가 import하지만 사용하지 않음)" },
+    { "id": "map", "file": "js/modules/map/map.js", "lines": 125, "role": "배럴/브리지. 하위 지도 모듈을 import해 initializeMapWithModules()로 초기화하고 함수 31개를 window.*에 등록" },
+    { "id": "map-core", "file": "js/modules/map/map-core.js", "lines": 157, "role": "ol.Map/ol.View 생성, VWorld XYZ 배경(일반/위성)·하이브리드 오버레이 레이어 구성, getMap() 제공" },
+    { "id": "map-events", "file": "js/modules/map/map-events.js", "lines": 269, "role": "MapEventManager: id+이벤트 타입 기준 중복 등록 방지 지도 이벤트 레지스트리" },
+    { "id": "map-layers", "file": "js/modules/map/map-layers.js", "lines": 46, "role": "배경지도 전환(switchLayer), 오버레이 토글(toggleOverlay). window.baseLayers/overlayLayers 의존" },
+    { "id": "map-tools", "file": "js/modules/map/map-tools.js", "lines": 86, "role": "콘솔 디버깅용 mapTools(flyTo, setZoom, resetMap 등)" },
+    { "id": "map-measure", "file": "js/modules/map/map-measure.js", "lines": 1339, "role": "거리/면적/반경/각도 측정 도구, 측정 벡터 레이어, 측정 결과 팝업" },
+    { "id": "map-roadview", "file": "js/modules/map/map-roadview.js", "lines": 490, "role": "카카오 로드뷰: 커버리지 오버레이 피커(Kakao SDK)와 전체화면 iframe(load-view.html)" },
+    { "id": "map-wfs", "file": "js/modules/map/map-wfs.js", "lines": 2227, "role": "자사 백엔드 API(getApiUrl) 기반 POI 벡터 레이어 6종(편의점/버스정류장/CCTV/약국/병원/관공서) 로딩·표시·팝업(HLS CCTV 포함)" },
+    { "id": "map-wms", "file": "js/modules/map/map-wms.js", "lines": 383, "role": "GeoServer WMS 편의점 타일 레이어 1종, GetFeatureInfo 팝업" },
+    { "id": "map-area-selector", "file": "js/modules/map/map-area-selector.js", "lines": 698, "role": "지도 영역 사각형 선택 → 캔버스 캡처 → fabric-editor.html 새 창으로 전송" },
+    { "id": "load-view", "file": "html/loadview/load-view.html", "lines": 267, "role": "독립 팝업 페이지: 쿼리(lat/lng/zoom/appkey)로 카카오 로드뷰 표시 (iframe으로 삽입됨)" },
+    { "id": "fabric-editor", "file": "html/fabric/fabric-editor.html", "lines": 4007, "role": "독립 팝업 페이지: Fabric.js 이미지 편집기. window.loadMapAreaImage/showLoadingMessage 노출" }
+  ],
+  "edges": [
+    { "from": "index-html", "to": "app", "kind": "import", "label": "<script type=\"module\" src=\"js/app.js\"> (index.html:555)" },
+    { "from": "app", "to": "map", "kind": "import", "label": "initializeMapWithModules (app.js:2)" },
+    { "from": "app", "to": "ui", "kind": "import", "label": "initializeNavigation, initializeLayerPanel, hideLoading, initializeHeaderToggle (app.js:3-8)" },
+    { "from": "app", "to": "map-area-selector", "kind": "import", "label": "initializeAreaSelector (app.js:9)" },
+    { "from": "app", "to": "helpers", "kind": "import", "label": "makeAjaxRequest, utils — 미사용 (app.js:10)" },
+    { "from": "map", "to": "map-core", "kind": "import", "label": "initializeMap, getMap (map.js:2)" },
+    { "from": "map", "to": "map-events", "kind": "import", "label": "MapEventManager (map.js:3)" },
+    { "from": "map", "to": "map-layers", "kind": "import", "label": "switchLayer, toggleOverlay (map.js:4)" },
+    { "from": "map", "to": "map-tools", "kind": "import", "label": "mapTools (map.js:5)" },
+    { "from": "map", "to": "map-measure", "kind": "import", "label": "initializeMeasureTools 외 측정 함수 8개 (map.js:6-16)" },
+    { "from": "map", "to": "map-roadview", "kind": "import", "label": "drawRoadView, enableRoadviewPicker, disableRoadviewPicker, toggleRoadviewBtn (map.js:17-22)" },
+    { "from": "map", "to": "map-wfs", "kind": "import", "label": "initializeWfsLayers 외 WFS 함수 10개 (map.js:23-35)" },
+    { "from": "map", "to": "map-wms", "kind": "import", "label": "initializeWmsLayers, toggleWmsLayer, showWmsPopup, closeWmsPopup (map.js:36-41)" },
+    { "from": "map-events", "to": "map-core", "kind": "import", "label": "getMap (map-events.js:2)" },
+    { "from": "map-tools", "to": "map-core", "kind": "import", "label": "getMap (map-tools.js:2)" },
+    { "from": "map-measure", "to": "map-core", "kind": "import", "label": "getMap (map-measure.js:2)" },
+    { "from": "map-measure", "to": "map-events", "kind": "import", "label": "MapEventManager (map-measure.js:3)" },
+    { "from": "map-roadview", "to": "map-core", "kind": "import", "label": "getMap (map-roadview.js:2)" },
+    { "from": "map-wfs", "to": "map-core", "kind": "import", "label": "getMap (map-wfs.js:2)" },
+    { "from": "map-wfs", "to": "map-events", "kind": "import", "label": "MapEventManager (map-wfs.js:3)" },
+    { "from": "map-wms", "to": "map-core", "kind": "import", "label": "getMap (map-wms.js:2)" },
+    { "from": "map-wms", "to": "map-events", "kind": "import", "label": "MapEventManager (map-wms.js:3)" },
+    { "from": "map-area-selector", "to": "map-core", "kind": "import", "label": "getMap (map-area-selector.js:2)" },
+    { "from": "map-core", "to": "ui", "kind": "window", "label": "window.hideLoading() (map-core.js:141-142 → ui.js:696)" },
+    { "from": "map-layers", "to": "map-core", "kind": "window", "label": "window.baseLayers / window.overlayLayers (map-layers.js:7-35 → map-core.js:91-92)" },
+    { "from": "map-measure", "to": "map-core", "kind": "window", "label": "window.measureLayers.push (map-measure.js:93-94 → map-core.js:95)" },
+    { "from": "map-wfs", "to": "map-wms", "kind": "window", "label": "window.wmsLayers / wmsActive / toggleWmsLayer (map-wfs.js:853-857 등 → map-wms.js:141-142, 379)" },
+    { "from": "ui", "to": "map-core", "kind": "window", "label": "window.mapInstance.updateSize() (ui.js:101-108, 155 → map.js:91 / map-core.js:154)" },
+    { "from": "ui", "to": "map-layers", "kind": "window", "label": "window.switchLayer / toggleOverlay (ui.js:253, 261, 647-656)" },
+    { "from": "ui", "to": "map-measure", "kind": "window", "label": "window.clearMeasurements / measureRadius / measureArea / measureDistance / measureAngle (ui.js:310-311, 599-618)" },
+    { "from": "ui", "to": "map-roadview", "kind": "window", "label": "window.enableRoadviewPicker / disableRoadviewPicker / drawRoadView (ui.js:344-347, 623-625)" },
+    { "from": "ui", "to": "map-wfs", "kind": "window", "label": "window.toggleConvenienceStore / toggleBusStop / toggleCctv / togglePharmacy / toggleHospital / toggleGovernmentOffice / show*Info (ui.js:397-584)" },
+    { "from": "ui", "to": "map-area-selector", "kind": "window", "label": "window.startMapEdit (ui.js:368-369 → map-area-selector.js:689)" },
+    { "from": "ui", "to": "index-html", "kind": "window", "label": "window.KAKAO_APP_KEY (ui.js:342, 624 → index.html:557)" },
+    { "from": "map-roadview", "to": "index-html", "kind": "window", "label": "window.KAKAO_APP_KEY (map-roadview.js:57, 200, 317 → index.html:557)" },
+    { "from": "index-html", "to": "map-roadview", "kind": "window", "label": "onclick=\"toggleRoadviewBtn()\" (index.html:200) — ui.js:340에서 onclick=null로 제거됨" },
+    { "from": "index-html", "to": "ui", "kind": "window", "label": "onclick=\"toggleAmenitiesSubmenu()\" / \"toggleTransportSubmenu()\" (index.html:208, 216 → ui.js:375, 353)" },
+    { "from": "map-roadview", "to": "load-view", "kind": "popup", "label": "iframe.src = html/loadview/load-view.html?lat&lng&radius&zoom&appkey (map-roadview.js:104-121)" },
+    { "from": "map-area-selector", "to": "fabric-editor", "kind": "popup", "label": "window.open(html/fabric/fabric-editor.html) → editorWindow.loadMapAreaImage(dataURL) (map-area-selector.js:614-641)" }
+  ],
+  "windowExports": [
+    { "name": "mapInstance", "module": "map-core", "source": "getMap() 반환값 (모듈 평가 시점 호출 → undefined, map.js:91)" },
+    { "name": "MapEventManager", "module": "map-events", "source": "MapEventManager" },
+    { "name": "mapTools", "module": "map-tools", "source": "mapTools" },
+    { "name": "switchLayer", "module": "map-layers", "source": "switchLayer" },
+    { "name": "toggleOverlay", "module": "map-layers", "source": "toggleOverlay" },
+    { "name": "measureDistance", "module": "map-measure", "source": "measureDistance" },
+    { "name": "measureArea", "module": "map-measure", "source": "measureArea" },
+    { "name": "measureRadius", "module": "map-measure", "source": "measureRadius" },
+    { "name": "measureAngle", "module": "map-measure", "source": "measureAngle" },
+    { "name": "clearMeasurements", "module": "map-measure", "source": "clearMeasurements" },
+    { "name": "createMeasurePopup", "module": "map-measure", "source": "createMeasurePopup" },
+    { "name": "closeMeasurePopup", "module": "map-measure", "source": "closeMeasurePopup" },
+    { "name": "deleteMeasure", "module": "map-measure", "source": "deleteMeasure" },
+    { "name": "drawRoadView", "module": "map-roadview", "source": "drawRoadView" },
+    { "name": "enableRoadviewPicker", "module": "map-roadview", "source": "enableRoadviewPicker" },
+    { "name": "disableRoadviewPicker", "module": "map-roadview", "source": "disableRoadviewPicker" },
+    { "name": "toggleRoadviewBtn", "module": "map-roadview", "source": "toggleRoadviewBtn" },
+    { "name": "toggleWfsLayer", "module": "map-wfs", "source": "toggleWfsLayer" },
+    { "name": "toggleWmsLayer", "module": "map-wms", "source": "toggleWmsLayer" },
+    { "name": "toggleConvenienceStore", "module": "map-wfs", "source": "toggleConvenienceStore" },
+    { "name": "togglePharmacy", "module": "map-wfs", "source": "togglePharmacy" },
+    { "name": "toggleHospital", "module": "map-wfs", "source": "toggleHospital" },
+    { "name": "clearAllWfsLayers", "module": "map-wfs", "source": "clearAllWfsLayers" },
+    { "name": "queryWfsFeaturesAt", "module": "map-wfs", "source": "queryWfsFeaturesAt" },
+    { "name": "getWfsLayerInfo", "module": "map-wfs", "source": "getWfsLayerInfo" },
+    { "name": "displayWfsFeatureInfo", "module": "map-wfs", "source": "displayWfsFeatureInfo" },
+    { "name": "showWfsPopup", "module": "map-wfs", "source": "showWfsPopup" },
+    { "name": "closeWfsPopup", "module": "map-wfs", "source": "closeWfsPopup" },
+    { "name": "showWmsPopup", "module": "map-wms", "source": "showWmsPopup" },
+    { "name": "closeWmsPopup", "module": "map-wms", "source": "closeWmsPopup" },
+    { "name": "testPharmacyHospitalApis", "module": "map-wfs", "source": "window.testPharmacyHospitalApis 자기 재할당 (import 없음, 실제 등록은 map-wfs.js:2197)" }
+  ],
+  "initSequence": [
+    { "order": 1, "step": "모듈 평가: import된 각 모듈의 top-level window.* 등록 실행 (map-core → map-events → map-layers → map-tools → map-measure → map-roadview → map-wfs → map-wms → map.js 브리지 → ui → map-area-selector)", "file": "js/modules/map/map.js", "line": 91, "delayMs": 0 },
+    { "order": 2, "step": "DOMContentLoaded 리스너 실행", "file": "js/app.js", "line": 13, "delayMs": 0 },
+    { "order": 3, "step": "window.appInitialized 가드 검사 (true면 return)", "file": "js/app.js", "line": 17, "delayMs": 0 },
+    { "order": 4, "step": "initializeMapWithModules() 호출", "file": "js/app.js", "line": 22, "delayMs": 0 },
+    { "order": 5, "step": "window.mapModulesInitialized / window.mapInitializationInProgress 가드 검사 후 mapInitializationInProgress = true", "file": "js/modules/map/map.js", "line": 48, "delayMs": 0 },
+    { "order": 6, "step": "initializeMap(): ol.Map 생성, VWorld 레이어, setupMapEventListeners, window.baseLayers/overlayLayers/measureLayers 설정", "file": "js/modules/map/map.js", "line": 63, "delayMs": 0 },
+    { "order": 7, "step": "initializeMeasureTools(): 측정 벡터 레이어 추가", "file": "js/modules/map/map.js", "line": 66, "delayMs": 0 },
+    { "order": 8, "step": "initializeWfsLayers(): WFS 벡터 레이어 6개 + MapEventManager 핸들러 8개 등록", "file": "js/modules/map/map.js", "line": 69, "delayMs": 0 },
+    { "order": 9, "step": "initializeWmsLayers(): WMS 타일 레이어 1개 + MapEventManager 핸들러 2개 등록", "file": "js/modules/map/map.js", "line": 72, "delayMs": 0 },
+    { "order": 10, "step": "window.mapModulesInitialized = true, window.mapInitializationInProgress = false", "file": "js/modules/map/map.js", "line": 75, "delayMs": 0 },
+    { "order": 11, "step": "initializeNavigation(): .nav-btn 클릭 → navigateToPage", "file": "js/app.js", "line": 23, "delayMs": 0 },
+    { "order": 12, "step": "initializeLayerPanel(): 패널/탭/사이드탭 리스너, window.toggleTransportSubmenu·toggleAmenitiesSubmenu·toggleConvenienceSubmenu 등록, loadviewBtn.onclick = null", "file": "js/app.js", "line": 24, "delayMs": 0 },
+    { "order": 13, "step": "initializeHeaderToggle(): 헤더 숨김 토글 + updateSize 예약", "file": "js/app.js", "line": 25, "delayMs": 0 },
+    { "order": 14, "step": "window.appInitialized = true", "file": "js/app.js", "line": 33, "delayMs": 0 },
+    { "order": 15, "step": "map.once('postrender') → 500ms 후 .loaded 클래스 부여 및 window.hideLoading() (내부 300ms 후 #loading 숨김)", "file": "js/modules/map/map-core.js", "line": 118, "delayMs": 500 },
+    { "order": 16, "step": "setTimeout → MapEventManager.debugHandlers() 콘솔 출력", "file": "js/modules/map/map.js", "line": 81, "delayMs": 1000 },
+    { "order": 17, "step": "setTimeout → initializeAreaSelector(): map.on('click'/'pointermove') 직접 등록 (가드 없음)", "file": "js/app.js", "line": 28, "delayMs": 1000 }
+  ],
+  "guards": [
+    { "flag": "window.appInitialized", "file": "js/app.js", "line": 17 },
+    { "flag": "window.appInitialized", "file": "js/app.js", "line": 33 },
+    { "flag": "window.mapModulesInitialized", "file": "js/modules/map/map.js", "line": 48 },
+    { "flag": "window.mapModulesInitialized", "file": "js/modules/map/map.js", "line": 75 },
+    { "flag": "window.mapInitializationInProgress", "file": "js/modules/map/map.js", "line": 54 },
+    { "flag": "window.mapInitializationInProgress", "file": "js/modules/map/map.js", "line": 60 },
+    { "flag": "window.mapInitializationInProgress", "file": "js/modules/map/map.js", "line": 76 },
+    { "flag": "wfsInitialized (모듈 로컬)", "file": "js/modules/map/map-wfs.js", "line": 310 },
+    { "flag": "window.wfsLayersInitialized", "file": "js/modules/map/map-wfs.js", "line": 316 },
+    { "flag": "window.wfsLayersInitialized", "file": "js/modules/map/map-wfs.js", "line": 604 }
+  ],
+  "eventHandlers": [
+    { "id": "wfs-move-convenience_store", "module": "map-wfs", "eventType": "moveend", "file": "js/modules/map/map-wfs.js", "line": 447 },
+    { "id": "wfs-move-bus_stop", "module": "map-wfs", "eventType": "moveend", "file": "js/modules/map/map-wfs.js", "line": 447 },
+    { "id": "wfs-move-cctv", "module": "map-wfs", "eventType": "moveend", "file": "js/modules/map/map-wfs.js", "line": 447 },
+    { "id": "wfs-move-pharmacy", "module": "map-wfs", "eventType": "moveend", "file": "js/modules/map/map-wfs.js", "line": 447 },
+    { "id": "wfs-move-hospital", "module": "map-wfs", "eventType": "moveend", "file": "js/modules/map/map-wfs.js", "line": 447 },
+    { "id": "wfs-move-government_office", "module": "map-wfs", "eventType": "moveend", "file": "js/modules/map/map-wfs.js", "line": 447 },
+    { "id": "wfs-general-click", "module": "map-wfs", "eventType": "click", "file": "js/modules/map/map-wfs.js", "line": 537 },
+    { "id": "wfs-pointer-move", "module": "map-wfs", "eventType": "pointermove", "file": "js/modules/map/map-wfs.js", "line": 561 },
+    { "id": "wms-single-click", "module": "map-wms", "eventType": "singleclick", "file": "js/modules/map/map-wms.js", "line": 70 },
+    { "id": "wms-pointer-move", "module": "map-wms", "eventType": "pointermove", "file": "js/modules/map/map-wms.js", "line": 115 }
+  ],
+  "layers": [
+    { "name": "common_map", "type": "XYZ", "module": "map-core", "sourceUrl": "https://xdworld.vworld.kr/2d/Base/service/{z}/{x}/{y}.png", "zIndex": null, "visible": true },
+    { "name": "satellite", "type": "XYZ", "module": "map-core", "sourceUrl": "https://xdworld.vworld.kr/2d/Satellite/service/{z}/{x}/{y}.jpeg", "zIndex": null, "visible": false },
+    { "name": "hybrid_overlay", "type": "XYZ", "module": "map-core", "sourceUrl": "https://xdworld.vworld.kr/2d/Hybrid/service/{z}/{x}/{y}.png", "zIndex": null, "visible": false },
+    { "name": "measureLayer", "type": "Vector", "module": "map-measure", "sourceUrl": null, "zIndex": null, "visible": null },
+    { "name": "convenience_store", "type": "WFS", "module": "map-wfs", "sourceUrl": "getApiUrl('/map/convenience-store') → http://localhost:8100/map/convenience-store | https://api.sj-lab.co.kr/map/convenience-store", "zIndex": 1000, "visible": false },
+    { "name": "bus_stop", "type": "WFS", "module": "map-wfs", "sourceUrl": "getApiUrl('/map/busStop-info') → http://localhost:8100/map/busStop-info | https://api.sj-lab.co.kr/map/busStop-info", "zIndex": 1000, "visible": false },
+    { "name": "cctv", "type": "WFS", "module": "map-wfs", "sourceUrl": "getApiUrl('/map/cctv-info') → http://localhost:8100/map/cctv-info | https://api.sj-lab.co.kr/map/cctv-info", "zIndex": 1000, "visible": false },
+    { "name": "pharmacy", "type": "WFS", "module": "map-wfs", "sourceUrl": "getApiUrl('/map/pharmacy-info') → http://localhost:8100/map/pharmacy-info | https://api.sj-lab.co.kr/map/pharmacy-info", "zIndex": 1000, "visible": false },
+    { "name": "hospital", "type": "WFS", "module": "map-wfs", "sourceUrl": "getApiUrl('/map/hospital-info') → http://localhost:8100/map/hospital-info | https://api.sj-lab.co.kr/map/hospital-info", "zIndex": 1000, "visible": false },
+    { "name": "government_office", "type": "WFS", "module": "map-wfs", "sourceUrl": "getApiUrl('/map/governmentOffice-info') → http://localhost:8100/map/governmentOffice-info | https://api.sj-lab.co.kr/map/governmentOffice-info", "zIndex": 1000, "visible": false },
+    { "name": "ne:convenience_store", "type": "WMS", "module": "map-wms", "sourceUrl": "https://geoserver.sj-lab.co.kr/geoserver/ne/wms", "zIndex": 1000, "visible": false },
+    { "name": "tempRectangle", "type": "Vector", "module": "map-area-selector", "sourceUrl": null, "zIndex": 999, "visible": null },
+    { "name": "selectionRectangle", "type": "Vector", "module": "map-area-selector", "sourceUrl": null, "zIndex": 1000, "visible": null }
+  ],
+  "inlineHandlers": [
+    { "name": "toggleRoadviewBtn", "registered": true, "file": "index.html", "line": 200 },
+    { "name": "toggleAmenitiesSubmenu", "registered": true, "file": "index.html", "line": 208 },
+    { "name": "toggleTransportSubmenu", "registered": true, "file": "index.html", "line": 216 },
+    { "name": "closeWmsPopup", "registered": true, "file": "js/modules/map/map-wms.js", "line": 197 },
+    { "name": "closeWfsPopup", "registered": true, "file": "js/modules/map/map-wfs.js", "line": 1339 },
+    { "name": "closeMeasurePopup", "registered": true, "file": "js/modules/map/map-measure.js", "line": 1034 },
+    { "name": "deleteMeasure", "registered": true, "file": "js/modules/map/map-measure.js", "line": 1040 },
+    { "name": "closeEditPopup", "registered": true, "file": "js/modules/map/map-area-selector.js", "line": 337 },
+    { "name": "clearAreaSelection", "registered": true, "file": "js/modules/map/map-area-selector.js", "line": 342 },
+    { "name": "openFabricEditor", "registered": true, "file": "js/modules/map/map-area-selector.js", "line": 343 }
+  ],
+  "popups": [
+    { "page": "html/loadview/load-view.html", "openedBy": "map-roadview" },
+    { "page": "html/fabric/fabric-editor.html", "openedBy": "map-area-selector" }
+  ],
+  "risks": [
+    { "severity": "high", "title": "window.mapInstance가 항상 undefined", "detail": "map.js:91과 map-core.js:154가 모듈 평가 시점(initializeMap() 호출 전)에 window.mapInstance를 할당하고 이후 재할당하는 코드가 저장소에 없음. ui.js:101-108, 155의 updateSize() 호출이 `if (window.mapInstance)`에 걸려 실행되지 않아 헤더 토글/페이지 전환 시 캔버스 크기가 갱신되지 않을 수 있고, CLAUDE.md의 디버그 진입점 window.mapInstance도 무효. (정적 분석 결과이며 브라우저 런타임 확인은 하지 않음)", "file": "js/modules/map/map.js", "line": 91 },
+    { "severity": "medium", "title": "WFS 캐시 재표시 경로가 줌별 최대 개수 제한을 우회", "detail": "loadWfsData()의 캐시 분기는 벡터 소스가 비어 있으면 wfsDataCache 전체를 필터 없이 addFeatures 함(주석 '모든 데이터 추가 (뷰포트 필터링 제거)'). 백그라운드 캐싱 완료 후 레이어를 껐다 켜면 다음 moveend까지 getMaxFeaturesByZoom/spatialSampling 가드 없이 전체 피처가 렌더링됨 — docs/map-architecture.md 규칙과 불일치.", "file": "js/modules/map/map-wfs.js", "line": 653 },
+    { "severity": "medium", "title": "로드뷰 버튼 인라인 onclick 무력화 및 이중 리스너", "detail": "index.html:200의 onclick=\"toggleRoadviewBtn()\"은 ui.js:340에서 onclick=null로 제거되어 초기화 이후 toggleRoadviewBtn(map-roadview.js:152)은 호출되지 않음. 대신 ui.js:328-331(active 클래스 토글)과 ui.js:341-349(피커 토글) 두 리스너가 붙음. ESC로 피커 종료(map-roadview.js:375-377) 시 버튼 active 클래스가 동기화되지 않음.", "file": "js/modules/ui.js", "line": 340 },
+    { "severity": "medium", "title": "zIndex 충돌/미지정", "detail": "WFS 벡터(map-wfs.js:422), WMS 타일(map-wms.js:55), 영역 선택 사각형(map-area-selector.js:295)이 모두 zIndex 1000으로 동일해 상대 순서가 추가 순서에 의존. 측정 레이어(map-measure.js:66)는 zIndex 미지정이라 POI 아이콘 아래에 그려질 수 있음.", "file": "js/modules/map/map-area-selector.js", "line": 295 },
+    { "severity": "medium", "title": "영역 선택 초기화에 중복 가드 없음 + MapEventManager 우회", "detail": "initializeAreaSelector()는 map.on('click'/'pointermove')를 직접 등록(map-area-selector.js:674, 677)하고 가드가 없음. app.js:28-30의 setTimeout은 appInitialized 가드 이후에 실행되며 window.initializeAreaSelector(map-area-selector.js:688)로도 노출되어 재호출 시 리스너가 중복됨.", "file": "js/modules/map/map-area-selector.js", "line": 669 },
+    { "severity": "medium", "title": "배경지도 버튼이 hybrid 오버레이를 set이 아닌 toggle로 처리", "detail": "ui.js:652-657은 위성/일반 버튼 클릭마다 toggleOverlay('hybrid')를 호출하는데 toggleOverlay(map-layers.js:19-23)는 현재 상태를 반전함. 초기 상태(일반, hybrid 꺼짐)에서 '일반' 버튼을 누르거나 '위성'을 연속 클릭하면 상태가 뒤집혀 일반 지도 위에 하이브리드가 켜질 수 있음.", "file": "js/modules/ui.js", "line": 652 },
+    { "severity": "medium", "title": "측정 모듈의 MapEventManager 등록 함수가 dead code이며 호출 시 ReferenceError", "detail": "registerMeasureEventListeners()/unregisterMeasureEventListeners()(map-measure.js:6-50)는 어디서도 호출되지 않음. 참조하는 cancelMeasurement, moveListener, clickListener, finishAngle, finishRadius, preMoveListener, completedCancelMeasurement는 각 측정 함수 내부 지역 변수(map-measure.js:265, 519, 584, 599, 920 등)라 모듈 스코프에 없음. 실제 측정 도구는 map.on/map.un을 직접 사용(map-measure.js:333, 646-649, 1000-1002 등)해 MapEventManager 중복 방지를 받지 않음.", "file": "js/modules/map/map-measure.js", "line": 6 },
+    { "severity": "low", "title": "map.js 브리지 규칙 밖에서 등록되는 전역 함수 다수", "detail": "CLAUDE.md는 전역 함수를 map.js에서 등록하라고 하지만 toggleBusStop/toggleCctv/toggleGovernmentOffice/show*Info/testWfsUrl(map-wfs.js:2165-2196), getMap(map-core.js:155), getCurrentLayer/getAllLayers(map-layers.js:43-44), 영역선택 7개(map-area-selector.js:684-690), toggleTransportSubmenu/toggleAmenitiesSubmenu/toggleConvenienceSubmenu(ui.js:353, 375, 385), hideLoading(ui.js:696)은 각 모듈이 직접 등록. ui.js는 이 중 일부를 window로 호출하므로 모듈 자기 등록에 의존. 또한 map.js의 대부분 할당은 각 모듈의 자기 등록과 중복.", "file": "js/modules/map/map-wfs.js", "line": 2165 },
+    { "severity": "low", "title": "window.testPharmacyHospitalApis 자기 재할당(no-op)", "detail": "map.js:123은 import 없이 window.testPharmacyHospitalApis = window.testPharmacyHospitalApis를 수행. 실제 등록은 map-wfs.js:2197.", "file": "js/modules/map/map.js", "line": 123 },
+    { "severity": "low", "title": "ui.js가 참조하는 window.toggleCadastralLayer 미정의", "detail": "ui.js:319-320에서 window.toggleCadastralLayer를 확인 후 호출하지만 저장소 JS/HTML 어디에도 할당이 없음(존재 체크로 오류는 없음).", "file": "js/modules/ui.js", "line": 319 },
+    { "severity": "low", "title": "존재하지 않는 WMS 레이어 분기", "detail": "WFS 토글 함수들이 window.wmsLayers.bus_stop/cctv/pharmacy/hospital/government_office를 검사(map-wfs.js:910-914, 967-971, 1032-1036, 1100-1104, 1168-1172)하지만 WMS_CONFIG에는 convenience_store만 있음(map-wms.js:10-18). 실행되지 않는 분기.", "file": "js/modules/map/map-wfs.js", "line": 910 },
+    { "severity": "low", "title": "WMS pointermove 커서 판정이 피처 유무와 무관", "detail": "wms-pointer-move 핸들러는 getFeatureInfoUrl()이 URL을 반환하면 pointer로 바꾸는데, 이는 피처 존재가 아니라 URL 생성 가능 여부라 WMS 활성 시 항상 pointer. 같은 pointermove에서 wfs-pointer-move(map-wfs.js:586-589)도 커서를 설정해 서로 덮어씀.", "file": "js/modules/map/map-wms.js", "line": 129 },
+    { "severity": "low", "title": "debugHandlers가 설정되지 않는 전역을 참조", "detail": "map-events.js:259-260은 view._zoomHandlers와 window.registeredZoomHandlers를 출력하지만 저장소에 할당 코드가 없음(항상 undefined).", "file": "js/modules/map/map-events.js", "line": 260 },
+    { "severity": "low", "title": "GeoJSON format 생성 시 featureProjection과 readFeatures 인자 불일치 (확인불가)", "detail": "벡터 소스의 GeoJSON format은 featureProjection: map.getView().getProjection()으로 생성(map-wfs.js:339)되지만 readFeatures에는 vectorSource.getProjection()(null)을 넘김(map-wfs.js:703, 746-749, 283-286). 문서는 null 전달 시 무변환에 의존한다고 명시하나, null 옵션이 format 기본값을 덮어쓰는지는 OpenLayers 내부 동작이라 이 저장소 코드만으로 확인불가.", "file": "js/modules/map/map-wfs.js", "line": 339 },
+    { "severity": "low", "title": "mapInitializationInProgress가 예외 시 true로 고착", "detail": "map.js:60에서 true로 설정 후 try/finally 없이 initializeMap 등 호출. 도중 예외가 나면 map.js:76에 도달하지 못해 이후 호출이 모두 map.js:54에서 조기 반환됨.", "file": "js/modules/map/map.js", "line": 60 },
+    { "severity": "low", "title": "하드코딩된 카카오 앱 키 / 외부 URL", "detail": "KAKAO_APP_KEY가 index.html:557과 load-view.html:98(폴백)에 중복 하드코딩. 외부 URL은 VWorld(map-core.js:17, 26, 40), GeoServer(map-wms.js:12), Kakao SDK(map-roadview.js:202)로 문서화된 패턴이며, WFS 엔드포인트 6개는 모두 getApiUrl()을 경유(map-wfs.js:26-106) — WFS 하드코딩 위반은 발견되지 않음.", "file": "index.html", "line": 557 },
+    { "severity": "low", "title": "load-view.html이 radius 파라미터를 읽지 않음", "detail": "drawRoadView는 radius를 쿼리로 전달(map-roadview.js:108)하지만 load-view.html에서는 lat/lng/appkey/zoom만 읽음(load-view.html:94-98, 193).", "file": "js/modules/map/map-roadview.js", "line": 108 },
+    { "severity": "low", "title": "팝업 innerHTML에 서버 속성값 비이스케이프 삽입", "detail": "WMS 팝업이 properties.fclty_nm/adres/rn_adres를 이스케이프 없이 innerHTML 템플릿에 삽입(map-wms.js:202-213). WFS 팝업(map-wfs.js:1292 이후)도 동일 방식으로 보이나 전체 템플릿은 상세 검토하지 않음.", "file": "js/modules/map/map-wms.js", "line": 202 },
+    { "severity": "low", "title": "app.js 미사용 import", "detail": "hideLoading(app.js:6), makeAjaxRequest/utils(app.js:10)를 import하지만 app.js 본문에서 사용하지 않음.", "file": "js/app.js", "line": 10 },
+    { "severity": "low", "title": "문서(테스트 없음)와 저장소 불일치", "detail": "CLAUDE.md는 테스트 스크립트가 없다고 하지만 js/modules/map/map-core.test.js(214줄, node:test 기반)가 존재함.", "file": "js/modules/map/map-core.test.js", "line": 8 },
+    { "severity": "low", "title": "로고 클릭 시 /map 경로 이동 (확인불가)", "detail": "goToMap()은 window.location.origin + '/map'으로 이동(ui.js:284-285). 정적 서버(python -m http.server)에 /map 경로가 존재하는지는 저장소 코드로 확인불가.", "file": "js/modules/ui.js", "line": 284 }
+  ]
+}
+
+  </script>
+
+  <!-- JavaScript Logic -->
+  <script>
+    // Global State
+    let analysisData = null;
+    let bridgeItems = [];
+    let selectedModuleId = null;
+    let activeEdgeFilter = 'all';
+    let activeBridgeFilter = 'all';
+    let activeRisksSeverity = 'all';
+    let currentZoom = 1;
+    let panX = 0;
+    let panY = 0;
+    let isPanning = false;
+    let panStartX = 0;
+    let panStartY = 0;
+
+    // Node Positions Layout with map.js bridge at the exact center (600, 410)
+    const nodeLayout = {
+      'map': { x: 600, y: 410, w: 160, h: 58, label: 'map.js', sub: '중심 브리지 (125줄)', isBridge: true, color: '#38bdf8' },
+      'app': { x: 600, y: 230, w: 140, h: 50, label: 'app.js', sub: '최상위 초기화 (45줄)', color: '#60a5fa' },
+      'index-html': { x: 380, y: 100, w: 140, h: 50, label: 'index.html', sub: '진입 HTML (560줄)', color: '#818cf8' },
+      'helpers': { x: 820, y: 100, w: 140, h: 50, label: 'helpers.js', sub: '범용 유틸 (63줄)', color: '#94a3b8' },
+      'ui': { x: 230, y: 240, w: 140, h: 50, label: 'ui.js', sub: 'SPA/UI 연동 (703줄)', color: '#34d399' },
+      'map-area-selector': { x: 940, y: 240, w: 160, h: 50, label: 'map-area-selector.js', sub: '영역 선택 (698줄)', color: '#f472b6' },
+      'fabric-editor': { x: 1110, y: 370, w: 150, h: 50, label: 'fabric-editor.html', sub: '이미지 편집기 (4007줄)', color: '#c084fc' },
+      'map-layers': { x: 320, y: 410, w: 140, h: 50, label: 'map-layers.js', sub: '배경/오버레이 (46줄)', color: '#4ade80' },
+      'map-tools': { x: 880, y: 410, w: 140, h: 50, label: 'map-tools.js', sub: '디버깅 도구 (86줄)', color: '#fb923c' },
+      'map-core': { x: 480, y: 560, w: 140, h: 50, label: 'map-core.js', sub: 'Map/VWorld (157줄)', color: '#38bdf8' },
+      'map-events': { x: 720, y: 560, w: 140, h: 50, label: 'map-events.js', sub: 'MapEventManager (269줄)', color: '#38bdf8' },
+      'map-measure': { x: 230, y: 580, w: 140, h: 50, label: 'map-measure.js', sub: '측정 도구 (1339줄)', color: '#a78bfa' },
+      'map-roadview': { x: 140, y: 410, w: 140, h: 50, label: 'map-roadview.js', sub: '카카오 로드뷰 (490줄)', color: '#facc15' },
+      'load-view': { x: 60, y: 530, w: 140, h: 50, label: 'load-view.html', sub: '로드뷰 iframe (267줄)', color: '#c084fc' },
+      'map-wfs': { x: 440, y: 730, w: 140, h: 50, label: 'map-wfs.js', sub: 'WFS POI 6종 (2227줄)', color: '#2dd4bf' },
+      'map-wms': { x: 740, y: 730, w: 140, h: 50, label: 'map-wms.js', sub: 'WMS 편의점 (383줄)', color: '#fb7185' }
+    };
+
+    // Error collection for observable acceptance check
+    window.__consoleErrors = [];
+    window.addEventListener('error', function(event) {
+      window.__consoleErrors.push(event.message || String(event));
+    });
+    const originalConsoleError = console.error;
+    console.error = function() {
+      window.__consoleErrors.push(Array.from(arguments).join(' '));
+      originalConsoleError.apply(console, arguments);
+    };
+
+    // Initialization on DOMContentLoaded
+    document.addEventListener('DOMContentLoaded', function() {
+      try {
+        const rawJsonText = document.getElementById('map-analysis-data').textContent;
+        analysisData = JSON.parse(rawJsonText);
+        initMergedBridgeItems();
+        initVisualization();
+      } catch (err) {
+        console.error('Failed to initialize analysis visualization:', err);
+      }
+    });
+
+    function initMergedBridgeItems() {
+      const map = new Map();
+      analysisData.windowExports.forEach(function(we) {
+        map.set(we.name, {
+          name: we.name,
+          module: we.module,
+          source: we.source,
+          inWindowExports: true,
+          inInlineHandlers: false,
+          registered: true,
+          file: 'js/modules/map/map.js',
+          line: 91,
+          notes: ''
+        });
+      });
+
+      analysisData.inlineHandlers.forEach(function(ih) {
+        if (map.has(ih.name)) {
+          const item = map.get(ih.name);
+          item.inInlineHandlers = true;
+          item.inlineFile = ih.file;
+          item.inlineLine = ih.line;
+          item.registered = ih.registered;
+        } else {
+          map.set(ih.name, {
+            name: ih.name,
+            module: ih.file.includes('html') ? 'index-html' : ih.file.replace('js/modules/map/', '').replace('.js', ''),
+            source: '인라인 핸들러 (' + ih.file + ':' + ih.line + ')',
+            inWindowExports: false,
+            inInlineHandlers: true,
+            registered: ih.registered,
+            inlineFile: ih.file,
+            inlineLine: ih.line,
+            notes: ''
+          });
+        }
+      });
+
+      if (map.has('mapInstance')) {
+        map.get('mapInstance').specialStatus = 'runtime-undefined';
+        map.get('mapInstance').notes = '모듈 평가 시점 getMap() 호출로 항상 undefined (High Risk: map.js:91)';
+      }
+      if (map.has('toggleRoadviewBtn')) {
+        map.get('toggleRoadviewBtn').specialStatus = 'disabled-onclick';
+        map.get('toggleRoadviewBtn').notes = 'ui.js:340에서 loadviewBtn.onclick = null로 인라인 무력화됨';
+      }
+      if (map.has('testPharmacyHospitalApis')) {
+        map.get('testPharmacyHospitalApis').specialStatus = 'self-assign';
+        map.get('testPharmacyHospitalApis').notes = 'map.js:123 자기 재할당 no-op, 실제 등록은 map-wfs.js:2197';
+      }
+
+      // Add missing cadastral layer referenced in ui.js:319
+      map.set('toggleCadastralLayer', {
+        name: 'toggleCadastralLayer',
+        module: 'ui',
+        source: 'ui.js:319 조건부 참조',
+        inWindowExports: false,
+        inInlineHandlers: false,
+        registered: false,
+        inlineFile: 'js/modules/ui.js',
+        inlineLine: 319,
+        specialStatus: 'not-defined',
+        notes: 'ui.js:319에서 호출하지만 코드 어디에도 등록/정의되지 않음 (registered=false)'
+      });
+
+      bridgeItems = Array.from(map.values());
+    }
+
+    function initVisualization() {
+      setupTheme();
+      renderSummaryCounts();
+      renderModuleGraph();
+      renderInitTimeline();
+      renderLayerStack();
+      renderBridgeTable();
+      renderRisksList();
+      setupGraphPanZoom();
+
+      // Observable acceptance check recorded globally
+      window.__validationResult = {
+        modulesCount: analysisData.modules.length,
+        edgesCount: analysisData.edges.length,
+        layersCount: analysisData.layers.length,
+        risksCount: analysisData.risks.length,
+        windowExportsCount: analysisData.windowExports.length,
+        initSequenceCount: analysisData.initSequence.length,
+        guardsCount: analysisData.guards.length,
+        eventHandlersCount: analysisData.eventHandlers.length,
+        inlineHandlersCount: analysisData.inlineHandlers.length,
+        popupsCount: analysisData.popups.length,
+        consoleErrorsCount: window.__consoleErrors.length
+      };
+    }
+
+    /* Tab Switching */
+    function switchTab(tabId) {
+      const tabBtns = document.querySelectorAll('.nav-tab-btn');
+      tabBtns.forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+      });
+
+      const sections = document.querySelectorAll('.view-section');
+      sections.forEach(function(sec) {
+        sec.classList.toggle('active', sec.id === 'view-' + tabId);
+      });
+    }
+
+    /* Theme Management */
+    function setupTheme() {
+      try {
+        const savedTheme = localStorage.getItem('sj-map-theme');
+        if (savedTheme) {
+          document.documentElement.setAttribute('data-theme', savedTheme);
+          updateThemeToggleUi(savedTheme);
+        } else {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          updateThemeToggleUi('dark');
+        }
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        updateThemeToggleUi('dark');
+      }
+    }
+
+    function toggleTheme() {
+      const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+      const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', nextTheme);
+      try {
+        localStorage.setItem('sj-map-theme', nextTheme);
+      } catch (e) {}
+      updateThemeToggleUi(nextTheme);
+    }
+
+    function updateThemeToggleUi(theme) {
+      const icon = document.getElementById('theme-icon');
+      const text = document.getElementById('theme-text');
+      if (theme === 'dark') {
+        icon.textContent = '☀️';
+        text.textContent = '라이트 모드';
+      } else {
+        icon.textContent = '🌙';
+        text.textContent = '다크 모드';
+      }
+    }
+
+    function renderSummaryCounts() {
+      document.getElementById('summary-modules-count').textContent = analysisData.modules.length;
+      document.getElementById('summary-bridge-count').textContent = bridgeItems.length;
+      document.getElementById('summary-layers-count').textContent = analysisData.layers.length;
+      document.getElementById('summary-risks-count').textContent = analysisData.risks.length;
+    }
+
+    /* (1) Module Dependency Graph */
+    function renderModuleGraph() {
+      const edgesLayer = document.getElementById('edges-layer');
+      const nodesLayer = document.getElementById('nodes-layer');
+      edgesLayer.innerHTML = '';
+      nodesLayer.innerHTML = '';
+
+      // Count multiple edges between same pair
+      const pairCounts = {};
+      analysisData.edges.forEach(function(edge) {
+        const key = [edge.from, edge.to].sort().join('___');
+        pairCounts[key] = (pairCounts[key] || 0) + 1;
+      });
+
+      const pairIndexes = {};
+
+      // Draw Edges
+      analysisData.edges.forEach(function(edge, idx) {
+        const src = nodeLayout[edge.from];
+        const tgt = nodeLayout[edge.to];
+        if (!src || !tgt) return;
+
+        const key = [edge.from, edge.to].sort().join('___');
+        const pairTotal = pairCounts[key] || 1;
+        const pairIdx = pairIndexes[key] || 0;
+        pairIndexes[key] = pairIdx + 1;
+
+        const pathData = computeEdgePath(src, tgt, pairIdx, pairTotal, edge.from > edge.to);
+
+        const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pathEl.setAttribute('d', pathData);
+        pathEl.setAttribute('class', 'svg-edge kind-' + edge.kind);
+        pathEl.setAttribute('data-from', edge.from);
+        pathEl.setAttribute('data-to', edge.to);
+        pathEl.setAttribute('data-kind', edge.kind);
+        pathEl.setAttribute('data-label', edge.label);
+        pathEl.setAttribute('marker-end', 'url(#arrow-' + edge.kind + ')');
+
+        // Tooltip on Hover
+        pathEl.addEventListener('mouseenter', function(evt) {
+          showEdgeTooltip(evt, edge);
+          pathEl.classList.add('hovered');
+        });
+        pathEl.addEventListener('mouseleave', function() {
+          hideEdgeTooltip();
+          pathEl.classList.remove('hovered');
+        });
+
+        edgesLayer.appendChild(pathEl);
+      });
+
+      // Draw Nodes
+      analysisData.modules.forEach(function(mod) {
+        const conf = nodeLayout[mod.id];
+        if (!conf) return;
+
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('class', 'svg-node' + (conf.isBridge ? ' is-bridge' : ''));
+        g.setAttribute('data-id', mod.id);
+        g.setAttribute('transform', 'translate(' + conf.x + ',' + conf.y + ')');
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', -conf.w / 2);
+        rect.setAttribute('y', -conf.h / 2);
+        rect.setAttribute('width', conf.w);
+        rect.setAttribute('height', conf.h);
+        rect.setAttribute('rx', '8');
+        rect.setAttribute('ry', '8');
+        rect.setAttribute('fill', 'var(--bg-card)');
+        rect.setAttribute('stroke', conf.isBridge ? '#38bdf8' : 'var(--border-color)');
+        rect.setAttribute('stroke-width', conf.isBridge ? '2.5' : '1.5');
+
+        // Bridge glowing tag
+        if (conf.isBridge) {
+          const bridgeTag = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          bridgeTag.setAttribute('x', -conf.w / 2 + 10);
+          bridgeTag.setAttribute('y', -conf.h / 2 - 9);
+          bridgeTag.setAttribute('width', '74');
+          bridgeTag.setAttribute('height', '18');
+          bridgeTag.setAttribute('rx', '4');
+          bridgeTag.setAttribute('fill', '#0284c7');
+          g.appendChild(bridgeTag);
+
+          const tagText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          tagText.setAttribute('x', -conf.w / 2 + 47);
+          tagText.setAttribute('y', -conf.h / 2 + 4);
+          tagText.setAttribute('text-anchor', 'middle');
+          tagText.setAttribute('fill', '#ffffff');
+          tagText.setAttribute('font-size', '10px');
+          tagText.setAttribute('font-weight', 'bold');
+          tagText.textContent = '🌟 중심 브리지';
+          g.appendChild(tagText);
+        }
+
+        const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        titleText.setAttribute('x', '0');
+        titleText.setAttribute('y', conf.isBridge ? '2' : '-4');
+        titleText.setAttribute('text-anchor', 'middle');
+        titleText.setAttribute('fill', 'var(--text-primary)');
+        titleText.setAttribute('font-size', '13px');
+        titleText.setAttribute('font-weight', '700');
+        titleText.textContent = conf.label;
+
+        const subText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        subText.setAttribute('x', '0');
+        subText.setAttribute('y', conf.isBridge ? '18' : '14');
+        subText.setAttribute('text-anchor', 'middle');
+        subText.setAttribute('fill', 'var(--text-muted)');
+        subText.setAttribute('font-size', '10px');
+        subText.textContent = conf.sub;
+
+        g.appendChild(rect);
+        g.appendChild(titleText);
+        g.appendChild(subText);
+
+        // Click selection
+        g.addEventListener('click', function(evt) {
+          evt.stopPropagation();
+          selectModule(mod.id);
+        });
+
+        // Make node draggable
+        setupNodeDrag(g, mod.id);
+
+        nodesLayer.appendChild(g);
+      });
+
+      // Canvas background click clears selection
+      document.getElementById('graph-svg').addEventListener('click', function() {
+        deselectModule();
+      });
+    }
+
+    function computeEdgePath(src, tgt, pairIdx, pairTotal, isReverse) {
+      const mx = (src.x + tgt.x) / 2;
+      const my = (src.y + tgt.y) / 2;
+      const dx = tgt.x - src.x;
+      const dy = tgt.y - src.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const nx = -dy / dist;
+      const ny = dx / dist;
+
+      let curvature = 0;
+      if (pairTotal > 1) {
+        curvature = (pairIdx - (pairTotal - 1) / 2) * 38;
+      } else {
+        curvature = 20; // default slight curve
+      }
+
+      if (isReverse) curvature = -curvature;
+
+      const cx = mx + nx * curvature;
+      const cy = my + ny * curvature;
+
+      const startPt = getBoxIntersection(cx, cy, src.x, src.y, src.w, src.h);
+      const endPt = getBoxIntersection(cx, cy, tgt.x, tgt.y, tgt.w, tgt.h);
+
+      return 'M ' + startPt.x + ' ' + startPt.y + ' Q ' + cx + ' ' + cy + ' ' + endPt.x + ' ' + endPt.y;
+    }
+
+    function getBoxIntersection(x1, y1, x2, y2, w, h) {
+      const dx = x1 - x2;
+      const dy = y1 - y2;
+      if (dx === 0 && dy === 0) return { x: x2, y: y2 };
+      const halfW = w / 2 + 5;
+      const halfH = h / 2 + 5;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      let scale = 1;
+      if (absDx * halfH > absDy * halfW) {
+        scale = halfW / absDx;
+      } else {
+        scale = halfH / absDy;
+      }
+      return {
+        x: Math.round(x2 + dx * scale),
+        y: Math.round(y2 + dy * scale)
+      };
+    }
+
+    function setupNodeDrag(nodeGroup, moduleId) {
+      let isDragging = false;
+      let startMouseX = 0;
+      let startMouseY = 0;
+      let initialNodeX = 0;
+      let initialNodeY = 0;
+
+      nodeGroup.addEventListener('mousedown', function(evt) {
+        if (evt.button !== 0) return;
+        isDragging = true;
+        startMouseX = evt.clientX;
+        startMouseY = evt.clientY;
+        initialNodeX = nodeLayout[moduleId].x;
+        initialNodeY = nodeLayout[moduleId].y;
+        evt.stopPropagation();
+      });
+
+      window.addEventListener('mousemove', function(evt) {
+        if (!isDragging) return;
+        const dx = (evt.clientX - startMouseX) / currentZoom;
+        const dy = (evt.clientY - startMouseY) / currentZoom;
+        nodeLayout[moduleId].x = initialNodeX + dx;
+        nodeLayout[moduleId].y = initialNodeY + dy;
+        nodeGroup.setAttribute('transform', 'translate(' + nodeLayout[moduleId].x + ',' + nodeLayout[moduleId].y + ')');
+        updateConnectedEdges(moduleId);
+      });
+
+      window.addEventListener('mouseup', function() {
+        isDragging = false;
+      });
+    }
+
+    function updateConnectedEdges(moduleId) {
+      const edges = document.querySelectorAll('.svg-edge');
+      edges.forEach(function(edgeEl) {
+        const from = edgeEl.getAttribute('data-from');
+        const to = edgeEl.getAttribute('data-to');
+        if (from === moduleId || to === moduleId) {
+          const src = nodeLayout[from];
+          const tgt = nodeLayout[to];
+          if (src && tgt) {
+            const newPath = computeEdgePath(src, tgt, 0, 1, false);
+            edgeEl.setAttribute('d', newPath);
+          }
+        }
+      });
+    }
+
+    function selectModule(modId) {
+      selectedModuleId = modId;
+      const mod = analysisData.modules.find(function(m) { return m.id === modId; });
+      if (!mod) return;
+
+      // Highlight active node
+      const nodes = document.querySelectorAll('.svg-node');
+      const edges = document.querySelectorAll('.svg-edge');
+
+      const connectedNeighbors = new Set([modId]);
+
+      edges.forEach(function(edgeEl) {
+        const from = edgeEl.getAttribute('data-from');
+        const to = edgeEl.getAttribute('data-to');
+        const isConnected = (from === modId || to === modId);
+        if (isConnected) {
+          connectedNeighbors.add(from);
+          connectedNeighbors.add(to);
+          edgeEl.classList.remove('dimmed');
+          edgeEl.style.strokeWidth = '3px';
+        } else {
+          edgeEl.classList.add('dimmed');
+          edgeEl.style.strokeWidth = '';
+        }
+      });
+
+      nodes.forEach(function(nodeEl) {
+        const nid = nodeEl.getAttribute('data-id');
+        nodeEl.classList.toggle('selected', nid === modId);
+        if (connectedNeighbors.has(nid)) {
+          nodeEl.classList.remove('dimmed');
+        } else {
+          nodeEl.classList.add('dimmed');
+        }
+      });
+
+      // Populate Side Panel
+      renderSidePanel(mod);
+    }
+
+    function deselectModule() {
+      selectedModuleId = null;
+      document.querySelectorAll('.svg-node').forEach(function(n) {
+        n.classList.remove('selected');
+        n.classList.remove('dimmed');
+      });
+      document.querySelectorAll('.svg-edge').forEach(function(e) {
+        e.classList.remove('dimmed');
+        e.style.strokeWidth = '';
+      });
+
+      document.getElementById('panel-module-title').textContent = '모듈 선택 대기';
+      document.getElementById('panel-module-file').textContent = '그래프에서 노드를 클릭하세요';
+      document.getElementById('panel-body').innerHTML = '<p style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">노드를 클릭하면 해당 모듈의 역할, 줄 수, windowExports, eventHandlers, 레이어 목록, 연결 의존관계 및 관련 위험이 여기에 표시됩니다.</p>';
+    }
+
+    function renderSidePanel(mod) {
+      document.getElementById('panel-module-title').textContent = mod.id + (mod.id === 'map' ? ' (중심 브리지)' : '');
+      document.getElementById('panel-module-file').textContent = mod.file + ' (' + mod.lines + '줄)';
+
+      const weList = analysisData.windowExports.filter(function(w) { return w.module === mod.id; });
+      const ehList = analysisData.eventHandlers.filter(function(e) { return e.module === mod.id; });
+      const lyList = analysisData.layers.filter(function(l) { return l.module === mod.id; });
+      const inEdges = analysisData.edges.filter(function(e) { return e.to === mod.id; });
+      const outEdges = analysisData.edges.filter(function(e) { return e.from === mod.id; });
+      const relatedRisks = analysisData.risks.filter(function(r) { return r.file.includes(mod.file) || mod.file.includes(r.file); });
+
+      let html = '';
+
+      // Role
+      html += '<div style="margin-bottom: 14px;">';
+      html += '<div class="side-panel-section-title">모듈 역할 (Role)</div>';
+      html += '<div style="font-size: 13px; line-height: 1.5; color: var(--text-primary);">' + escapeHtml(mod.role) + '</div>';
+      html += '</div>';
+
+      // windowExports
+      html += '<div style="margin-bottom: 14px;">';
+      html += '<div class="side-panel-section-title">등록 전역 항목 (windowExports: ' + weList.length + '개)</div>';
+      if (weList.length === 0) {
+        html += '<div style="font-size: 12px; color: var(--text-muted);">' + (mod.id === 'map' ? 'map.js는 브리지로서 31개 항목을 일괄 노출합니다.' : '직접 등록하는 전역 항목 없음') + '</div>';
+      } else {
+        html += '<div class="side-panel-list">';
+        weList.forEach(function(we) {
+          html += '<div class="side-panel-item">';
+          html += '<div class="side-panel-item-header"><strong><code>window.' + we.name + '</code></strong></div>';
+          html += '<div style="font-size: 11px; color: var(--text-muted);">' + escapeHtml(we.source) + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      // eventHandlers
+      html += '<div style="margin-bottom: 14px;">';
+      html += '<div class="side-panel-section-title">이벤트 핸들러 (eventHandlers: ' + ehList.length + '개)</div>';
+      if (ehList.length === 0) {
+        html += '<div style="font-size: 12px; color: var(--text-muted);">MapEventManager 등록 핸들러 없음</div>';
+      } else {
+        html += '<div class="side-panel-list">';
+        ehList.forEach(function(eh) {
+          html += '<div class="side-panel-item">';
+          html += '<div class="side-panel-item-header"><strong>' + eh.id + '</strong><span class="badge badge-low">' + eh.eventType + '</span></div>';
+          html += '<div style="font-size: 11px; color: var(--text-muted);">' + eh.file + ':' + eh.line + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      // layers
+      html += '<div style="margin-bottom: 14px;">';
+      html += '<div class="side-panel-section-title">지도 레이어 (layers: ' + lyList.length + '개)</div>';
+      if (lyList.length === 0) {
+        html += '<div style="font-size: 12px; color: var(--text-muted);">생성/관리하는 레이어 없음</div>';
+      } else {
+        html += '<div class="side-panel-list">';
+        lyList.forEach(function(ly) {
+          html += '<div class="side-panel-item">';
+          html += '<div class="side-panel-item-header"><strong>' + ly.name + '</strong><span class="badge badge-import">' + ly.type + '</span></div>';
+          html += '<div style="font-size: 11px; color: var(--text-muted);">zIndex: ' + (ly.zIndex !== null ? ly.zIndex : '미지정(기본값)') + ' · 기본표시: ' + (ly.visible ? '켜짐' : '꺼짐') + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+
+      // Dependencies
+      html += '<div style="margin-bottom: 14px;">';
+      html += '<div class="side-panel-section-title">연결 의존관계 (나감: ' + outEdges.length + ', 들어옴: ' + inEdges.length + ')</div>';
+      html += '<div class="side-panel-list">';
+      outEdges.forEach(function(e) {
+        html += '<div class="side-panel-item">';
+        html += '<div class="side-panel-item-header"><span>👉 <strong>' + e.to + '</strong> 호출</span><span class="badge badge-' + e.kind + '">' + e.kind + '</span></div>';
+        html += '<div style="font-size: 11px; color: var(--text-muted);">' + escapeHtml(e.label) + '</div>';
+        html += '</div>';
+      });
+      inEdges.forEach(function(e) {
+        html += '<div class="side-panel-item">';
+        html += '<div class="side-panel-item-header"><span>👈 <strong>' + e.from + '</strong> 로부터</span><span class="badge badge-' + e.kind + '">' + e.kind + '</span></div>';
+        html += '<div style="font-size: 11px; color: var(--text-muted);">' + escapeHtml(e.label) + '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+      html += '</div>';
+
+      // Related Risks
+      if (relatedRisks.length > 0) {
+        html += '<div style="margin-bottom: 14px;">';
+        html += '<div class="side-panel-section-title">연관된 위험 분석 (' + relatedRisks.length + '건)</div>';
+        html += '<div class="side-panel-list">';
+        relatedRisks.forEach(function(r) {
+          html += '<div class="side-panel-item" style="border-left: 3px solid ' + (r.severity === 'high' ? '#ef4444' : r.severity === 'medium' ? '#f59e0b' : '#0ea5e9') + '">';
+          html += '<div class="side-panel-item-header"><strong>' + escapeHtml(r.title) + '</strong><span class="badge badge-' + r.severity + '">' + r.severity.toUpperCase() + '</span></div>';
+          html += '<div style="font-size: 11px; color: var(--text-muted);">' + r.file + ':' + r.line + '</div>';
+          html += '<div style="font-size: 11px; margin-top: 4px; color: var(--text-secondary);">' + escapeHtml(r.detail) + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+        html += '</div>';
+      }
+
+      document.getElementById('panel-body').innerHTML = html;
+    }
+
+    function filterGraphEdges(kind) {
+      activeEdgeFilter = kind;
+      const edges = document.querySelectorAll('.svg-edge');
+      edges.forEach(function(edgeEl) {
+        const edgeKind = edgeEl.getAttribute('data-kind');
+        if (kind === 'all' || edgeKind === kind) {
+          edgeEl.style.display = '';
+        } else {
+          edgeEl.style.display = 'none';
+        }
+      });
+    }
+
+    function showEdgeTooltip(evt, edge) {
+      const tip = document.getElementById('edge-tooltip');
+      tip.innerHTML = '<strong>' + edge.from + ' ➔ ' + edge.to + '</strong> <span class="badge badge-' + edge.kind + '">' + edge.kind + '</span><br>' +
+                      '<span style="font-size: 11px; color: #94a3b8; margin-top: 4px; display: block;">' + escapeHtml(edge.label) + '</span>';
+      tip.style.display = 'block';
+      tip.style.left = (evt.pageX + 12) + 'px';
+      tip.style.top = (evt.pageY + 12) + 'px';
+    }
+
+    function hideEdgeTooltip() {
+      const tip = document.getElementById('edge-tooltip');
+      tip.style.display = 'none';
+    }
+
+    function setupGraphPanZoom() {
+      const svgArea = document.getElementById('graph-svg-area');
+      const viewportGroup = document.getElementById('viewport-group');
+
+      svgArea.addEventListener('wheel', function(evt) {
+        evt.preventDefault();
+        const zoomFactor = evt.deltaY < 0 ? 1.1 : 0.9;
+        zoomGraphBy(zoomFactor);
+      }, { passive: false });
+
+      svgArea.addEventListener('mousedown', function(evt) {
+        if (evt.target.closest('.svg-node')) return;
+        isPanning = true;
+        panStartX = evt.clientX - panX;
+        panStartY = evt.clientY - panY;
+      });
+
+      window.addEventListener('mousemove', function(evt) {
+        if (!isPanning) return;
+        panX = evt.clientX - panStartX;
+        panY = evt.clientY - panStartY;
+        applyGraphTransform();
+      });
+
+      window.addEventListener('mouseup', function() {
+        isPanning = false;
+      });
+    }
+
+    function zoomGraphBy(factor) {
+      currentZoom = Math.max(0.4, Math.min(3.0, currentZoom * factor));
+      applyGraphTransform();
+    }
+
+    function resetGraphZoom() {
+      currentZoom = 1;
+      panX = 0;
+      panY = 0;
+      applyGraphTransform();
+    }
+
+    function focusBridgeNode() {
+      currentZoom = 1.25;
+      panX = -120;
+      panY = -80;
+      applyGraphTransform();
+      selectModule('map');
+    }
+
+    function applyGraphTransform() {
+      const viewportGroup = document.getElementById('viewport-group');
+      viewportGroup.setAttribute('transform', 'translate(' + panX + ',' + panY + ') scale(' + currentZoom + ')');
+    }
+
+    /* (2) Initialization Sequence Timeline */
+    function renderInitTimeline() {
+      const container = document.getElementById('timeline-list');
+      container.innerHTML = '';
+
+      analysisData.initSequence.forEach(function(item) {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'timeline-item' + (item.delayMs > 0 ? ' has-delay' : '');
+
+        let badgesHtml = '';
+        if (item.delayMs > 0) {
+          badgesHtml += '<span class="badge badge-medium">⏱️ ' + item.delayMs + 'ms 지연</span> ';
+        }
+
+        // Guards associations
+        if (item.order === 3) {
+          badgesHtml += '<span class="badge badge-ok">🛡️ window.appInitialized 가드 검사</span> ';
+        } else if (item.order === 5) {
+          badgesHtml += '<span class="badge badge-medium">🛡️ mapModulesInitialized 검사 / InProgress=true</span> ';
+        } else if (item.order === 8) {
+          badgesHtml += '<span class="badge badge-ok">🛡️ wfsInitialized / window.wfsLayersInitialized</span> ';
+        } else if (item.order === 10) {
+          badgesHtml += '<span class="badge badge-ok">🛡️ mapModulesInitialized=true / InProgress=false</span> ';
+        } else if (item.order === 14) {
+          badgesHtml += '<span class="badge badge-ok">🛡️ window.appInitialized = true 설정</span> ';
+        } else if (item.order === 17) {
+          badgesHtml += '<span class="badge badge-high">⚠️ initializeAreaSelector 중복 가드 없음</span> ';
+        }
+
+        itemEl.innerHTML = 
+          '<div class="timeline-dot"></div>' +
+          '<div class="timeline-card">' +
+            '<div class="timeline-card-top">' +
+              '<div>' +
+                '<span class="timeline-step-order">Step ' + item.order + '</span>' +
+                '<span style="margin-left: 8px;">' + badgesHtml + '</span>' +
+              '</div>' +
+              '<span class="code-tag">' + item.file + ':' + item.line + '</span>' +
+            '</div>' +
+            '<div class="timeline-step-text">' + escapeHtml(item.step) + '</div>' +
+          '</div>';
+        container.appendChild(itemEl);
+      });
+    }
+
+    /* (3) Layer Stack */
+    function renderLayerStack() {
+      const container = document.getElementById('layer-stack-container');
+      container.innerHTML = '';
+
+      // Group layers by zIndex
+      const z1000 = analysisData.layers.filter(function(l) { return l.zIndex === 1000; });
+      const z999 = analysisData.layers.filter(function(l) { return l.zIndex === 999; });
+      const zNull = analysisData.layers.filter(function(l) { return l.zIndex === null; });
+
+      // Group: zIndex 1000 (Collision)
+      container.appendChild(createLayerStackGroup(
+        '최상위 벡터/WMS 타일 레이어군 (zIndex: 1000)',
+        z1000,
+        true,
+        '🚨 동일 zIndex(1000) 충돌 경고: WFS POI 6종, WMS 타일 1종, 영역 선택 레이어가 동일한 우선순위를 가집니다. 추가 순서에 따라 가려짐이 결정됩니다.'
+      ));
+
+      // Group: zIndex 999
+      container.appendChild(createLayerStackGroup(
+        '임시 드래그 선택 레이어 (zIndex: 999)',
+        z999,
+        false,
+        '영역 선택 도구 드래그 시 임시 사각형 표시용 레이어'
+      ));
+
+      // Group: zIndex null (Base layers)
+      container.appendChild(createLayerStackGroup(
+        '배경지도 및 기본 레이어군 (zIndex: 미지정 / OpenLayers 기본값)',
+        zNull,
+        false,
+        '⚠️ measureLayer(측정 도구)는 zIndex가 지정되지 않아 POI 아이콘(1000) 아래에 그려질 수 있습니다.'
+      ));
+    }
+
+    function createLayerStackGroup(title, layers, isCollision, note) {
+      const grp = document.createElement('div');
+      grp.className = 'stack-group' + (isCollision ? ' collision' : '');
+
+      let html = 
+        '<div class="stack-group-header">' +
+          '<div class="stack-group-title">' +
+            '<span>' + title + '</span>' +
+            '<span class="badge ' + (isCollision ? 'badge-medium' : 'badge-low') + '">' + layers.length + '개 레이어</span>' +
+          '</div>' +
+          '<span style="font-size: 12px; color: var(--text-muted);">' + note + '</span>' +
+        '</div>' +
+        '<div class="layer-cards-grid">';
+
+      layers.forEach(function(l) {
+        html += 
+          '<div class="layer-card">' +
+            '<div class="layer-card-title">' +
+              '<span><code>' + l.name + '</code></span>' +
+              '<span class="badge badge-import">' + l.type + '</span>' +
+            '</div>' +
+            '<div style="font-size: 12px; color: var(--text-secondary);">' +
+              '생성 모듈: <strong>' + l.module + '</strong> · 기본표시: <strong>' + (l.visible === true ? '✅ 켜짐' : l.visible === false ? '❌ 꺼짐' : '미지정') + '</strong>' +
+            '</div>' +
+            '<div class="layer-card-source">' +
+              (l.sourceUrl ? escapeHtml(l.sourceUrl) : '(내부 벡터 피처 소스)') +
+            '</div>' +
+          '</div>';
+      });
+
+      html += '</div>';
+      grp.innerHTML = html;
+      return grp;
+    }
+
+    /* (4) Window Global Bridge Table */
+    function renderBridgeTable() {
+      const tbody = document.getElementById('bridge-table-body');
+      tbody.innerHTML = '';
+
+      const query = (document.getElementById('bridge-search-input').value || '').toLowerCase();
+
+      const filtered = bridgeItems.filter(function(item) {
+        // Filter by category
+        if (activeBridgeFilter === 'registered' && (!item.registered || item.specialStatus)) return false;
+        if (activeBridgeFilter === 'warning' && !item.specialStatus && item.registered) return false;
+        if (activeBridgeFilter === 'unregistered' && item.registered !== false) return false;
+        if (activeBridgeFilter === 'exports' && !item.inWindowExports) return false;
+        if (activeBridgeFilter === 'inline' && !item.inInlineHandlers) return false;
+
+        // Search query
+        if (query) {
+          const match = item.name.toLowerCase().includes(query) ||
+                        item.module.toLowerCase().includes(query) ||
+                        item.source.toLowerCase().includes(query) ||
+                        (item.notes && item.notes.toLowerCase().includes(query));
+          if (!match) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">조건에 일치하는 전역 함수 항목이 없습니다.</td></tr>';
+        return;
+      }
+
+      filtered.forEach(function(item) {
+        const tr = document.createElement('tr');
+
+        // Row highlighting for risks or unregistered
+        if (item.registered === false || item.specialStatus === 'runtime-undefined') {
+          tr.className = 'row-danger';
+        } else if (item.specialStatus) {
+          tr.className = 'row-warning';
+        }
+
+        // Category Tag
+        let catBadge = '';
+        if (item.inWindowExports && item.inInlineHandlers) {
+          catBadge = '<span class="badge badge-popup">공통 (둘 다)</span>';
+        } else if (item.inWindowExports) {
+          catBadge = '<span class="badge badge-import">windowExport</span>';
+        } else if (item.inInlineHandlers) {
+          catBadge = '<span class="badge badge-window">inlineHandler</span>';
+        } else {
+          catBadge = '<span class="badge badge-low">참조</span>';
+        }
+
+        // Status Badge
+        let statusBadge = '';
+        if (item.registered === false) {
+          statusBadge = '<span class="badge badge-high">❌ 미등록 (registered=false)</span>';
+        } else if (item.specialStatus === 'runtime-undefined') {
+          statusBadge = '<span class="badge badge-high">⚠️ 런타임 undefined</span>';
+        } else if (item.specialStatus === 'disabled-onclick') {
+          statusBadge = '<span class="badge badge-medium">⚠️ 인라인 무력화</span>';
+        } else if (item.specialStatus === 'self-assign') {
+          statusBadge = '<span class="badge badge-low">⚠️ 자기 재할당(no-op)</span>';
+        } else {
+          statusBadge = '<span class="badge badge-ok">✅ 정상 등록 (true)</span>';
+        }
+
+        const filePos = item.inlineFile ? (item.inlineFile + ':' + item.inlineLine) : (item.file + ':' + item.line);
+
+        tr.innerHTML = 
+          '<td><strong><code>window.' + item.name + '</code></strong></td>' +
+          '<td>' + catBadge + '</td>' +
+          '<td><span class="code-tag">' + item.module + '</span></td>' +
+          '<td>' + statusBadge + '</td>' +
+          '<td style="font-size: 12px; color: var(--text-muted);">' + escapeHtml(filePos || item.source) + '</td>' +
+          '<td style="font-size: 12px; color: ' + (item.notes ? 'var(--text-primary)' : 'var(--text-muted)') + ';">' + escapeHtml(item.notes || item.source) + '</td>';
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function filterBridgeTable() {
+      renderBridgeTable();
+    }
+
+    function setBridgeFilter(filterType) {
+      activeBridgeFilter = filterType;
+      document.querySelectorAll('#view-bridge .filter-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-filter') === filterType);
+      });
+      renderBridgeTable();
+    }
+
+    /* (5) Risks List */
+    function renderRisksList() {
+      const container = document.getElementById('risks-list-container');
+      container.innerHTML = '';
+
+      const query = (document.getElementById('risks-search-input').value || '').toLowerCase();
+
+      const filtered = analysisData.risks.filter(function(r) {
+        if (activeRisksSeverity !== 'all' && r.severity !== activeRisksSeverity) return false;
+        if (query) {
+          const match = r.title.toLowerCase().includes(query) ||
+                        r.detail.toLowerCase().includes(query) ||
+                        r.file.toLowerCase().includes(query);
+          if (!match) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 32px;">해당 조건의 위험 항목이 없습니다.</div>';
+        return;
+      }
+
+      filtered.forEach(function(r, idx) {
+        const card = document.createElement('div');
+        card.className = 'risk-item-card severity-' + r.severity;
+
+        card.innerHTML = 
+          '<div class="risk-header">' +
+            '<div style="display: flex; align-items: center; gap: 8px;">' +
+              '<span class="badge badge-' + r.severity + '">' + r.severity.toUpperCase() + '</span>' +
+              '<span class="risk-title">' + escapeHtml(r.title) + '</span>' +
+            '</div>' +
+            '<span class="code-tag">' + r.file + ':' + r.line + '</span>' +
+          '</div>' +
+          '<div class="risk-detail">' + escapeHtml(r.detail) + '</div>';
+
+        container.appendChild(card);
+      });
+    }
+
+    function filterRisksList() {
+      renderRisksList();
+    }
+
+    function setRisksSeverityFilter(sev) {
+      activeRisksSeverity = sev;
+      document.querySelectorAll('#view-risks .filter-btn').forEach(function(btn) {
+        btn.classList.toggle('active', btn.getAttribute('data-severity') === sev);
+      });
+      renderRisksList();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>

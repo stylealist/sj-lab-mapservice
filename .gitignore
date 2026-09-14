@@ -1,0 +1,5 @@
+# 로컬 비밀값 (MCP 토큰·DB 접속 정보) — 절대 커밋 금지
+# .mcp.json 은 ${변수}만 담고 커밋하며, 실제 값은 아래 파일의 env 에만 둔다
+.claude/settings.local.json
+.env
+.env.*

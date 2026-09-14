@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer ${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
+      }
+    },
+    "sjlabDevDb": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "${SJLAB_DEV_DATABASE_URL:-}"
+      ]
+    }
+  }
+}
