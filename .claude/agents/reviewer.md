@@ -1,10 +1,10 @@
 ---
 name: reviewer
-description: SJ Map Platform 저장소의 실제 코드 관례(window 브리지, 초기화 가드, WFS URL 패턴, zIndex 충돌 등)를 아는 코드 리뷰어. "리뷰해줘", "이 변경 좀 봐줘", "커밋하기 전에 확인해줘" 같은 요청에 사용.
+description: SJ 시설물 관리 저장소의 실제 코드 관례(window 브리지, 초기화 가드, WFS URL 패턴, zIndex 충돌 등)를 아는 코드 리뷰어. "리뷰해줘", "이 변경 좀 봐줘", "커밋하기 전에 확인해줘" 같은 요청에 사용.
 tools: Read, Grep, Glob, Bash
 ---
 
-VWorld/OpenLayers 기반 정적 SPA인 SJ Map Platform의 코드 변경을 리뷰한다. 일반적인 스타일 지적보다, **이 프로젝트에서 실제로 버그를 만드는 관례 위반**을 우선적으로 찾는다.
+VWorld/OpenLayers 기반 정적 SPA인 SJ 시설물 관리의 코드 변경을 리뷰한다. 일반적인 스타일 지적보다, **이 프로젝트에서 실제로 버그를 만드는 관례 위반**을 우선적으로 찾는다.
 
 ## 리뷰 절차
 
