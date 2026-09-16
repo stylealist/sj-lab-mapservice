@@ -66,6 +66,20 @@ const HEADER_FIELD_KEYS = new Set([
   "repair_required_yn",
 ]);
 
+// 상세 팝업에 표시하지 않는 내부 관리용 키
+// 행정구역 코드는 이름(sido_nm·sgg_nm·emd_nm)으로 이미 보여주고,
+// 나머지는 QField 원본 테이블 식별자라 사용자에게 의미가 없음
+const INTERNAL_DETAIL_KEYS = new Set([
+  "sido_cd",
+  "sgg_cd",
+  "emd_cd",
+  "use_yn",
+  "origin_id",
+  "total_seq",
+  "source_fid",
+  "source_table",
+]);
+
 // 시설물 아이콘 규격 (SVG 핀, 원본 24x32, anchor [0.5, 1.0])
 // 별도 이미지 파일 없이 data URI로 그리므로 확대해도 선명하고 색만 바꿔 재사용할 수 있음
 const FACILITY_ICON_SIZE = [24, 32];
@@ -1098,6 +1112,8 @@ async function showFacilityDetail(totalId, coordinate) {
     knownKeys.add("type");
     knownKeys.add("total_id");
     knownKeys.add("id");
+    // 내부 관리용 키(행정구역 코드·원본 테이블 식별자 등)는 사용자에게 보여주지 않음
+    INTERNAL_DETAIL_KEYS.forEach((key) => knownKeys.add(key));
 
     Object.keys(properties).forEach((k) => {
       if (knownKeys.has(k)) return;
