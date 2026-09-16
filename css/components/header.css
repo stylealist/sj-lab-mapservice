@@ -2,15 +2,11 @@
 
 /* 헤더 */
 .header {
-  background: linear-gradient(
-    135deg,
-    rgb(30, 41, 59) 0%,
-    rgb(51, 65, 85) 50%,
-    rgb(71, 85, 105) 100%
-  );
+  /* 지도 핀 파랑(#2563eb)과 어울리는 딥 네이비 톤 */
+  background: linear-gradient(120deg, #0b1424 0%, #142440 55%, #1b3159 100%);
   color: white;
   padding: 0.8rem 0;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 6px 18px rgba(8, 15, 30, 0.28);
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -44,44 +40,73 @@
   height: 100%;
 }
 
+/* 로고: 심볼 배지 + 서비스명 + 영문 캡션 */
 .logo {
   flex-shrink: 0;
-  font-size: 1.4rem;
-  font-weight: 700;
-  background: linear-gradient(45deg, #f8fafc, #e2e8f0);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  letter-spacing: -0.3px;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: opacity 0.2s ease;
 }
 
 .logo:hover {
-  transform: scale(1.05);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  opacity: 0.88;
+}
+
+.logo-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: #ffffff;
+  background: linear-gradient(140deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45);
+  flex-shrink: 0;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.logo-title {
+  font-size: 1.12rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f8fafc;
+}
+
+.logo-sub {
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.55);
 }
 
 .nav {
   flex-shrink: 0;
   display: flex;
-  gap: 0.3rem;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 0.2rem;
-  border-radius: 25px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  gap: 0.15rem;
+  background: rgba(148, 178, 232, 0.1);
+  padding: 0.22rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 178, 232, 0.16);
 }
 
 .nav-btn {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.85);
-  padding: 0.5rem 1.2rem;
-  border-radius: 20px;
+  color: rgba(226, 232, 240, 0.72);
+  padding: 0.42rem 1.05rem;
+  border-radius: 9px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background 0.18s ease, color 0.18s ease;
   font-size: 0.85rem;
   font-weight: 500;
   position: relative;
@@ -109,17 +134,18 @@
 }
 
 .nav-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: rgba(148, 178, 232, 0.14);
+  color: #ffffff;
 }
 
 .nav-btn.active {
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-  transform: translateY(-1px);
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.45);
+}
+
+.nav-btn.active:hover {
+  background: #1d4ed8;
 }
 
 /* 개발 예정 탭 스타일 */
@@ -197,8 +223,12 @@
     padding: 0 1rem;
   }
 
-  .logo {
-    font-size: 1.2rem;
+  .logo-title {
+    font-size: 1rem;
+  }
+
+  .logo-sub {
+    display: none;
   }
 
   .nav {
@@ -217,8 +247,14 @@
     padding: 0 0.75rem;
   }
 
-  .logo {
-    font-size: 1.1rem;
+  .logo-title {
+    font-size: 0.95rem;
+  }
+
+  .logo-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
   }
 
   .nav-btn {

@@ -440,6 +440,7 @@ function initializeFacilityModule() {
   // 초기 시도 목록 및 전체 시설물 데이터 로드
   // 아이콘 설정은 DB(qfield.facility_icon)에서 불러오며, 실패해도 내장 기본 아이콘으로 계속 동작함
   loadFacilityIconConfig();
+  bindFacilityKeywordSearch();
   loadFacilitySidoList();
   loadFacilities({});
 
@@ -662,6 +663,154 @@ async function loadFacilityEmdList(sggCd) {
   }
 }
 
+// 현재 조회된 목록 항목(검색 필터는 렌더 단계에서만 적용하므로 원본을 들고 있음)
+let facilityListItems = [];
+let facilityKeyword = "";
+
+// 응답 피처에서 목록 항목 데이터만 뽑아낸다 (중복 제거)
+function buildFacilityListItems(rawFeatures) {
+  const seen = new Set();
+  const items = [];
+
+  rawFeatures.forEach((feat) => {
+    const props = feat.properties || {};
+    const totalId = props.total_id || feat.id;
+    if (!totalId || seen.has(totalId)) return;
+    seen.add(totalId);
+
+    const name = props.fclt_nm || `시설물 (${totalId})`;
+    // 같은 이름이 반복되므로 기관명·지사(주소)로 구분한다
+    const subParts = [props.inst_nm, props.daddr].filter(
+      (part) => part && String(part).trim() && String(part).trim() !== "null"
+    );
+
+    items.push({
+      totalId: String(totalId),
+      name,
+      sub: subParts.join(" · "),
+      needsRepair: String(props.repair_required_yn || "").toUpperCase() === "Y",
+      condition: String(props.facility_condition || "").trim(),
+      searchText: `${name} ${subParts.join(" ")}`.toLowerCase(),
+    });
+  });
+
+  return items;
+}
+
+// 목록 DOM 생성 — 검색어 필터 적용, 지도와 같은 아이콘 표시
+function renderFacilityList() {
+  const listEl = document.getElementById("facilityList");
+  const countEl = document.getElementById("facilityCount");
+  const panelCountEl = document.getElementById("panelCount");
+  const emptyEl = document.getElementById("facilityEmpty");
+  if (!listEl) return;
+
+  const keyword = facilityKeyword.trim().toLowerCase();
+  const visibleItems = keyword
+    ? facilityListItems.filter((item) => item.searchText.includes(keyword))
+    : facilityListItems;
+
+  if (countEl) countEl.textContent = visibleItems.length.toLocaleString();
+  if (panelCountEl) panelCountEl.textContent = facilityListItems.length.toLocaleString();
+
+  // 검색 결과가 없을 때만 빈 상태를 보여준다 (조회 자체가 0건인 경우는 loadFacilities 가 처리)
+  if (emptyEl && facilityListItems.length > 0) {
+    emptyEl.classList.toggle("hidden", visibleItems.length > 0);
+  }
+
+  const fragment = document.createDocumentFragment();
+
+  visibleItems.forEach((item) => {
+    const li = document.createElement("li");
+    li.className = "facility-item";
+    li.setAttribute("data-total-id", item.totalId);
+    if (selectedTotalId && String(selectedTotalId) === item.totalId) {
+      li.classList.add("selected");
+    }
+
+    // 지도 핀과 같은 아이콘 (종류·보수필요 색 규칙 공유)
+    const iconConfig = resolveFacilityIcon(item.name);
+    const iconWrap = document.createElement("span");
+    iconWrap.className = "facility-item-icon";
+    const iconImg = document.createElement("img");
+    iconImg.src = buildFacilityIconUrl(
+      iconConfig.glyph,
+      getFacilityPinColor(iconConfig, item.needsRepair)
+    );
+    iconImg.alt = iconConfig.label;
+    iconWrap.appendChild(iconImg);
+    li.appendChild(iconWrap);
+
+    const body = document.createElement("div");
+    body.className = "facility-item-body";
+
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "facility-name";
+    nameSpan.textContent = item.name; // XSS 방지
+    body.appendChild(nameSpan);
+
+    if (item.sub) {
+      const subSpan = document.createElement("span");
+      subSpan.className = "facility-sub";
+      subSpan.textContent = item.sub;
+      subSpan.title = item.sub;
+      body.appendChild(subSpan);
+    }
+    li.appendChild(body);
+
+    // 보수필요 / 상태 뱃지
+    if (item.needsRepair) {
+      const badge = document.createElement("span");
+      badge.className = "facility-badge badge-repair";
+      badge.textContent = "보수필요";
+      li.appendChild(badge);
+    } else if (item.condition) {
+      const badge = document.createElement("span");
+      badge.className = "facility-badge badge-condition";
+      badge.textContent = item.condition;
+      li.appendChild(badge);
+    }
+
+    li.addEventListener("click", () => {
+      selectFacility(item.totalId, true);
+    });
+
+    fragment.appendChild(li);
+  });
+
+  listEl.innerHTML = "";
+  listEl.appendChild(fragment);
+}
+
+// 검색 입력 바인딩 (입력할 때마다 목록만 다시 그림 — 서버 재조회 없음)
+function bindFacilityKeywordSearch() {
+  const inputEl = document.getElementById("facilityKeyword");
+  const clearEl = document.getElementById("facilityKeywordClear");
+  if (!inputEl) return;
+
+  const applyKeyword = (value) => {
+    facilityKeyword = value;
+    if (clearEl) clearEl.classList.toggle("hidden", !value);
+    renderFacilityList();
+  };
+
+  inputEl.addEventListener("input", () => applyKeyword(inputEl.value));
+  inputEl.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      inputEl.value = "";
+      applyKeyword("");
+    }
+  });
+
+  if (clearEl) {
+    clearEl.addEventListener("click", () => {
+      inputEl.value = "";
+      inputEl.focus();
+      applyKeyword("");
+    });
+  }
+}
+
 // 시설물 목록 및 지도 데이터 로드
 async function loadFacilities(filter = {}) {
   const countEl = document.getElementById("facilityCount");
@@ -718,61 +867,18 @@ async function loadFacilities(filter = {}) {
     if (loadingEl) loadingEl.classList.add("hidden");
 
     if (rawFeatures.length === 0) {
+      facilityListItems = [];
       if (emptyEl) emptyEl.classList.remove("hidden");
       if (countEl) countEl.textContent = "0";
+      const panelCountEl = document.getElementById("panelCount");
+      if (panelCountEl) panelCountEl.textContent = "0";
       if (facilitySource) facilitySource.clear();
       return;
     }
 
-    // 결과 건수 업데이트
-    if (countEl) {
-      countEl.textContent = rawFeatures.length.toLocaleString();
-    }
-
-    // 1) 목록 렌더링: DocumentFragment 사용, XSS 방지를 위한 textContent 사용
-    const fragment = document.createDocumentFragment();
-    const renderedKeys = new Set();
-
-    rawFeatures.forEach((feat) => {
-      const props = feat.properties || {};
-      const totalId = props.total_id || feat.id;
-      if (!totalId || renderedKeys.has(totalId)) {
-        return; // 중복 렌더 방지
-      }
-      renderedKeys.add(totalId);
-
-      const li = document.createElement("li");
-      li.className = "facility-item";
-      li.setAttribute("data-total-id", String(totalId));
-
-      const nameSpan = document.createElement("span");
-      nameSpan.className = "facility-name";
-      nameSpan.textContent = props.fclt_nm || `시설물 (${totalId})`;
-      li.appendChild(nameSpan);
-
-      // 보수필요 / 상태 뱃지
-      if (props.repair_required_yn === "Y" || props.repair_required_yn === "y") {
-        const badge = document.createElement("span");
-        badge.className = "facility-badge badge-repair";
-        badge.textContent = "보수필요";
-        li.appendChild(badge);
-      } else if (props.facility_condition) {
-        const badge = document.createElement("span");
-        badge.className = "facility-badge badge-condition";
-        badge.textContent = props.facility_condition;
-        li.appendChild(badge);
-      }
-
-      li.addEventListener("click", () => {
-        selectFacility(totalId, true);
-      });
-
-      fragment.appendChild(li);
-    });
-
-    if (listEl) {
-      listEl.appendChild(fragment);
-    }
+    // 1) 목록 렌더링 (검색어가 있으면 걸러서 표시)
+    facilityListItems = buildFacilityListItems(rawFeatures);
+    renderFacilityList();
 
     // 2) 지도 표출: 목록 렌더링 후 같은 응답 데이터로 벡터 레이어 채우기
     // docs/map-architecture.md 규칙: featureProjection에 vectorSource.getProjection()(= null) 전달

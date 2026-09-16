@@ -13,5 +13,8 @@
   - 시설물 탭(`.tab-pane#facility-tab`)은 기본 활성화(`active`) 탭으로 제공되며, `#panelTitle`의 기본값은 "시설물"입니다.
   - 상단 행정구역 연쇄 select(시도 → 시군구 → 읍면동)는 각각 `전체` 옵션을 포함하며, 상위 select가 변경되면 하위 select를 초기화(비활성화)하고 가장 구체적인 행정구역 코드(또는 전체)로 시설물 목록과 지도를 재조회합니다. 구역 선택 시 해당 구역 extent(패딩 포함)로 지도를 이동(fit)합니다.
   - 대량 피처(약 2,474건) 렌더링 시 `DocumentFragment`를 사용하고 XSS 방지를 위해 텍스트는 `textContent`로 삽입합니다.
+  - **목록 항목 구조**: `아이콘(30px) | 이름 + 소속 | 배지` 3단 그리드(`.facility-item`). 아이콘은 지도 핀과 같은 SVG를 `buildFacilityIconUrl()`로 만들어 쓰고, 소속(`.facility-sub`)은 `inst_nm · daddr`입니다 — 같은 이름이 반복되므로 이 줄이 실질적인 구분 기준이니 빼지 말 것.
+  - **검색**: `#facilityKeyword` 입력은 서버를 다시 부르지 않고 `renderFacilityList()`가 이름·소속 부분일치로 걸러 다시 그립니다(원본은 `facilityListItems`에 보관). 행정구역 select 변경만 서버를 재조회합니다.
+  - **건수 표시**: 패널 제목 옆 `#panelCount`는 조회된 전체 건수, 검색 영역의 `#facilityCount`는 현재 화면에 보이는 건수입니다.
   - 상태 표시(로딩 중, 빈 결과, 오류)는 인라인 `style="display:none"` 대신 CSS 클래스(`.facility-state-message.hidden`)로 제어합니다.
 - 지도 우측 사이드 탭(`.cadastral-control`)의 서브메뉴(`.cadastral-submenu`)는 모두 같은 컨테이너 안에서 `position: absolute`로 겹쳐 있습니다. **`top` 값을 CSS나 인라인 스타일로 하드코딩하지 말 것** — `js/modules/ui.js`의 `toggleCadastralSubmenu()`가 트리거 버튼의 `offsetTop`에 맞춰 위치를 계산하고, 다른 서브메뉴는 닫아 영역이 겹치지 않게 합니다. 서브메뉴를 새로 추가할 때는 `CADASTRAL_SUBMENUS` 배열에 `{ buttonId, submenuId }` 짝을 등록하고 토글도 이 함수를 통할 것 — 빠뜨리면 다른 서브메뉴와 같은 위치에 열려 서로 가려집니다.
