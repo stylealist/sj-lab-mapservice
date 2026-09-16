@@ -37,28 +37,125 @@ const DETAIL_FIELD_CONFIG = [
   { key: "sido_nm", label: "시도", hidden: true },
   { key: "sgg_nm", label: "시군구", hidden: true },
   { key: "emd_nm", label: "읍면동", hidden: true },
-  { key: "facility_condition", label: "상태" },
-  { key: "repair_required_yn", label: "보수필요여부" },
-  { key: "facility_memo", label: "메모" },
-  { key: "facility_memo_txt", label: "메모내용" },
-  { key: "inspected_at", label: "점검일시", isDateTime: true },
+  // 점검 결과 — 값은 현장조사 앱(infra-manage-app)의 ValueMap 코드라 한글로 바꿔 보여준다
+  { key: "facility_condition", label: "시설물 상태", valueMap: "condition" },
+  { key: "repair_required_yn", label: "보수 필요 여부", valueMap: "repair" },
+  { key: "facility_memo", label: "시설물 특이사항" },
+  { key: "inspected_at", label: "점검 일시", isDateTime: true },
   { key: "project_name", label: "사업명" },
   { key: "owner", label: "소유자" },
   { key: "pic_dept_nm", label: "담당부서" },
   { key: "pic_nm", label: "담당자" },
   { key: "pic_telno", label: "전화번호" },
   { key: "pic_eml", label: "이메일" },
-  { key: "photo_1", label: "사진 1", isMedia: true },
-  { key: "photo_2", label: "사진 2", isMedia: true },
-  { key: "photo_3", label: "사진 3", isMedia: true },
-  { key: "photo_4", label: "사진 4", isMedia: true },
-  { key: "photo_5", label: "사진 5", isMedia: true },
-  { key: "video", label: "동영상", isMedia: true },
-  { key: "audio_memo", label: "음성메모", isMedia: true },
-  { key: "audio_memo_txt", label: "음성내용" },
+  // 사진 5장은 한 줄에서 넘겨 보는 갤러리로 묶는다 (photo_1 위치에 렌더, 나머지는 숨김)
+  { key: "photo_1", label: "시설물 사진", isPhotoGallery: true },
+  { key: "photo_2", label: "사진 2", hidden: true },
+  { key: "photo_3", label: "사진 3", hidden: true },
+  { key: "photo_4", label: "사진 4", hidden: true },
+  { key: "photo_5", label: "사진 5", hidden: true },
+  { key: "audio_memo", label: "현장 특이사항", isAudio: true },
+  // 음성으로 남긴 현장 특이사항을 STT로 받아쓴 내용
+  { key: "facility_memo_txt", label: "음성 변환 내용" },
+  { key: "video", label: "현장 영상", isVideo: true },
+  { key: "audio_memo_txt", label: "음성 메모 텍스트" },
   { key: "reg_date", label: "등록일시", isDateTime: true },
   { key: "update_at", label: "수정일시", isDateTime: true },
 ];
+
+// 현장조사 앱(infra-manage-app `projectutils.cpp`)의 ValueMap 과 같은 표기
+// 앱에서 선택지가 바뀌면 이 표도 함께 고칠 것
+const FACILITY_VALUE_MAPS = {
+  condition: {
+    NORMAL: "정상",
+    MINOR_DAMAGE: "경미한 파손",
+    BROKEN: "파손 / 고장",
+    DESTROYED: "철거됨",
+  },
+  repair: {
+    Y: "정비요청",
+    N: "양호",
+  },
+};
+
+// 코드 값을 한글 표기로 바꾼다. 표에 없는 값은 원본을 그대로 보여준다.
+function formatFacilityCodeValue(mapName, value) {
+  const map = FACILITY_VALUE_MAPS[mapName];
+  const key = String(value).trim().toUpperCase();
+  return (map && map[key]) || String(value);
+}
+
+/**
+ * 사진 갤러리 생성 — 사진 여러 장을 한 줄에서 넘겨 본다.
+ * 사진이 한 장이면 이동 버튼과 번호를 숨긴다.
+ */
+function createFacilityPhotoGallery(photoUrls) {
+  const gallery = document.createElement("div");
+  gallery.className = "facility-gallery";
+
+  const frame = document.createElement("div");
+  frame.className = "facility-gallery-frame";
+
+  const image = document.createElement("img");
+  image.className = "facility-gallery-image";
+  image.alt = "시설물 사진";
+  image.loading = "lazy";
+  image.src = photoUrls[0];
+  frame.appendChild(image);
+
+  // 원본 보기 (새 창)
+  const openLink = document.createElement("a");
+  openLink.className = "facility-gallery-open";
+  openLink.href = photoUrls[0];
+  openLink.target = "_blank";
+  openLink.rel = "noopener noreferrer";
+  openLink.textContent = "원본";
+  frame.appendChild(openLink);
+
+  const prevBtn = document.createElement("button");
+  prevBtn.type = "button";
+  prevBtn.className = "facility-gallery-nav prev";
+  prevBtn.title = "이전 사진";
+  prevBtn.textContent = "‹";
+
+  const nextBtn = document.createElement("button");
+  nextBtn.type = "button";
+  nextBtn.className = "facility-gallery-nav next";
+  nextBtn.title = "다음 사진";
+  nextBtn.textContent = "›";
+
+  const counter = document.createElement("span");
+  counter.className = "facility-gallery-counter";
+
+  let index = 0;
+  const render = () => {
+    image.src = photoUrls[index];
+    openLink.href = photoUrls[index];
+    counter.textContent = `${index + 1} / ${photoUrls.length}`;
+  };
+
+  prevBtn.addEventListener("click", () => {
+    index = (index - 1 + photoUrls.length) % photoUrls.length;
+    render();
+  });
+  nextBtn.addEventListener("click", () => {
+    index = (index + 1) % photoUrls.length;
+    render();
+  });
+
+  if (photoUrls.length > 1) {
+    frame.appendChild(prevBtn);
+    frame.appendChild(nextBtn);
+  }
+
+  gallery.appendChild(frame);
+  if (photoUrls.length > 1) {
+    gallery.appendChild(counter);
+  }
+
+  render();
+  return gallery;
+}
 
 /**
  * 일시 값을 'YYYY-MM-DD HH:MM' 으로 다듬는다.
@@ -76,11 +173,7 @@ function formatFacilityDateTime(value) {
 
 // 팝업 헤더(제목·배지)에서 이미 보여주는 필드 — 본문 목록에서는 중복 표시하지 않음
 // DETAIL_FIELD_CONFIG 에는 남겨 둬야 "그 밖의 항목" 목록으로 다시 새어 나오지 않음
-const HEADER_FIELD_KEYS = new Set([
-  "fclt_nm",
-  "facility_condition",
-  "repair_required_yn",
-]);
+const HEADER_FIELD_KEYS = new Set(["fclt_nm"]);
 
 // 상세 팝업에 표시하지 않는 내부 관리용 키
 // 행정구역 코드는 이름(sido_nm·sgg_nm·emd_nm)으로 이미 보여주고,
@@ -1120,10 +1213,11 @@ async function showFacilityDetail(totalId, coordinate) {
     if (titleEl) {
       titleEl.textContent = properties.fclt_nm || "시설물 상세정보";
     }
+    // 상태 값은 본문에 행으로 나오므로 헤더에는 종류와 보수 필요 배지만 둔다
     renderFacilityPopupHeader(
       properties.fclt_nm,
       String(properties.repair_required_yn || "").toUpperCase() === "Y",
-      String(properties.facility_condition || "").trim()
+      ""
     );
 
     if (!bodyEl) return;
@@ -1136,15 +1230,21 @@ async function showFacilityDetail(totalId, coordinate) {
     DETAIL_FIELD_CONFIG.forEach((cfg) => {
       if (cfg.hidden) return; // 숨김 처리된 필드
       if (HEADER_FIELD_KEYS.has(cfg.key)) return; // 헤더에서 이미 표시
-      const val = properties[cfg.key];
-      if (
+
+      // 사진 갤러리는 photo_1 이 비어 있어도 다른 장이 있으면 표시해야 하므로 별도 판정
+      const val = cfg.isPhotoGallery
+        ? ["photo_1", "photo_2", "photo_3", "photo_4", "photo_5"].find(
+            (photoKey) =>
+              properties[photoKey] &&
+              String(properties[photoKey]).trim() &&
+              String(properties[photoKey]).trim() !== "null"
+          ) && "photos"
+        : properties[cfg.key];
+      const isEmpty =
         val === null ||
         val === undefined ||
         String(val).trim() === "" ||
-        String(val).trim() === "null"
-      ) {
-        return; // 빈 필드는 표시하지 않음
-      }
+        String(val).trim() === "null";
 
       const row = document.createElement("div");
       row.className = "facility-detail-row";
@@ -1156,11 +1256,45 @@ async function showFacilityDetail(totalId, coordinate) {
       const value = document.createElement("span");
       value.className = "facility-detail-value";
 
+      // 값이 없어도 항목은 남기고 '-' 로 표시한다 (어떤 정보가 비어 있는지 보이도록)
+      if (isEmpty) {
+        value.classList.add("is-empty");
+        value.textContent = "-";
+        row.appendChild(label);
+        row.appendChild(value);
+        detailList.appendChild(row);
+        return;
+      }
+
       const strVal = String(val).trim();
       const isHttpUrl =
         strVal.startsWith("http://") || strVal.startsWith("https://");
 
-      if (cfg.isMedia && isHttpUrl) {
+      if (cfg.isPhotoGallery) {
+        // photo_1~photo_5 중 값이 있는 것만 모아 한 줄 갤러리로 표시
+        const photoUrls = ["photo_1", "photo_2", "photo_3", "photo_4", "photo_5"]
+          .map((photoKey) => properties[photoKey])
+          .filter((url) => url && String(url).trim() && String(url).trim() !== "null")
+          .map((url) => String(url).trim());
+        row.classList.add("facility-detail-row-block");
+        value.appendChild(createFacilityPhotoGallery(photoUrls));
+      } else if (cfg.isAudio && isHttpUrl) {
+        const audio = document.createElement("audio");
+        audio.className = "facility-media-audio";
+        audio.controls = true;
+        audio.preload = "none";
+        audio.src = strVal;
+        row.classList.add("facility-detail-row-block");
+        value.appendChild(audio);
+      } else if (cfg.isVideo && isHttpUrl) {
+        const video = document.createElement("video");
+        video.className = "facility-media-video";
+        video.controls = true;
+        video.preload = "metadata";
+        video.src = strVal;
+        row.classList.add("facility-detail-row-block");
+        value.appendChild(video);
+      } else if ((cfg.isMedia || cfg.isAudio || cfg.isVideo) && isHttpUrl) {
         const link = document.createElement("a");
         link.href = strVal;
         link.target = "_blank";
@@ -1170,6 +1304,8 @@ async function showFacilityDetail(totalId, coordinate) {
         value.appendChild(link);
       } else if (cfg.isDateTime) {
         value.textContent = formatFacilityDateTime(strVal);
+      } else if (cfg.valueMap) {
+        value.textContent = formatFacilityCodeValue(cfg.valueMap, strVal);
       } else {
         value.textContent = strVal;
       }

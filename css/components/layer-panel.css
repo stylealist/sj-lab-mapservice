@@ -935,11 +935,12 @@
 }
 
 .facility-detail-label {
-  width: 90px;
+  width: 108px;
   flex-shrink: 0;
   font-weight: 600;
   color: #64748b;
   font-size: 0.8rem;
+  word-break: keep-all; /* "시설물 특이사항" 같은 라벨이 어색하게 잘리지 않도록 */
 }
 
 .facility-detail-value {
@@ -947,6 +948,112 @@
   color: #1e293b;
   font-size: 0.85rem;
   word-break: break-word;
+}
+
+/* 값이 없는 항목 — 자리는 남기고 '-' 로 표시 */
+.facility-detail-value.is-empty {
+  color: #94a3b8;
+}
+
+/* 사진·음성·영상처럼 폭이 필요한 값은 라벨 아래에 전체 폭으로 표시 */
+.facility-detail-row-block {
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.facility-detail-row-block .facility-detail-label {
+  width: auto;
+}
+
+/* 시설물 사진 갤러리 */
+.facility-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+}
+
+.facility-gallery-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #0f172a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.facility-gallery-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.facility-gallery-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.55);
+  color: #ffffff;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+
+.facility-gallery-nav:hover {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.facility-gallery-nav.prev {
+  left: 6px;
+}
+
+.facility-gallery-nav.next {
+  right: 6px;
+}
+
+.facility-gallery-open {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #ffffff;
+  font-size: 0.7rem;
+  text-decoration: none;
+}
+
+.facility-gallery-open:hover {
+  background: rgba(15, 23, 42, 0.85);
+}
+
+.facility-gallery-counter {
+  align-self: flex-end;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: #64748b;
+}
+
+/* 현장 음성·영상 */
+.facility-media-audio {
+  width: 100%;
+  height: 34px;
+}
+
+.facility-media-video {
+  width: 100%;
+  max-height: 220px;
+  border-radius: 8px;
+  background: #0f172a;
 }
 
 .facility-media-link {
