@@ -55,10 +55,11 @@ const DETAIL_FIELD_CONFIG = [
   { key: "photo_4", label: "사진 4", hidden: true },
   { key: "photo_5", label: "사진 5", hidden: true },
   { key: "audio_memo", label: "현장 특이사항", isAudio: true },
-  // 음성으로 남긴 현장 특이사항을 STT로 받아쓴 내용
-  { key: "facility_memo_txt", label: "음성 변환 내용" },
+  // 음성(audio_memo)을 STT로 받아쓴 결과. 동기화 워커가 <컬럼>_txt 에 채운다.
+  { key: "audio_memo_txt", label: "음성 변환 내용" },
   { key: "video", label: "현장 영상", isVideo: true },
-  { key: "audio_memo_txt", label: "음성 메모 텍스트" },
+  // facility_memo 는 앱에서 텍스트 입력 필드라 그 _txt 는 항상 비어 있어 숨긴다
+  { key: "facility_memo_txt", label: "시설물 특이사항 변환", hidden: true },
   { key: "reg_date", label: "등록일시", isDateTime: true },
   { key: "update_at", label: "수정일시", isDateTime: true },
 ];
@@ -77,6 +78,23 @@ const FACILITY_VALUE_MAPS = {
     N: "양호",
   },
 };
+
+/**
+ * 첨부 파일(사진·음성·영상)의 재생 URL을 만든다.
+ *
+ * DB에는 URL이 아니라 QField 프로젝트 내 상대 경로(DCIM/x.jpg 등)가 저장되고
+ * 원본은 QFieldCloud에 있으며 인증이 필요하다. 브라우저가 직접 받을 수 없으므로
+ * 백엔드 중계 엔드포인트를 통해 받는다. 값이 이미 http(s) URL이면 그대로 쓴다.
+ */
+function buildFacilityMediaUrl(totalId, rawPath) {
+  const path = String(rawPath || "").trim();
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+
+  return getApiUrl(
+    `/map/qfield/facilities/${encodeURIComponent(totalId)}/media?path=${encodeURIComponent(path)}`
+  );
+}
 
 // 코드 값을 한글 표기로 바꾼다. 표에 없는 값은 원본을 그대로 보여준다.
 function formatFacilityCodeValue(mapName, value) {
@@ -1275,23 +1293,23 @@ async function showFacilityDetail(totalId, coordinate) {
         const photoUrls = ["photo_1", "photo_2", "photo_3", "photo_4", "photo_5"]
           .map((photoKey) => properties[photoKey])
           .filter((url) => url && String(url).trim() && String(url).trim() !== "null")
-          .map((url) => String(url).trim());
+          .map((url) => buildFacilityMediaUrl(totalId, url));
         row.classList.add("facility-detail-row-block");
         value.appendChild(createFacilityPhotoGallery(photoUrls));
-      } else if (cfg.isAudio && isHttpUrl) {
+      } else if (cfg.isAudio) {
         const audio = document.createElement("audio");
         audio.className = "facility-media-audio";
         audio.controls = true;
         audio.preload = "none";
-        audio.src = strVal;
+        audio.src = buildFacilityMediaUrl(totalId, strVal);
         row.classList.add("facility-detail-row-block");
         value.appendChild(audio);
-      } else if (cfg.isVideo && isHttpUrl) {
+      } else if (cfg.isVideo) {
         const video = document.createElement("video");
         video.className = "facility-media-video";
         video.controls = true;
         video.preload = "metadata";
-        video.src = strVal;
+        video.src = buildFacilityMediaUrl(totalId, strVal);
         row.classList.add("facility-detail-row-block");
         value.appendChild(video);
       } else if ((cfg.isMedia || cfg.isAudio || cfg.isVideo) && isHttpUrl) {

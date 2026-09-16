@@ -3,6 +3,7 @@
 - 지도 타일: VWorld (`xdworld.vworld.kr`) — 별도 API 키 없이 XYZ 타일 직접 요청.
 - POI/WFS·시설물 데이터: 자사 백엔드 `mapservice-rest`(운영 `api.sj-lab.co.kr`, 로컬은 API Gateway `localhost:8100` 경유).
 - WMS: 자사 GeoServer(`geoserver.sj-lab.co.kr`).
+- 시설물 첨부 파일(사진·음성·영상): 원본은 QFieldCloud(`https://qfield.sj-lab.co.kr`)에 있고 API가 인증을 요구합니다. DB 컬럼(`photo_1`~`photo_5`, `audio_memo`, `video`)에는 URL이 아니라 **프로젝트 내 상대 경로**(`DCIM/*.jpg`, `audio/*.m4a`, `video/*.mp4`)가 들어 있으므로, 그 값을 그대로 `<img>`·`<audio>`·`<video>`에 넣으면 재생되지 않습니다. **반드시 `buildFacilityMediaUrl(totalId, path)`로 백엔드 중계 URL(`/map/qfield/facilities/{totalId}/media?path=...`)을 만들어 쓸 것.** 값이 이미 `http(s)` URL이면 그대로 사용합니다.
 - 로드뷰: 카카오맵 SDK (`window.KAKAO_APP_KEY`, index.html에 하드코딩되어 있음).
 
 ## 반드시 지킬 것
