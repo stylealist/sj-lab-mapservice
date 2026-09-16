@@ -39,7 +39,7 @@ const DETAIL_FIELD_CONFIG = [
   { key: "repair_required_yn", label: "보수필요여부" },
   { key: "facility_memo", label: "메모" },
   { key: "facility_memo_txt", label: "메모내용" },
-  { key: "inspected_at", label: "점검일시" },
+  { key: "inspected_at", label: "점검일시", isDateTime: true },
   { key: "project_name", label: "사업명" },
   { key: "owner", label: "소유자" },
   { key: "pic_dept_nm", label: "담당부서" },
@@ -54,9 +54,23 @@ const DETAIL_FIELD_CONFIG = [
   { key: "video", label: "동영상", isMedia: true },
   { key: "audio_memo", label: "음성메모", isMedia: true },
   { key: "audio_memo_txt", label: "음성내용" },
-  { key: "reg_date", label: "등록일시" },
-  { key: "update_at", label: "수정일시" },
+  { key: "reg_date", label: "등록일시", isDateTime: true },
+  { key: "update_at", label: "수정일시", isDateTime: true },
 ];
+
+/**
+ * 일시 값을 'YYYY-MM-DD HH:MM' 으로 다듬는다.
+ * 백엔드가 주는 값은 타임존이 없는 로컬 시각 문자열(예: 2026-08-28T05:12:42.635018)이므로
+ * Date 로 파싱하면 브라우저 타임존만큼 어긋난다. 그래서 문자열에서 그대로 잘라 쓴다.
+ * 형식이 다르면 원본을 그대로 보여준다.
+ */
+function formatFacilityDateTime(value) {
+  const matched = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (!matched) return String(value);
+
+  const [, year, month, day, hour, minute] = matched;
+  return `${year}-${month}-${day} ${hour}:${minute}`;
+}
 
 // 팝업 헤더(제목·배지)에서 이미 보여주는 필드 — 본문 목록에서는 중복 표시하지 않음
 // DETAIL_FIELD_CONFIG 에는 남겨 둬야 "그 밖의 항목" 목록으로 다시 새어 나오지 않음
@@ -1097,6 +1111,8 @@ async function showFacilityDetail(totalId, coordinate) {
         link.textContent = "열기 (새 창)";
         link.className = "facility-media-link";
         value.appendChild(link);
+      } else if (cfg.isDateTime) {
+        value.textContent = formatFacilityDateTime(strVal);
       } else {
         value.textContent = strVal;
       }
