@@ -3,6 +3,10 @@ import { getMap } from "./map-core.js";
 import { MapEventManager } from "./map-events.js";
 import { getApiUrl } from "./map-wfs.js";
 
+// 화면을 처음 열었을 때 선택되는 기본 시·도 (11 = 서울특별시)
+// 목록에 이 코드가 없으면 전체로 표시된다
+const DEFAULT_SIDO_CD = "11";
+
 // 시설물 모듈 상태
 let facilityLayer = null;
 let facilitySource = null;
@@ -437,12 +441,12 @@ function initializeFacilityModule() {
   window.loadFacilitySggList = loadFacilitySggList;
   window.loadFacilityEmdList = loadFacilityEmdList;
 
-  // 초기 시도 목록 및 전체 시설물 데이터 로드
   // 아이콘 설정은 DB(qfield.facility_icon)에서 불러오며, 실패해도 내장 기본 아이콘으로 계속 동작함
   loadFacilityIconConfig();
   bindFacilityKeywordSearch();
+  // 시도 목록을 불러온 뒤 기본 시·도(서울)를 적용하며 시설물도 함께 조회한다
+  // (여기서 loadFacilities 를 따로 부르면 전체 조회 → 서울 조회로 두 번 요청하게 됨)
   loadFacilitySidoList();
-  loadFacilities({});
 
   facilityModuleInitialized = true;
   console.log("시설물 모듈 초기화 완료");
@@ -572,9 +576,33 @@ async function loadFacilitySidoList() {
         sidoSelect.appendChild(opt);
       });
     }
+
+    applyDefaultSido(sidoSelect);
   } catch (error) {
     console.error("시도 목록 로드 오류:", error);
+    // 시도 목록을 못 받아도 시설물은 전체로 표시한다
+    loadFacilities({});
   }
+}
+
+/**
+ * 기본 시·도를 선택 상태로 만든다.
+ * select 값을 바꾼 뒤 change 이벤트를 직접 발생시켜, 사용자가 고른 것과 같은 경로
+ * (구역 extent로 지도 이동 → 시군구 목록 로드 → 시설물 재조회)를 그대로 타게 한다.
+ */
+function applyDefaultSido(sidoSelect) {
+  const hasDefault = Array.from(sidoSelect.options).some(
+    (option) => option.value === DEFAULT_SIDO_CD
+  );
+
+  if (!hasDefault) {
+    // 기본 시·도가 목록에 없으면 전체로 표시
+    loadFacilities({});
+    return;
+  }
+
+  sidoSelect.value = DEFAULT_SIDO_CD;
+  sidoSelect.dispatchEvent(new Event("change"));
 }
 
 // 시군구 목록 로드
