@@ -968,6 +968,60 @@ async function loadFacilities(filter = {}) {
   }
 }
 
+/**
+ * 팝업 전체가 지도 화면 안에 들어오도록 보정한다.
+ *
+ * 주의할 점 두 가지 때문에 setPosition 재호출이 아니라 panIntoView 를 쓴다.
+ *  1) 같은 좌표로 setPosition 을 다시 호출하면 값이 바뀌지 않아 autoPan 이 아예 실행되지 않는다.
+ *  2) 지도 이동 애니메이션이 끝나기 전에 보정하면 애니메이션이 팝업을 다시 화면 밖으로 밀어낸다.
+ * 그래서 애니메이션이 끝난 뒤(최대 약 1.5초 대기) 한 번 보정한다.
+ */
+function ensureFacilityPopupVisible() {
+  const map = getMap();
+  if (!map || !facilityOverlay) return;
+
+  const deadline = Date.now() + 1500;
+
+  const run = () => {
+    if (!facilityOverlay || facilityOverlay.getPosition() === undefined) return;
+
+    if (map.getView().getAnimating() && Date.now() < deadline) {
+      requestAnimationFrame(run);
+      return;
+    }
+
+    facilityOverlay.panIntoView({ margin: 24, animation: { duration: 200 } });
+  };
+
+  requestAnimationFrame(run);
+}
+
+/**
+ * 선택된 목록 항목이 보이도록 목록 컨테이너만 스크롤한다.
+ * element.scrollIntoView() 는 목록뿐 아니라 상위 문서까지 함께 스크롤해서,
+ * 지도에서 핀을 클릭하면 화면 전체가 위로 밀려 헤더 아래가 잘리는 문제가 있었다.
+ * 그래서 컨테이너 기준으로 필요한 만큼만 직접 스크롤한다.
+ */
+function scrollFacilityItemIntoView(item) {
+  const container = document.querySelector(".facility-list-container");
+  if (!container || !item) return;
+
+  const containerRect = container.getBoundingClientRect();
+  const itemRect = item.getBoundingClientRect();
+  const margin = 8; // 위아래로 살짝 여유
+
+  let delta = 0;
+  if (itemRect.top < containerRect.top) {
+    delta = itemRect.top - containerRect.top - margin;
+  } else if (itemRect.bottom > containerRect.bottom) {
+    delta = itemRect.bottom - containerRect.bottom + margin;
+  }
+
+  if (delta !== 0) {
+    container.scrollTo({ top: container.scrollTop + delta, behavior: "smooth" });
+  }
+}
+
 // 시설물 선택 (목록 또는 지도에서 호출)
 function selectFacility(totalId, animate = true) {
   if (!totalId) return;
@@ -978,7 +1032,7 @@ function selectFacility(totalId, animate = true) {
   items.forEach((item) => {
     if (item.getAttribute("data-total-id") === selectedTotalId) {
       item.classList.add("selected");
-      item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      scrollFacilityItemIntoView(item);
     } else {
       item.classList.remove("selected");
     }
@@ -1177,11 +1231,8 @@ async function showFacilityDetail(totalId, coordinate) {
       bodyEl.appendChild(detailList);
     }
 
-    // 내용이 채워져 팝업 높이가 확정된 뒤 위치를 다시 지정해야 autoPan이 실제 크기로 계산됨
-    // (처음 setPosition 시점에는 "불러오는 중" 상태라 높이가 작아 헤더가 화면 위로 잘렸음)
-    if (coordinate && facilityOverlay) {
-      facilityOverlay.setPosition(coordinate);
-    }
+    // 내용이 채워진 뒤(=높이 확정) 지도 이동 애니메이션까지 끝나면 팝업 전체가 보이도록 보정
+    ensureFacilityPopupVisible();
   } catch (error) {
     console.error("시설물 상세정보 로드 오류:", error);
     if (bodyEl) {
