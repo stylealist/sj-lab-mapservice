@@ -11,9 +11,9 @@ VWorld 지도 API와 OpenLayers를 사용하는 순수 정적 웹 프론트엔�
 빌드·린트·테스트 스크립트가 없습니다. 로컬 정적 서버로 띄우고 브라우저에서 바로 확인하는 것이 유일한 개발 루프입니다 (ES 모듈 `import`를 쓰므로 `file://`로 열면 CORS 오류가 납니다):
 
 ```bash
-python -m http.server 8000
+python -m http.server 4000
 # 또는
-npx serve .
+npx serve . -l 4000
 ```
 
 브라우저 콘솔에서 즉시 확인 가능한 디버그 진입점 (`js/modules/map/map.js`가 전역에 노출):
@@ -36,7 +36,7 @@ window.MapEventManager.debugHandlers()
 
 - 인라인 HTML(`onclick=...`)이나 다른 모듈에서 호출해야 하는 새 함수는 `js/modules/map/map.js`에서 `window.*`에 등록할 것. 등록을 빠뜨리면 모듈 안에서만 동작하고 인라인 핸들러에서는 `ReferenceError`가 남.
 - `window.appInitialized` / `window.mapModulesInitialized` / `window.mapInitializationInProgress` 가드를 제거·우회하지 말 것 — `DOMContentLoaded`가 중복 발생하거나 모듈이 재호출되면 이벤트 리스너·레이어가 중복 등록됨.
-- 존재하지 않는 빌드/린트/테스트 명령을 만들어내지 말 것. 변경 검증은 정적 서버(`python -m http.server`)로 띄운 뒤 브라우저에서 직접 확인.
+- 존재하지 않는 빌드/린트/테스트 명령을 만들어내지 말 것. 변경 검증은 정적 서버를 4000 포트(`python -m http.server 4000`)로 띄운 뒤 브라우저에서 직접 확인 — 게이트웨이 CORS가 `localhost:4000`만 허용하므로 다른 포트에서는 API 호출이 막힘.
 - 함수, 변수의 이름은 카멜 형식으로 명명 할것
 - 코드 추가 및 수정중에 CLAUDE.md 혹은 README.md에 추가되어야 할 내용인경우 코드 변경후에 바로 추가
 - 답변을 해줄 때 한글로 답변 할것
@@ -48,3 +48,7 @@ window.MapEventManager.debugHandlers()
 - @docs/map-architecture.md — 지도 모듈(`js/modules/map/`) 파일별 역할, WFS/WMS 설정, 팝업 페이지 연결
 - @docs/ui-conventions.md — SPA 페이지 전환, 레이어 패널 탭 구조, CSS 구성
 - @docs/external-services.md — VWorld/자사 백엔드/GeoServer/카카오맵 등 외부 연동 목록
+
+## 통합 허브
+
+저장소를 넘나드는 작업(프론트엔드 + 백엔드 + 게이트웨이)의 총괄 기준 저장소는 `C:\developer\workspace\mapservice-rest`입니다. MCP(GitHub/DB), 로컬 비밀값, Bash 가드 훅, DB 분석 문서, 로컬 포트·라우팅·CORS 구성은 그 저장소에서 관리하므로 이 저장소에는 MCP 서버가 연결되지 않습니다. 로컬 개발 시 API는 API Gateway(`localhost:8100`)를 거치며, 프론트엔드는 게이트웨이 CORS 허용 origin인 `http://localhost:4000`에서 서빙해야 API 호출이 됩니다.
