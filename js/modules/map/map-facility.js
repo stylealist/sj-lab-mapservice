@@ -32,9 +32,11 @@ const DETAIL_FIELD_CONFIG = [
   { key: "inst_nm", label: "기관명" },
   { key: "daddr", label: "도로명주소" },
   { key: "lotno_addr", label: "지번주소" },
-  { key: "sido_nm", label: "시도" },
-  { key: "sgg_nm", label: "시군구" },
-  { key: "emd_nm", label: "읍면동" },
+  // 행정구역 이름은 주소로 이미 알 수 있어 팝업에서는 숨김
+  // (설정에서 아예 빼면 "그 밖의 항목" 목록으로 다시 새어 나오므로 hidden 으로 둔다)
+  { key: "sido_nm", label: "시도", hidden: true },
+  { key: "sgg_nm", label: "시군구", hidden: true },
+  { key: "emd_nm", label: "읍면동", hidden: true },
   { key: "facility_condition", label: "상태" },
   { key: "repair_required_yn", label: "보수필요여부" },
   { key: "facility_memo", label: "메모" },
@@ -1132,6 +1134,7 @@ async function showFacilityDetail(totalId, coordinate) {
 
     // 정의된 필드 렌더링 (값이 비어 있는 필드는 숨김, XSS 방지 처리)
     DETAIL_FIELD_CONFIG.forEach((cfg) => {
+      if (cfg.hidden) return; // 숨김 처리된 필드
       if (HEADER_FIELD_KEYS.has(cfg.key)) return; // 헤더에서 이미 표시
       const val = properties[cfg.key];
       if (
