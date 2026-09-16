@@ -8,6 +8,7 @@
 - **map-measure.js** (1,339줄) — 거리/면적/반경/각도 측정 도구와 측정 결과 팝업.
 - **map-roadview.js** — 로드뷰(카카오맵 스트리트뷰) 기능. `window.KAKAO_APP_KEY`(index.html 인라인 스크립트에서 설정)를 사용하며, `html/loadview/load-view.html`을 별도 창/iframe으로 띄움.
 - **map-area-selector.js** (698줄) — 지도 영역 선택 → 캡처 기능. `html/fabric/fabric-editor.html`(Fabric.js 기반 편집기, 별도 페이지)로 연결됨.
+- **map-facility.js** — QField 시설물 레이어 및 관리 모듈. 시도/시군구/읍면동 행정구역 연쇄 검색에 따른 시설물 목록·지도 표출, 피처 선택 시 지도 이동 및 `ol.Overlay` 팝업 상세정보 표시.
 - **map-tools.js** — 콘솔 디버깅용 `window.mapTools` (flyTo, setZoom, resetMap 등).
 
 `html/` 아래 페이지들은 `index.html`의 SPA 라우팅(페이지 전환)에 포함되지 않는 **독립 팝업 페이지**입니다 — `map-roadview.js`/`map-area-selector.js`가 별도 창으로 여는 방식이므로, 관련 기능을 고칠 때는 두 파일과 그 팝업 HTML을 함께 봐야 합니다.
@@ -22,3 +23,21 @@
 - `map-wfs.js`의 새 엔드포인트는 반드시 `getApiUrl()`을 통해서만 URL을 만들 것 (dev/prod 자동 전환). 절대 URL 하드코딩 금지.
 - `loadWfsData()`는 최초 로드 시 서버 응답 전체를 한 번에 `readFeatures()`하지 않고, 원본 GeoJSON 좌표로 뷰포트 내 피처만 먼저 골라(`filterRawPointFeaturesByExtent`) 빠르게 화면에 표시한 뒤, 나머지는 `scheduleBackgroundFeatureCaching()`으로 청크 단위(`requestIdleCallback`)로 백그라운드 파싱해 `wfsDataCache`를 채웁니다. 새 WFS 레이어를 추가하거나 로딩 로직을 고칠 때도 이 패턴(초기 표시는 빠르게, 전체 파싱은 메인 스레드를 막지 않게)을 유지할 것 — 대량 데이터에서 최초 로딩 체감 속도에 직결됨.
 - **`readFeatures()`에 넘기는 `featureProjection`은 반드시 `vectorSource.getProjection()`(= `null`)을 유지할 것.** OpenLayers 7.4.0에서 `ol.source.Vector`의 `getProjection()`은 `null`을 반환하고, `featureProjection`이 `null`이면 `readFeatures()`가 좌표를 **변환하지 않고 그대로** 사용합니다. 백엔드 응답 좌표가 이미 뷰 좌표계(EPSG:3857)이므로 이 동작에 의존하고 있습니다(옵션의 `dataProjection: "EPSG:4326"`은 실질적으로 무시됨). 여기에 `map.getView().getProjection()` 같은 실제 투영을 넘기면 미터 좌표를 경위도로 간주해 변환해버려 피처가 지도 밖으로 밀려나 **레이어가 아예 표시되지 않음**. 같은 이유로 원본 좌표 기반 뷰포트 필터링도 4326이 아니라 **뷰 좌표계 extent**로 비교해야 함.
+- **시설물 레이어 (`map-facility.js`) 규격**:
+  - `zIndex`: `1010` (기존 WFS/WMS 레이어 1000 위에 배치하여 가시성 확보).
+  - **아이콘**: PNG 파일이 아니라 `buildFacilityIconUrl()`이 만드는 **SVG data URI 핀**(원본 24×32, `anchor [0.5, 1.0]`)을 사용합니다. 시설물명(`fclt_nm`)에 포함된 키워드로 종류를 판별해 글리프를 고르고, `repair_required_yn === 'Y'`면 핀 색을 경고색으로 바꿉니다. 글리프 안의 문자열 `COLOR`는 핀 색으로 치환되므로 색을 직접 적지 말 것. 종류·색·선택 상태 조합은 `facilityStyleCache`에 캐시되므로(피처 2천여 건) 스타일 함수 안에서 `new ol.style.Style`을 새로 만들지 말 것.
+  - **아이콘 설정의 기준은 DB**(`qfield.facility_icon`)입니다. `loadFacilityIconConfig()`가 초기화 때 `GET /map/qfield/facility-icons`로 불러와 `facilityIconTypes`·`facilityDefaultIcon`을 교체하고 캐시를 비웁니다. **아이콘을 추가·변경할 때는 이 파일이 아니라 DB 행을 수정할 것**(생성·초기데이터 스크립트: `mapservice-rest/db/qfield_facility_icon.sql`). 파일 안의 `FALLBACK_FACILITY_ICON_TYPES`는 API 실패·빈 응답일 때만 쓰는 대체값이므로, DB에 종류를 추가했다고 해서 여기에 같이 넣지 말 것(둘이 어긋나면 어느 쪽이 보이는지 헷갈림).
+  - 레이어 옵션: `updateWhileAnimating: false`, `updateWhileInteracting: false`, `declutter: false` (목록 건수와 지도 표출 건수 일치를 위해 비활성화).
+  - **상세 팝업**: 헤더는 지도 핀과 같은 규칙으로 채웁니다(`renderFacilityPopupHeader()`) — 같은 SVG 아이콘 + 시설물명 + 종류·보수필요·상태 배지. 헤더에서 보여주는 `fclt_nm`·`facility_condition`·`repair_required_yn`은 `HEADER_FIELD_KEYS`로 본문 목록에서 제외하되 `DETAIL_FIELD_CONFIG`에는 남겨 둘 것(빼면 "그 밖의 항목" 목록으로 다시 새어 나옴). 배지 색은 핀 색과 맞춰 종류=파랑(`badge-type`), 보수 필요=주황(`badge-repair`)을 씁니다.
+  - **팝업 위치**: 오버레이는 `autoPan`을 켜고, **상세 내용을 그린 뒤 `setPosition(coordinate)`을 한 번 더 호출**해야 합니다. 처음 위치를 잡는 시점에는 "불러오는 중" 상태라 팝업 높이가 작아, autoPan이 실제 높이를 모른 채 계산해 헤더가 화면 위로 잘립니다.
+  - 이벤트 ID:
+    - 클릭: `MapEventManager.registerClickHandler('facility-click-layer', handler)` (기존 `wfs-general-click`과 충돌하지 않도록 시설물 레이어 피처만 필터링 처리).
+    - 호버 커서: `MapEventManager.registerPointerMoveHandler('facility-pointer-move', handler)` (자체 `isFacilityHovered` 상태를 두어 시설물 피처를 벗어날 때 `cursor = ""`로 즉시 복원하여 커서 고착 방지).
+  - 요청 순서 경쟁 방지: `loadFacilities`, `loadFacilitySggList`, `loadFacilityEmdList`는 `AbortController` 및 요청 순번(`facilityRequestSeq` 등)을 두어 이전 요청을 취소하고 최신 응답만 UI에 반영(취소된 `AbortError`는 오류 UI를 띄우지 않음).
+  - API 목록 (모두 `getApiUrl()`을 통해 호출):
+    - `GET /map/admin-area/sido`: 시도 목록 및 extent
+    - `GET /map/admin-area/sgg?sidoCd={sidoCd}`: 시군구 목록 및 extent
+    - `GET /map/admin-area/emd?sggCd={sggCd}`: 읍면동 목록 및 extent
+    - `GET /map/qfield/facilities`: 시설물 GeoJSON FeatureCollection (`sidoCd`, `sggCd`, `emdCd` 파라미터 지원)
+    - `GET /map/qfield/facilities/{totalId}`: 시설물 상세 GeoJSON Feature (모든 상세 속성 및 sido_nm, sgg_nm, emd_nm 포함)
+

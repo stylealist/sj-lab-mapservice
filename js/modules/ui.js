@@ -236,6 +236,11 @@ function initializeLayerPanel() {
   // 패널 토글 기능
   panelToggle.addEventListener("click", function () {
     layerPanel.classList.toggle("collapsed");
+    setTimeout(() => {
+      if (window.mapInstance) {
+        window.mapInstance.updateSize();
+      }
+    }, 320);
   });
 
   // 내부 탭 기능
@@ -681,6 +686,23 @@ function switchTab(tabName, tabButtons, tabPanes) {
 
   if (activeTabPane) {
     activeTabPane.classList.add("active");
+  }
+
+  const panelTitle = document.getElementById("panelTitle");
+  if (panelTitle) {
+    const titles = {
+      facility: "시설물",
+      route: "길찾기",
+      layers: "레이어",
+      search: "검색",
+      bookmark: "즐겨찾기",
+      measure: "측정",
+      draw: "그리기",
+      export: "내보내기",
+    };
+    if (titles[tabName]) {
+      panelTitle.textContent = titles[tabName];
+    }
   }
 }
 

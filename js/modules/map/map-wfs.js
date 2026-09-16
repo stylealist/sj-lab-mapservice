@@ -2197,6 +2197,7 @@ window.testWfsUrl = testWfsUrl;
 window.testPharmacyHospitalApis = testPharmacyHospitalApis;
 
 export {
+  getApiUrl,
   initializeWfsLayers,
   toggleWfsLayer,
   toggleConvenienceStore,

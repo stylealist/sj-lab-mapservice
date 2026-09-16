@@ -39,6 +39,16 @@ import {
   showWmsPopup,
   closeWmsPopup,
 } from "./map-wms.js";
+import {
+  initializeFacilityModule,
+  loadFacilities,
+  selectFacility,
+  showFacilityDetail,
+  closeFacilityPopup,
+  loadFacilitySidoList,
+  getFacilityLayer,
+  getFacilitySource,
+} from "./map-facility.js";
 
 // 맵 초기화 함수 - 모든 모듈을 초기화
 function initializeMapWithModules() {
@@ -70,6 +80,9 @@ function initializeMapWithModules() {
 
   // WMS 레이어 초기화
   initializeWmsLayers();
+
+  // 시설물 모듈 초기화
+  initializeFacilityModule();
 
   // 초기화 완료 플래그 설정
   window.mapModulesInitialized = true;
@@ -119,7 +132,27 @@ window.closeWfsPopup = closeWfsPopup;
 window.showWmsPopup = showWmsPopup;
 window.closeWmsPopup = closeWmsPopup;
 
+// 시설물 모듈 전역 등록
+window.initializeFacilityModule = initializeFacilityModule;
+window.loadFacilities = loadFacilities;
+window.selectFacility = selectFacility;
+window.showFacilityDetail = showFacilityDetail;
+window.closeFacilityPopup = closeFacilityPopup;
+window.loadFacilitySidoList = loadFacilitySidoList;
+window.getFacilityLayer = getFacilityLayer;
+window.getFacilitySource = getFacilitySource;
+
 // 테스트 함수들 추가
 window.testPharmacyHospitalApis = window.testPharmacyHospitalApis;
 
-export { initializeMapWithModules, mapTools, switchLayer, toggleOverlay };
+export {
+  initializeMapWithModules,
+  mapTools,
+  switchLayer,
+  toggleOverlay,
+  initializeFacilityModule,
+  loadFacilities,
+  selectFacility,
+  showFacilityDetail,
+  closeFacilityPopup,
+};

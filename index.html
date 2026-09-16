@@ -318,7 +318,7 @@
 
           <div class="layer-panel" id="layerPanel">
             <div class="panel-header">
-              <h3 id="panelTitle">길찾기</h3>
+              <h3 id="panelTitle">시설물</h3>
               <button class="panel-toggle" id="panelToggle">
                 <svg class="toggle-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -329,8 +329,52 @@
 
             <div class="panel-content">
               <div class="tab-content">
+                <!-- 시설물 탭 -->
+                <div class="tab-pane active" id="facility-tab">
+                  <div class="facility-search-area">
+                    <div class="facility-select-group">
+                      <div class="facility-select-item">
+                        <label for="facilitySidoSelect">시·도</label>
+                        <select id="facilitySidoSelect" class="facility-select">
+                          <option value="">전체</option>
+                        </select>
+                      </div>
+                      <div class="facility-select-item">
+                        <label for="facilitySggSelect">시·군·구</label>
+                        <select id="facilitySggSelect" class="facility-select" disabled>
+                          <option value="">전체</option>
+                        </select>
+                      </div>
+                      <div class="facility-select-item">
+                        <label for="facilityEmdSelect">읍·면·동</label>
+                        <select id="facilityEmdSelect" class="facility-select" disabled>
+                          <option value="">전체</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="facility-status-area">
+                      <div class="facility-count-info">
+                        총 <span id="facilityCount" class="facility-count">0</span>건
+                      </div>
+                    </div>
+                  </div>
+                  <div class="facility-list-container">
+                    <div id="facilityLoading" class="facility-state-message hidden">
+                      <div class="facility-spinner"></div>
+                      <span>데이터를 불러오는 중...</span>
+                    </div>
+                    <div id="facilityEmpty" class="facility-state-message hidden">
+                      <span>검색 결과가 없습니다.</span>
+                    </div>
+                    <div id="facilityError" class="facility-state-message facility-error-message hidden">
+                      <span>데이터를 불러오는 중 오류가 발생했습니다.</span>
+                    </div>
+                    <ul id="facilityList" class="facility-list"></ul>
+                  </div>
+                </div>
+
                 <!-- 길찾기 탭 -->
-                <div class="tab-pane active" id="route-tab">
+                <div class="tab-pane" id="route-tab">
                   <div class="route-form">
                     <div class="input-group">
                       <label for="startPoint">출발지</label>
