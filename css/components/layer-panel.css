@@ -563,6 +563,75 @@
   background: #cbd5e1;
 }
 
+/* 검색어가 없을 때 숨김 (bindFacilityKeywordSearch 가 hidden 클래스를 토글) */
+.facility-keyword-clear.hidden {
+  display: none;
+}
+
+/* 보수 필요 여부 필터 — 세그먼트 버튼 (전체 / 보수 필요 / 보수 불필요) */
+.facility-repair-filter {
+  display: grid;
+  /* 같은 너비로 나누면 전국 조회 시 "보수 불필요 2,473"이 넘치므로 글자 길이만큼 나누고 남는 폭을 고르게 채운다 */
+  grid-template-columns: auto auto auto;
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 0.7rem;
+  background: #f1f5f9;
+  border-radius: 9px;
+}
+
+.facility-repair-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.38rem 0.35rem;
+  font-size: 0.78rem;
+  font-family: inherit;
+  font-weight: 500;
+  color: #475569;
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.facility-repair-option:hover {
+  color: #0f172a;
+}
+
+.facility-repair-option.active {
+  color: #1d4ed8;
+  font-weight: 600;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+/* 보수 필요 선택 시 — 지도 핀 경고색(#d97706)과 맞춤 */
+.facility-repair-option[data-repair-filter="repair"].active {
+  color: #b45309;
+}
+
+.facility-repair-option:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.facility-repair-count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.facility-repair-option.active .facility-repair-count {
+  color: inherit;
+  opacity: 0.75;
+}
+
 .facility-select-group {
   display: flex;
   flex-direction: column;
@@ -810,6 +879,12 @@
 .facility-badge.badge-repair {
   background-color: #fef3c7;
   color: #b45309;
+}
+
+/* 보수 불필요 — 경고(주황)와 구분되는 차분한 초록 */
+.facility-badge.badge-no-repair {
+  background-color: #dcfce7;
+  color: #15803d;
 }
 
 /* 시설물 종류 — 지도 핀 기본색(#2563eb)과 맞춤 */

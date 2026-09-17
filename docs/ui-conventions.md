@@ -15,7 +15,12 @@
   - 상단 행정구역 연쇄 select(시도 → 시군구 → 읍면동)는 각각 `전체` 옵션을 포함하며, 상위 select가 변경되면 하위 select를 초기화(비활성화)하고 가장 구체적인 행정구역 코드(또는 전체)로 시설물 목록과 지도를 재조회합니다. 구역 선택 시 해당 구역 extent(패딩 포함)로 지도를 이동(fit)합니다.
   - 대량 피처(약 2,474건) 렌더링 시 `DocumentFragment`를 사용하고 XSS 방지를 위해 텍스트는 `textContent`로 삽입합니다.
   - **목록 항목 구조**: `아이콘(30px) | 이름 + 소속 | 배지` 3단 그리드(`.facility-item`). 아이콘은 지도 핀과 같은 SVG를 `buildFacilityIconUrl()`로 만들어 쓰고, 소속(`.facility-sub`)은 `inst_nm · daddr`입니다 — 같은 이름이 반복되므로 이 줄이 실질적인 구분 기준이니 빼지 말 것.
-  - **검색**: `#facilityKeyword` 입력은 서버를 다시 부르지 않고 `renderFacilityList()`가 이름·소속 부분일치로 걸러 다시 그립니다(원본은 `facilityListItems`에 보관). 행정구역 select 변경만 서버를 재조회합니다.
+  - **검색**: `#facilityKeyword` 입력은 서버를 다시 부르지 않고 `renderFacilityList()`가 이름·소속 부분일치로 걸러 다시 그립니다(원본은 `facilityListItems`에 보관). 행정구역 select 변경만 서버를 재조회합니다. 검색어는 **목록에만** 적용되고 지도 핀은 그대로입니다.
+  - **보수 필요 여부 필터**: 검색창 아래 세그먼트 버튼(`#facilityRepairFilter`, `전체`(기본) / `보수 필요` / `보수 불필요`). 상태는 `facilityRepairFilter`(`"all"`·`"repair"`·`"noRepair"`)이고 판정은 `matchesFacilityRepairFilter()` 하나로 목록과 지도가 공유합니다.
+    - `보수 필요` = `repair_required_yn === 'Y'`, `보수 불필요` = **Y가 아닌 전부**(`N`·빈 값). 실데이터 대부분이 빈 값이라 `N`만 고르면 결과가 0건이 되니 판정을 바꾸지 말 것.
+    - 검색어와 달리 **지도 핀에도 적용**합니다 — `facilityStyleFunction()`이 맞지 않는 핀에 `null`을 반환(클릭·호버 대상에서도 빠짐)하고, 필터를 바꾸면 `facilitySource.changed()`로 다시 그립니다. 열려 있던 팝업의 시설물이 필터에서 빠지면 팝업을 닫습니다.
+    - 버튼 옆 건수는 **검색어까지 반영한** 기준입니다(어느 쪽에 결과가 있는지 보이도록). 행정구역을 바꿔 재조회해도 선택한 필터는 유지됩니다.
+    - 버튼 칸은 `grid-template-columns: auto auto auto`로 글자 길이만큼 나눕니다. 같은 너비(`1fr`)로 바꾸면 전국 조회 시 "보수 불필요 2,473"이 넘칩니다.
   - **건수 표시**: 패널 제목 옆 `#panelCount`는 조회된 전체 건수, 검색 영역의 `#facilityCount`는 현재 화면에 보이는 건수입니다.
   - **기본 시·도**: 화면을 처음 열면 `DEFAULT_SIDO_CD`(현재 `"11"` 서울특별시)가 선택됩니다. `applyDefaultSido()`가 select 값을 바꾼 뒤 `change` 이벤트를 직접 발생시켜 사용자가 고른 것과 같은 경로(구역 extent로 지도 이동 → 시군구 목록 → 시설물 재조회)를 타므로, **초기화에서 `loadFacilities({})`를 따로 부르지 말 것** — 전체 조회 후 다시 시·도 조회로 요청이 두 번 나갑니다. 시도 목록 조회가 실패하거나 기본 코드가 목록에 없을 때만 전체 조회로 넘어갑니다.
   - 상태 표시(로딩 중, 빈 결과, 오류)는 인라인 `style="display:none"` 대신 CSS 클래스(`.facility-state-message.hidden`)로 제어합니다.

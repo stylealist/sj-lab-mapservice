@@ -10,6 +10,7 @@
 - **map-area-selector.js** (698줄) — 지도 영역 선택 → 캡처 기능. `html/fabric/fabric-editor.html`(Fabric.js 기반 편집기, 별도 페이지)로 연결됨.
 - **map-facility.js** — QField 시설물 레이어 및 관리 모듈. 시도/시군구/읍면동 행정구역 연쇄 검색에 따른 시설물 목록·지도 표출, 피처 선택 시 지도 이동 및 `ol.Overlay` 팝업 상세정보 표시.
 - **map-tools.js** — 콘솔 디버깅용 `window.mapTools` (flyTo, setZoom, resetMap 등).
+- **map-popup-drag.js** — 지도 팝업 헤더 드래그 이동 공용 함수 `bindOverlayHeaderDrag(overlay, header, { ignoreSelector })`. 시설물 팝업(`map-facility.js`), WFS 레이어 팝업(`showWfsPopup`, 편의점·약국·병원·관공서·버스·CCTV 공통), WMS 팝업(`showWmsPopup`)이 모두 이 함수를 씁니다. 오버레이 좌표는 대상 지점에 고정한 채 **offset만** 바꾸므로 옮긴 뒤에도 지도를 움직이면 팝업이 따라갑니다. WFS·WMS 팝업은 클릭할 때마다 요소와 오버레이를 새로 만들므로 **만들 때마다 다시 호출**해야 하고(요소를 지우면 리스너도 함께 사라짐), 닫기 버튼은 `ignoreSelector`로 제외해야 드래그로 오인되지 않습니다. 새 지도 팝업을 추가할 때도 헤더 드래그는 이 함수로 붙일 것(복사해서 새로 만들지 말 것).
 
 `html/` 아래 페이지들은 `index.html`의 SPA 라우팅(페이지 전환)에 포함되지 않는 **독립 팝업 페이지**입니다 — `map-roadview.js`/`map-area-selector.js`가 별도 창으로 여는 방식이므로, 관련 기능을 고칠 때는 두 파일과 그 팝업 HTML을 함께 봐야 합니다.
 
@@ -33,6 +34,7 @@
   - **아이콘 설정의 기준은 DB**(`qfield.facility_icon`)입니다. `loadFacilityIconConfig()`가 초기화 때 `GET /map/qfield/facility-icons`로 불러와 `facilityIconTypes`·`facilityDefaultIcon`을 교체하고 캐시를 비웁니다. **아이콘을 추가·변경할 때는 이 파일이 아니라 DB 행을 수정할 것**(생성·초기데이터 스크립트: `mapservice-rest/db/qfield_facility_icon.sql`). 파일 안의 `FALLBACK_FACILITY_ICON_TYPES`는 API 실패·빈 응답일 때만 쓰는 대체값이므로, DB에 종류를 추가했다고 해서 여기에 같이 넣지 말 것(둘이 어긋나면 어느 쪽이 보이는지 헷갈림).
   - 레이어 옵션: `updateWhileAnimating: false`, `updateWhileInteracting: false`, `declutter: false` (목록 건수와 지도 표출 건수 일치를 위해 비활성화).
   - **상세 팝업**: 헤더는 지도 핀과 같은 규칙으로 채웁니다(`renderFacilityPopupHeader()`) — 같은 SVG 아이콘 + 시설물명 + 종류·보수필요·상태 배지. 헤더에서 보여주는 `fclt_nm`·`facility_condition`·`repair_required_yn`은 `HEADER_FIELD_KEYS`로 본문 목록에서 제외하되 `DETAIL_FIELD_CONFIG`에는 남겨 둘 것(빼면 "그 밖의 항목" 목록으로 다시 새어 나옴). 배지 색은 핀 색과 맞춰 종류=파랑(`badge-type`), 보수 필요=주황(`badge-repair`)을 씁니다.
+    - **보수 필요 여부는 항상 표시**합니다 — `repair_required_yn`이 `Y`면 헤더에 `보수 필요`(주황), 그 밖(`N`·빈 값)이면 `보수 불필요`(초록, `badge-no-repair`). 본문 "보수 필요 여부" 행도 같은 용어(`FACILITY_VALUE_MAPS.repair`: Y=보수 필요, N=보수 불필요)이고, 설정의 `emptyValue: "N"` 때문에 빈 값이 `-`가 아니라 `보수 불필요`로 나옵니다. 목록 필터(`matchesFacilityRepairFilter`)와 같은 기준이므로 한쪽만 바꾸지 말 것. 앱 ValueMap 원문은 Y=정비요청, N=양호입니다.
   - **선택 시 지도 가운데로 이동**: `selectFacility(totalId, zoomIn)`은 지도에서 핀을 클릭하든 목록에서 고르든 **선택한 시설물을 지도 가운데로 옮깁니다.** `zoomIn`은 목록에서 골랐을 때만 `true`(최소 줌 16까지 확대)이고, 지도에서 직접 클릭하면 배율은 그대로 둡니다.
     - 가운데의 기준은 `#map` 요소가 아니라 **화면에 실제로 보이는 지도 영역**입니다(`getFacilityViewCenter()`). `#map`은 화면 전체 너비인데 좌측 `.layer-panel`(320px)이 그 위에 겹쳐 떠 있고, 세로로는 60px 헤더 아래에서 시작해 하단 60px가 화면 밖으로 넘칩니다. view center를 시설물 좌표로 그대로 두면 왼쪽으로 160px·아래로 30px 치우쳐 보입니다.
     - 패널이 가리는 폭과 화면 안에 보이는 범위를 **클릭할 때마다 다시 재므로** 패널을 접거나 창 크기가 바뀌어도 맞습니다. 헤더·패널·`#map` 레이아웃을 바꾸면 이 함수 결과가 달라지니 함께 확인할 것.

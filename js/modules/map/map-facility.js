@@ -2,6 +2,7 @@
 import { getMap } from "./map-core.js";
 import { MapEventManager } from "./map-events.js";
 import { getApiUrl } from "./map-wfs.js";
+import { bindOverlayHeaderDrag } from "./map-popup-drag.js";
 
 // 화면을 처음 열었을 때 선택되는 기본 시·도 (11 = 서울특별시)
 // 목록에 이 코드가 없으면 전체로 표시된다
@@ -41,7 +42,8 @@ const DETAIL_FIELD_CONFIG = [
   { key: "emd_nm", label: "읍면동", hidden: true },
   // 점검 결과 — 값은 현장조사 앱(infra-manage-app)의 ValueMap 코드라 한글로 바꿔 보여준다
   { key: "facility_condition", label: "시설물 상태", valueMap: "condition" },
-  { key: "repair_required_yn", label: "보수 필요 여부", valueMap: "repair" },
+  // 값이 비어 있으면 보수 불필요로 본다 (목록 필터 matchesFacilityRepairFilter 와 같은 기준 — Y 가 아니면 불필요)
+  { key: "repair_required_yn", label: "보수 필요 여부", valueMap: "repair", emptyValue: "N" },
   { key: "facility_memo", label: "시설물 특이사항" },
   { key: "inspected_at", label: "점검 일시", isDateTime: true },
   { key: "project_name", label: "사업명" },
@@ -76,9 +78,10 @@ const FACILITY_VALUE_MAPS = {
     BROKEN: "파손 / 고장",
     DESTROYED: "철거됨",
   },
+  // 목록 필터·헤더 배지와 같은 용어로 표시 (앱 ValueMap 원문: Y=정비요청, N=양호)
   repair: {
-    Y: "정비요청",
-    N: "양호",
+    Y: "보수 필요",
+    N: "보수 불필요",
   },
 };
 
@@ -380,8 +383,11 @@ function renderFacilityPopupHeader(facilityName, needsRepair, conditionText) {
 
   metaEl.innerHTML = "";
   const badges = [{ text: iconConfig.label, className: "badge-type" }];
+  // 보수 필요 여부는 항상 둘 중 하나를 보여준다 (Y 가 아니면 불필요 — 목록 필터와 같은 기준)
   if (needsRepair) {
     badges.push({ text: "보수 필요", className: "badge-repair" });
+  } else {
+    badges.push({ text: "보수 불필요", className: "badge-no-repair" });
   }
   if (conditionText) {
     badges.push({ text: conditionText, className: "badge-condition" });
@@ -438,58 +444,9 @@ function facilityStyleFunction(feature) {
   const totalId = feature.get("total_id") || feature.getId();
   const isSelected = Boolean(selectedTotalId) && String(totalId) === String(selectedTotalId);
   const needsRepair = String(feature.get("repair_required_yn") || "").toUpperCase() === "Y";
+  // 보수 필요 여부 필터에 맞지 않는 핀은 그리지 않는다 (스타일이 없으면 클릭·호버 대상에서도 빠짐)
+  if (!matchesFacilityRepairFilter(needsRepair)) return null;
   return getFacilityStyle(resolveFacilityIcon(feature.get("fclt_nm")), needsRepair, isSelected);
-}
-
-/**
- * 팝업 헤더를 잡아 끌어 위치를 옮길 수 있게 한다.
- *
- * 오버레이의 좌표(position)는 시설물에 고정해 두고 offset 만 바꾼다.
- * 그래야 지도를 움직여도 팝업이 시설물을 계속 따라다닌다.
- * 닫기 버튼 위에서 시작한 드래그는 무시한다.
- */
-function bindFacilityPopupDrag(popupEl) {
-  const header = popupEl.querySelector(".facility-popup-header");
-  if (!header) return;
-
-  let dragging = false;
-  let startX = 0;
-  let startY = 0;
-  let baseOffset = FACILITY_POPUP_OFFSET.slice();
-
-  header.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return; // 왼쪽 버튼만
-    if (event.target.closest(".facility-popup-close")) return; // 닫기 버튼 제외
-
-    dragging = true;
-    startX = event.clientX;
-    startY = event.clientY;
-    baseOffset = facilityOverlay ? facilityOverlay.getOffset().slice() : FACILITY_POPUP_OFFSET.slice();
-
-    header.setPointerCapture(event.pointerId);
-    header.classList.add("dragging");
-    event.preventDefault(); // 텍스트 선택 방지
-  });
-
-  header.addEventListener("pointermove", (event) => {
-    if (!dragging || !facilityOverlay) return;
-    facilityOverlay.setOffset([
-      baseOffset[0] + (event.clientX - startX),
-      baseOffset[1] + (event.clientY - startY),
-    ]);
-  });
-
-  const endDrag = (event) => {
-    if (!dragging) return;
-    dragging = false;
-    header.classList.remove("dragging");
-    if (event.pointerId !== undefined && header.hasPointerCapture(event.pointerId)) {
-      header.releasePointerCapture(event.pointerId);
-    }
-  };
-
-  header.addEventListener("pointerup", endDrag);
-  header.addEventListener("pointercancel", endDrag);
 }
 
 // 팝업 요소 생성
@@ -578,8 +535,10 @@ function initializeFacilityModule() {
   });
   map.addOverlay(facilityOverlay);
 
-  // 헤더를 끌어 팝업 위치를 옮길 수 있게 함
-  bindFacilityPopupDrag(popupEl);
+  // 헤더를 끌어 팝업 위치를 옮길 수 있게 함 (WFS·WMS 팝업과 같은 공용 모듈)
+  bindOverlayHeaderDrag(facilityOverlay, popupEl.querySelector(".facility-popup-header"), {
+    ignoreSelector: ".facility-popup-close",
+  });
 
   // 팝업 닫기 버튼 이벤트 바인딩
   const closeBtn = popupEl.querySelector("#facilityPopupCloseBtn");
@@ -650,6 +609,7 @@ function initializeFacilityModule() {
   // 아이콘 설정은 DB(qfield.facility_icon)에서 불러오며, 실패해도 내장 기본 아이콘으로 계속 동작함
   loadFacilityIconConfig();
   bindFacilityKeywordSearch();
+  bindFacilityRepairFilter();
   // 시도 목록을 불러온 뒤 기본 시·도(서울)를 적용하며 시설물도 함께 조회한다
   // (여기서 loadFacilities 를 따로 부르면 전체 조회 → 서울 조회로 두 번 요청하게 됨)
   loadFacilitySidoList();
@@ -900,6 +860,14 @@ async function loadFacilityEmdList(sggCd) {
 // 현재 조회된 목록 항목(검색 필터는 렌더 단계에서만 적용하므로 원본을 들고 있음)
 let facilityListItems = [];
 let facilityKeyword = "";
+// 보수 필요 여부 필터: "all"(기본) | "repair"(repair_required_yn = Y) | "noRepair"(Y 가 아닌 전부 — N·빈 값)
+let facilityRepairFilter = "all";
+
+function matchesFacilityRepairFilter(needsRepair) {
+  if (facilityRepairFilter === "repair") return needsRepair;
+  if (facilityRepairFilter === "noRepair") return !needsRepair;
+  return true;
+}
 
 // 응답 피처에서 목록 항목 데이터만 뽑아낸다 (중복 제거)
 function buildFacilityListItems(rawFeatures) {
@@ -931,7 +899,7 @@ function buildFacilityListItems(rawFeatures) {
   return items;
 }
 
-// 목록 DOM 생성 — 검색어 필터 적용, 지도와 같은 아이콘 표시
+// 목록 DOM 생성 — 검색어·보수 필요 여부 필터 적용, 지도와 같은 아이콘 표시
 function renderFacilityList() {
   const listEl = document.getElementById("facilityList");
   const countEl = document.getElementById("facilityCount");
@@ -940,9 +908,18 @@ function renderFacilityList() {
   if (!listEl) return;
 
   const keyword = facilityKeyword.trim().toLowerCase();
-  const visibleItems = keyword
+  const keywordItems = keyword
     ? facilityListItems.filter((item) => item.searchText.includes(keyword))
     : facilityListItems;
+  const visibleItems = keywordItems.filter((item) => matchesFacilityRepairFilter(item.needsRepair));
+
+  // 필터 버튼 옆 건수는 검색어까지 반영한 기준으로 표시 (어느 쪽을 눌러야 결과가 있는지 보이도록)
+  const repairCount = keywordItems.filter((item) => item.needsRepair).length;
+  updateFacilityRepairCounts({
+    all: keywordItems.length,
+    repair: repairCount,
+    noRepair: keywordItems.length - repairCount,
+  });
 
   if (countEl) countEl.textContent = visibleItems.length.toLocaleString();
   if (panelCountEl) panelCountEl.textContent = facilityListItems.length.toLocaleString();
@@ -1045,6 +1022,44 @@ function bindFacilityKeywordSearch() {
   }
 }
 
+function updateFacilityRepairCounts(counts) {
+  document.querySelectorAll("[data-repair-count]").forEach((el) => {
+    const value = counts[el.getAttribute("data-repair-count")] || 0;
+    el.textContent = value.toLocaleString();
+  });
+}
+
+// 보수 필요 여부 필터 바인딩 — 목록을 다시 그리고 지도 핀 스타일도 갱신 (서버 재조회 없음)
+function bindFacilityRepairFilter() {
+  const groupEl = document.getElementById("facilityRepairFilter");
+  if (!groupEl) return;
+  const options = Array.from(groupEl.querySelectorAll("[data-repair-filter]"));
+
+  const applyRepairFilter = (value) => {
+    facilityRepairFilter = value;
+    options.forEach((option) => {
+      const isActive = option.getAttribute("data-repair-filter") === value;
+      option.classList.toggle("active", isActive);
+      option.setAttribute("aria-checked", isActive ? "true" : "false");
+    });
+
+    // 열려 있는 팝업의 시설물이 필터에서 빠지면 핀이 사라지므로 팝업도 닫는다
+    if (selectedTotalId) {
+      const selectedItem = facilityListItems.find((item) => item.totalId === String(selectedTotalId));
+      if (selectedItem && !matchesFacilityRepairFilter(selectedItem.needsRepair)) {
+        closeFacilityPopup();
+      }
+    }
+
+    renderFacilityList();
+    if (facilitySource) facilitySource.changed();
+  };
+
+  options.forEach((option) => {
+    option.addEventListener("click", () => applyRepairFilter(option.getAttribute("data-repair-filter")));
+  });
+}
+
 // 시설물 목록 및 지도 데이터 로드
 async function loadFacilities(filter = {}) {
   const countEl = document.getElementById("facilityCount");
@@ -1106,6 +1121,7 @@ async function loadFacilities(filter = {}) {
       if (countEl) countEl.textContent = "0";
       const panelCountEl = document.getElementById("panelCount");
       if (panelCountEl) panelCountEl.textContent = "0";
+      updateFacilityRepairCounts({ all: 0, repair: 0, noRepair: 0 });
       if (facilitySource) facilitySource.clear();
       return;
     }
@@ -1405,7 +1421,7 @@ async function showFacilityDetail(totalId, coordinate) {
       if (HEADER_FIELD_KEYS.has(cfg.key)) return; // 헤더에서 이미 표시
 
       // 사진 갤러리는 photo_1 이 비어 있어도 다른 장이 있으면 표시해야 하므로 별도 판정
-      const val = cfg.isPhotoGallery
+      const rawVal = cfg.isPhotoGallery
         ? ["photo_1", "photo_2", "photo_3", "photo_4", "photo_5"].find(
             (photoKey) =>
               properties[photoKey] &&
@@ -1413,6 +1429,13 @@ async function showFacilityDetail(totalId, coordinate) {
               String(properties[photoKey]).trim() !== "null"
           ) && "photos"
         : properties[cfg.key];
+      // emptyValue 가 있는 항목은 값이 비어 있을 때 '-' 대신 그 값으로 해석한다
+      const isRawEmpty =
+        rawVal === null ||
+        rawVal === undefined ||
+        String(rawVal).trim() === "" ||
+        String(rawVal).trim() === "null";
+      const val = isRawEmpty && cfg.emptyValue !== undefined ? cfg.emptyValue : rawVal;
       const isEmpty =
         val === null ||
         val === undefined ||

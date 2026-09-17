@@ -1,6 +1,7 @@
 // 맵 WMS 레이어 모듈
 import { getMap } from "./map-core.js";
 import { MapEventManager } from "./map-events.js";
+import { bindOverlayHeaderDrag } from "./map-popup-drag.js";
 
 // WMS 관련 변수들
 let wmsLayers = {};
@@ -354,6 +355,9 @@ function showWmsPopup(coordinate, feature) {
 
   overlay.setPosition(coordinate);
   map.addOverlay(overlay);
+
+  // 헤더를 끌어 팝업을 옮길 수 있게 함 (닫기 버튼 제외)
+  bindOverlayHeaderDrag(overlay, header, { ignoreSelector: ".wms-popup-close" });
 
   // 전역에서 접근 가능하도록 저장
   window.currentWmsOverlay = overlay;

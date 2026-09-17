@@ -357,6 +357,16 @@
                       <button type="button" class="facility-keyword-clear hidden" id="facilityKeywordClear"
                         title="검색어 지우기">×</button>
                     </div>
+                    <!-- 보수 필요 여부 필터 (목록과 지도 핀에 함께 적용, 서버 재조회 없음) -->
+                    <div class="facility-repair-filter" id="facilityRepairFilter" role="radiogroup"
+                      aria-label="보수 필요 여부">
+                      <button type="button" class="facility-repair-option active" role="radio" aria-checked="true"
+                        data-repair-filter="all">전체 <span class="facility-repair-count" data-repair-count="all">0</span></button>
+                      <button type="button" class="facility-repair-option" role="radio" aria-checked="false"
+                        data-repair-filter="repair">보수 필요 <span class="facility-repair-count" data-repair-count="repair">0</span></button>
+                      <button type="button" class="facility-repair-option" role="radio" aria-checked="false"
+                        data-repair-filter="noRepair">보수 불필요 <span class="facility-repair-count" data-repair-count="noRepair">0</span></button>
+                    </div>
                     <div class="facility-select-group">
                       <div class="facility-select-item">
                         <label for="facilitySidoSelect">시·도</label>

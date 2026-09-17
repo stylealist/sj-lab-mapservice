@@ -1,6 +1,7 @@
 ﻿// 맵 WFS 레이어 모듈
 import { getMap } from "./map-core.js";
 import { MapEventManager } from "./map-events.js";
+import { bindOverlayHeaderDrag } from "./map-popup-drag.js";
 
 // WFS 관련 변수들
 let wfsLayers = {};
@@ -1982,6 +1983,9 @@ function showWfsPopup(coordinate, feature, layerName) {
 
   overlay.setPosition(coordinate);
   map.addOverlay(overlay);
+
+  // 헤더를 끌어 팝업을 옮길 수 있게 함 (편의점·약국·병원·관공서·버스·CCTV 공통, 닫기 버튼 제외)
+  bindOverlayHeaderDrag(overlay, header, { ignoreSelector: ".wfs-popup-close" });
 
   // 전역에서 접근 가능하도록 저장
   window.currentWfsOverlay = overlay;
