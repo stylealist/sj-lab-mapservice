@@ -54,10 +54,11 @@ const DETAIL_FIELD_CONFIG = [
   { key: "photo_3", label: "사진 3", hidden: true },
   { key: "photo_4", label: "사진 4", hidden: true },
   { key: "photo_5", label: "사진 5", hidden: true },
+  { key: "video", label: "현장 영상", isVideo: true },
   { key: "audio_memo", label: "현장 특이사항", isAudio: true },
   // 음성(audio_memo)을 STT로 받아쓴 결과. 동기화 워커가 <컬럼>_txt 에 채운다.
+  // 바로 위 음성 항목에 이어지도록 순서를 유지할 것
   { key: "audio_memo_txt", label: "음성 변환 내용" },
-  { key: "video", label: "현장 영상", isVideo: true },
   // facility_memo 는 앱에서 텍스트 입력 필드라 그 _txt 는 항상 비어 있어 숨긴다
   { key: "facility_memo_txt", label: "시설물 특이사항 변환", hidden: true },
   { key: "reg_date", label: "등록일시", isDateTime: true },
