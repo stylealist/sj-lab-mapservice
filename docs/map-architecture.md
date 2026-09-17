@@ -21,7 +21,11 @@
 - 레이어 생성 옵션(`updateWhileAnimating: false`, `updateWhileInteracting: false`, `declutter: true` 등)은 성능을 위해 의도적으로 설정된 값입니다. 임의로 `true`로 바꾸지 말 것.
 - POI 아이콘 스타일은 `size`/`imgSize` `[32, 32]`, `anchor: [0.5, 1.0]`(하단 중앙 앵커)로 통일돼 있습니다. 새 POI 아이콘을 추가할 때 이 컨벤션을 맞출 것 — 앵커가 다르면 다른 레이어 아이콘과 위치 정렬이 어긋남.
 - `map-wfs.js`의 새 엔드포인트는 반드시 `getApiUrl()`을 통해서만 URL을 만들 것 (dev/prod 자동 전환). 절대 URL 하드코딩 금지.
-- `loadWfsData()`는 최초 로드 시 서버 응답 전체를 한 번에 `readFeatures()`하지 않고, 원본 GeoJSON 좌표로 뷰포트 내 피처만 먼저 골라(`filterRawPointFeaturesByExtent`) 빠르게 화면에 표시한 뒤, 나머지는 `scheduleBackgroundFeatureCaching()`으로 청크 단위(`requestIdleCallback`)로 백그라운드 파싱해 `wfsDataCache`를 채웁니다. 새 WFS 레이어를 추가하거나 로딩 로직을 고칠 때도 이 패턴(초기 표시는 빠르게, 전체 파싱은 메인 스레드를 막지 않게)을 유지할 것 — 대량 데이터에서 최초 로딩 체감 속도에 직결됨.
+- **WFS 데이터는 화면에 보이는 영역만 서버에서 받아옵니다.** 예전에는 레이어를 켤 때마다 전국 데이터를 통째로(버스정류장 약 85MB) 받아 브라우저에서 잘라 썼고, 그래서 최초 표출에 수십 초가 걸렸습니다. 지금은 백엔드가 `bbox`(EPSG:3857 `minX,minY,maxX,maxY`)와 `limit`을 지원하므로 `fetchWfsFeaturesForExtent()`가 화면보다 가로·세로 **50% 넓은 영역**(`bufferExtent`)만 요청합니다.
+  - `wfsFetchState[layerName]`이 `{ extent, zoom, complete }`로 "어디까지 받아왔는지"를 들고 있고, `needsServerFetch()`가 ① 아직 안 받음 ② 화면이 받아둔 영역 밖 ③ 상한에 걸린 영역인데 줌인함 — 이 세 경우에만 서버를 다시 부릅니다. 버퍼 안에서 움직이는 동안은 요청이 나가지 않으므로, 이동할 때마다 요청이 나간다면 이 판정을 먼저 볼 것.
+  - 받아온 피처는 `mergeFeaturesIntoCache()`가 **피처 id 기준 중복 제거**로 `wfsDataCache`에 합칩니다. 캐시를 직접 `push`하지 말 것(같은 피처가 여러 번 들어가 개수 표시가 틀어짐).
+  - 화면에 그리는 일은 `renderLayerFromCache()` 한 곳에서만 합니다(뷰포트 필터 → `getMaxFeaturesByZoom()` 상한 → `spatialSampling()`). 레이어를 켤 때와 지도를 움직일 때 모두 이 함수를 씁니다.
+  - `filterRawPointFeaturesByExtent()` + `scheduleBackgroundFeatureCaching()`은 **`bbox`를 모르는 예전 백엔드에 붙었을 때의 안전장치**로만 남아 있습니다(요청한 상한보다 훨씬 많이 오면 예전 방식대로 화면 안쪽만 먼저 파싱). 정상 경로에서는 타지 않으므로, 이 두 함수가 자주 불린다면 백엔드 버전을 의심할 것.
 - **`readFeatures()`에 넘기는 `featureProjection`은 반드시 `vectorSource.getProjection()`(= `null`)을 유지할 것.** OpenLayers 7.4.0에서 `ol.source.Vector`의 `getProjection()`은 `null`을 반환하고, `featureProjection`이 `null`이면 `readFeatures()`가 좌표를 **변환하지 않고 그대로** 사용합니다. 백엔드 응답 좌표가 이미 뷰 좌표계(EPSG:3857)이므로 이 동작에 의존하고 있습니다(옵션의 `dataProjection: "EPSG:4326"`은 실질적으로 무시됨). 여기에 `map.getView().getProjection()` 같은 실제 투영을 넘기면 미터 좌표를 경위도로 간주해 변환해버려 피처가 지도 밖으로 밀려나 **레이어가 아예 표시되지 않음**. 같은 이유로 원본 좌표 기반 뷰포트 필터링도 4326이 아니라 **뷰 좌표계 extent**로 비교해야 함.
 - **시설물 레이어 (`map-facility.js`) 규격**:
   - `zIndex`: `1010` (기존 WFS/WMS 레이어 1000 위에 배치하여 가시성 확보).

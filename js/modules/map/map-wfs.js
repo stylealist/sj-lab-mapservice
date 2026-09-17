@@ -1,4 +1,4 @@
-// 맵 WFS 레이어 모듈
+﻿// 맵 WFS 레이어 모듈
 import { getMap } from "./map-core.js";
 import { MapEventManager } from "./map-events.js";
 
@@ -9,6 +9,11 @@ let wfsDataCache = {}; // 캐시된 데이터 저장
 let wfsVectorSources = {}; // 벡터 소스 저장
 let wfsDataLoaded = {}; // 데이터 로드 상태 저장
 let wfsUpdating = {}; // 각 레이어별 업데이트 상태 저장
+// 레이어별로 "서버에서 어디까지 받아왔는지" 기록.
+// { extent: 받아온 영역, zoom: 받을 때의 줌, complete: 그 영역을 상한에 걸리지 않고 다 받았는지 }
+let wfsFetchState = {};
+// 이미 캐시에 넣은 피처 id 집합 (여러 번 나눠 받을 때 중복 추가 방지)
+let wfsCachedFeatureIds = {};
 
 // 환경별 API URL 설정
 const getApiUrl = (endpoint) => {
@@ -258,6 +263,188 @@ const filterRawPointFeaturesByExtent = (rawFeatures, extent) => {
   });
 };
 
+// ─────────────────────────────────────────────────────────────
+// 서버 측 화면 영역(bbox) 조회
+//
+// 예전에는 레이어를 켤 때마다 전국 데이터를 통째로(버스정류장 기준 약 85MB) 받아
+// 브라우저에서 잘라 썼다. 지금은 백엔드가 bbox·limit 를 지원하므로 화면에 보이는 만큼만 받는다.
+// 작은 팬(이동)마다 다시 요청하지 않도록 화면보다 넓은 영역을 받아 두고, 그 안에서 움직이는 동안은
+// 캐시만 쓴다.
+// ─────────────────────────────────────────────────────────────
+
+// 화면보다 얼마나 넓게 받아둘지(가로·세로 각각 이 비율만큼 양옆으로 확장)
+const WFS_FETCH_BUFFER_RATIO = 0.5;
+
+const bufferExtent = (extent, ratio = WFS_FETCH_BUFFER_RATIO) => {
+  const width = extent[2] - extent[0];
+  const height = extent[3] - extent[1];
+  return [
+    extent[0] - width * ratio,
+    extent[1] - height * ratio,
+    extent[2] + width * ratio,
+    extent[3] + height * ratio,
+  ];
+};
+
+// 서버에 요청할 개수 상한. 화면에 그리는 개수(getMaxFeaturesByZoom)보다 넉넉히 받아야
+// 버퍼 영역 안에서 팬할 때 빈 곳이 생기지 않는다.
+const getFetchLimitByZoom = (zoomLevel) => {
+  const maxFeatures = getMaxFeaturesByZoom(zoomLevel);
+  return Math.min(Math.max(maxFeatures * 3, 1500), 6000);
+};
+
+const isExtentCovered = (inner, outer) =>
+  !!outer &&
+  inner[0] >= outer[0] &&
+  inner[1] >= outer[1] &&
+  inner[2] <= outer[2] &&
+  inner[3] <= outer[3];
+
+// 서버에 다시 요청해야 하는지 판단
+// - 아직 한 번도 안 받았으면 받는다
+// - 화면이 받아둔 영역 밖으로 나갔으면 받는다
+// - 상한에 걸려 일부만 받은 영역이면, 줌인해서 더 조밀하게 보여줘야 할 때 다시 받는다
+const needsServerFetch = (layerName, extent, zoomLevel) => {
+  const state = wfsFetchState[layerName];
+  if (!state) return true;
+  if (!isExtentCovered(extent, state.extent)) return true;
+  return !state.complete && zoomLevel > state.zoom + 0.5;
+};
+
+const buildWfsRequestUrl = (layerName, extent, limit) => {
+  const bbox = extent.map((value) => Math.round(value)).join(",");
+  return `${WFS_CONFIG[layerName].url}?bbox=${encodeURIComponent(bbox)}&limit=${limit}`;
+};
+
+// 받아온 피처를 캐시에 합친다(id 기준 중복 제거). 새로 추가된 피처 수를 돌려준다.
+const mergeFeaturesIntoCache = (layerName, features) => {
+  if (!wfsDataCache[layerName]) wfsDataCache[layerName] = [];
+  if (!wfsCachedFeatureIds[layerName]) wfsCachedFeatureIds[layerName] = new Set();
+
+  const knownIds = wfsCachedFeatureIds[layerName];
+  let added = 0;
+
+  features.forEach((feature) => {
+    const id = feature.getId();
+    // id 가 없는 피처는 중복 판정을 할 수 없으므로 그대로 넣는다(서버는 항상 id를 내려줌)
+    if (id === undefined) {
+      wfsDataCache[layerName].push(feature);
+      added += 1;
+      return;
+    }
+    if (knownIds.has(id)) return;
+    knownIds.add(id);
+    wfsDataCache[layerName].push(feature);
+    added += 1;
+  });
+
+  return added;
+};
+
+// 캐시에서 현재 화면에 맞는 피처만 골라 벡터 소스에 그린다
+const renderLayerFromCache = (layerName, extent, zoomLevel) => {
+  const vectorSource = wfsVectorSources[layerName];
+  const config = WFS_CONFIG[layerName];
+  if (!vectorSource || !wfsDataCache[layerName]) return;
+
+  const viewportFeatures = wfsDataCache[layerName].filter((feature) => {
+    const geometry = feature.getGeometry();
+    if (!geometry) return false;
+    return geometry.intersectsExtent(extent);
+  });
+
+  const maxFeatures = getMaxFeaturesByZoom(zoomLevel);
+  const filteredFeatures =
+    viewportFeatures.length > maxFeatures
+      ? spatialSampling(viewportFeatures, maxFeatures, extent)
+      : viewportFeatures;
+
+  vectorSource.clear();
+  vectorSource.addFeatures(filteredFeatures);
+
+  console.log(
+    `${config.name}: 뷰포트 내 ${viewportFeatures.length}개 중 ${filteredFeatures.length}개 표출 (줌 레벨: ${zoomLevel})`
+  );
+};
+
+// 화면 영역만큼 서버에서 받아 캐시에 합친다
+function fetchWfsFeaturesForExtent(layerName, extent, zoomLevel) {
+  const config = WFS_CONFIG[layerName];
+  const vectorSource = wfsVectorSources[layerName];
+  const requestExtent = bufferExtent(extent);
+  const limit = getFetchLimitByZoom(zoomLevel);
+  const startTime = Date.now();
+
+  return fetch(buildWfsRequestUrl(layerName, requestExtent, limit))
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      const rawFeatures = Array.isArray(data.features) ? data.features : [];
+      console.log(
+        `${config.name} 화면 영역 수신: ${rawFeatures.length}개 (${Date.now() - startTime}ms)`
+      );
+
+      const format = vectorSource.getFormat();
+      // 기존 동작 유지: vectorSource.getProjection()은 null이라 readFeatures가 좌표를 변환하지 않고
+      // 원본 좌표를 그대로 사용함(응답 좌표가 이미 뷰 좌표계). 여기에 실제 투영을 넘기면 좌표가 어긋나 레이어가 표시되지 않음.
+      const featureProjection = vectorSource.getProjection();
+
+      // bbox 를 모르는 예전 백엔드로 붙은 경우(파라미터가 무시되어 전국 데이터가 옴)를 대비한 안전장치.
+      // 요청한 상한보다 훨씬 많이 오면 예전 방식대로 화면 안쪽만 먼저 파싱하고 나머지는 백그라운드로 넘긴다.
+      const overFetched = rawFeatures.length > limit * 1.5;
+      let targetRawFeatures = rawFeatures;
+
+      if (overFetched) {
+        console.warn(
+          `${config.name}: 서버가 bbox 를 적용하지 않은 것으로 보임(${rawFeatures.length}개 수신) - 화면 기준으로 직접 걸러냄`
+        );
+        const viewportRawFeatures = filterRawPointFeaturesByExtent(
+          rawFeatures,
+          requestExtent
+        );
+        targetRawFeatures =
+          viewportRawFeatures.length > limit
+            ? spatialSampling(
+                viewportRawFeatures,
+                limit,
+                requestExtent,
+                (rawFeature) => rawFeature.geometry.coordinates
+              )
+            : viewportRawFeatures;
+      }
+
+      const features = format.readFeatures(
+        { type: "FeatureCollection", features: targetRawFeatures },
+        { dataProjection: "EPSG:4326", featureProjection }
+      );
+
+      mergeFeaturesIntoCache(layerName, features);
+      wfsDataLoaded[layerName] = true;
+
+      // 상한에 걸리면 서버가 이 영역에 고르게 퍼진 표본을 내려주므로 영역 자체는 다 덮은 것이고,
+      // 다만 더 조밀하게 보려면(줌인) 다시 받아야 하므로 complete 로는 표시하지 않는다.
+      wfsFetchState[layerName] = {
+        extent: requestExtent,
+        zoom: zoomLevel,
+        complete: !overFetched && rawFeatures.length < limit,
+      };
+
+      if (overFetched) {
+        const usedRawSet = new Set(targetRawFeatures);
+        scheduleBackgroundFeatureCaching(
+          layerName,
+          rawFeatures.filter((rawFeature) => !usedRawSet.has(rawFeature)),
+          format,
+          featureProjection
+        );
+      }
+    });
+}
+
 // 초기 화면에 필요 없는 나머지 원본 피처를 백그라운드에서 청크 단위로 파싱해 캐시를 채움
 // (팬/줌 시 wfs-move 핸들러가 wfsDataCache를 참조하므로, 메인 스레드를 막지 않고 점진적으로 채워넣음)
 function scheduleBackgroundFeatureCaching(
@@ -285,10 +472,7 @@ function scheduleBackgroundFeatureCaching(
       { dataProjection: "EPSG:4326", featureProjection }
     );
 
-    if (!wfsDataCache[layerName]) {
-      wfsDataCache[layerName] = [];
-    }
-    wfsDataCache[layerName].push(...parsedChunk);
+    mergeFeaturesIntoCache(layerName, parsedChunk);
 
     if (index < rawFeatures.length) {
       scheduleIdle(processChunk);
@@ -475,45 +659,30 @@ function initializeWfsLayers() {
           lastZoomLevel = currentZoom;
           lastExtent = currentExtent;
 
-          // 캐시된 데이터에서 뷰포트 기반 필터링 및 줌 레벨에 따른 개수 제한
-          if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
-            // 기존 피처 제거
-            vectorSource.clear();
-
-            // 현재 뷰포트에 맞는 데이터만 필터링
-            const viewportFeatures = wfsDataCache[layerName].filter(
-              (feature) => {
-                const geometry = feature.getGeometry();
-                if (!geometry) return false;
-                return geometry.intersectsExtent(currentExtent);
-              }
-            );
-
-            // 줌 레벨에 따른 최대 표출 개수 제한
-            const maxFeatures = getMaxFeaturesByZoom(currentZoom);
-            let filteredFeatures = viewportFeatures;
-
-            if (viewportFeatures.length > maxFeatures) {
-              // 공간적 균등 분포를 고려한 샘플링
-              filteredFeatures = spatialSampling(
-                viewportFeatures,
-                maxFeatures,
-                currentExtent
-              );
-              console.log(
-                `${config.name}: 뷰포트 내 ${viewportFeatures.length}개 중 ${maxFeatures}개 표출 (줌 레벨: ${currentZoom})`
-              );
-            } else {
-              console.log(
-                `${config.name}: 뷰포트 내 ${viewportFeatures.length}개 모두 표출 (줌 레벨: ${currentZoom})`
-              );
-            }
-
-            // 필터링된 피처 추가
-            vectorSource.addFeatures(filteredFeatures);
-          } else {
-            console.warn(`캐시된 데이터가 없습니다: ${layerName}`);
+          // 레이어를 켠 적이 없으면 여기서 데이터를 받아오지 않는다(켤 때 loadWfsData 가 받음)
+          if (!wfsDataLoaded[layerName]) {
+            wfsUpdating[layerName] = false;
+            return;
           }
+
+          // 받아둔 영역을 벗어났으면 그 영역만 추가로 받아온 뒤 다시 그린다
+          if (needsServerFetch(layerName, currentExtent, currentZoom)) {
+            fetchWfsFeaturesForExtent(layerName, currentExtent, currentZoom)
+              .then(() => {
+                renderLayerFromCache(layerName, currentExtent, currentZoom);
+              })
+              .catch((error) => {
+                console.error(`${config.name} 화면 영역 추가 조회 실패:`, error);
+                // 실패해도 이미 받아둔 데이터로는 그려 둔다
+                renderLayerFromCache(layerName, currentExtent, currentZoom);
+              })
+              .finally(() => {
+                wfsUpdating[layerName] = false;
+              });
+            return;
+          }
+
+          renderLayerFromCache(layerName, currentExtent, currentZoom);
         }
 
         // 업데이트 상태 해제
@@ -632,46 +801,32 @@ function toggleWfsLayer(layerName) {
 function loadWfsData(layerName) {
   const config = WFS_CONFIG[layerName];
   const vectorSource = wfsVectorSources[layerName];
-  const map = getMap(); // 맵 인스턴스를 먼저 가져옴
+  const map = getMap();
 
-  // 이미 로드된 경우 캐시된 데이터 사용
-  if (wfsDataLoaded[layerName] && wfsDataCache[layerName]) {
-    console.log(
-      `${config.name} 캐시된 데이터 사용: ${wfsDataCache[layerName].length} 개 피처`
-    );
-
-    // 벡터 소스가 비어있는 경우에만 피처 추가 (중복 방지)
-    const currentFeatures = vectorSource.getFeatures();
-    if (currentFeatures.length === 0) {
-      // 모든 데이터 추가 (뷰포트 필터링 제거)
-      // const currentExtent = map.getView().calculateExtent(map.getSize());
-      // const filteredFeatures = wfsDataCache[layerName].filter((feature) => {
-      //   const geometry = feature.getGeometry();
-      //   if (!geometry) return false;
-      //   return geometry.intersectsExtent(currentExtent);
-      // });
-      vectorSource.addFeatures(wfsDataCache[layerName]);
-      console.log(
-        `${config.name} 전체 데이터: ${wfsDataCache[layerName].length} 개 피처`
-      );
-    }
-
+  const mapSize = map && map.getSize ? map.getSize() : null;
+  if (!map || !map.getView || !mapSize) {
+    console.error(`${config.name}: 맵이 준비되지 않아 데이터를 불러올 수 없습니다.`);
     return Promise.resolve();
   }
 
-  // 서버 요청 시작 시간 기록
+  const currentExtent = map.getView().calculateExtent(mapSize);
+  const currentZoom = map.getView().getZoom();
+
+  // 이미 받아둔 영역 안이면 서버를 다시 부르지 않고 캐시로 바로 그린다
+  if (!needsServerFetch(layerName, currentExtent, currentZoom)) {
+    console.log(`${config.name} 캐시 사용: ${wfsDataCache[layerName].length}개 보유`);
+    renderLayerFromCache(layerName, currentExtent, currentZoom);
+    return Promise.resolve();
+  }
+
   const startTime = Date.now();
+  const firstLoadHint = "⚡ 보이는 영역만 불러옵니다. 지도를 옮기면 그 영역을 이어서 불러와요.";
 
-  // 최초 로드에만 이 경로를 타므로(이후에는 위 캐시 분기에서 즉시 반환) 안내 문구를 함께 표시
-  const firstLoadHint = "⚡ 처음 한 번만 기다리면 돼요. 다시 켤 때는 바로 표시됩니다.";
-
-  // 로딩 시작 표시
-  let progress = 10; // 진행률은 DOM을 다시 읽지 않고 이 변수로만 추적 (재파싱 시 소수점이 잘려 같은 값에 멈추던 문제 방지)
+  // 점진적 로딩 진행 타이머: 실제 진행률이 아니라 "아직 작업 중"임을 알리는 용도.
+  let progress = 10;
   updateLoadingProgress(progress);
   showLoadingMessage(`${config.name} 데이터를 불러오는 중...`, firstLoadHint);
 
-  // 점진적 로딩 진행 타이머: 실제 진행률이 아니라 "아직 작업 중"임을 알리는 용도.
-  // 서버 응답을 기다리는 동안 진행률 바가 계속 조금씩 움직이도록 해서 멈춘 것처럼 보이지 않게 함
   const progressInterval = setInterval(() => {
     if (progress < 75) {
       progress = Math.min(progress + 0.8, 75);
@@ -679,114 +834,32 @@ function loadWfsData(layerName) {
     }
   }, 300);
 
-  return fetch(config.url)
-    .then((response) => {
-      const responseTime = Date.now() - startTime;
-      console.log(`${config.name} 서버 응답 시간: ${responseTime}ms`);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.json();
-    })
-    .then((data) => {
-      // 점진적 로딩 타이머 정리
+  return fetchWfsFeaturesForExtent(layerName, currentExtent, currentZoom)
+    .then(() => {
       clearInterval(progressInterval);
 
       progress = 80;
       updateLoadingProgress(progress);
       showLoadingMessage(`${config.name} 데이터를 표시하는 중...`, firstLoadHint);
 
-      const format = vectorSource.getFormat();
-      // 기존 동작 유지: vectorSource.getProjection()은 null이라 readFeatures가 좌표를 변환하지 않고
-      // 원본 좌표를 그대로 사용함(응답 좌표가 이미 뷰 좌표계). 여기에 실제 투영을 넘기면 좌표가 어긋나 레이어가 표시되지 않음.
-      const featureProjection = vectorSource.getProjection();
-      const rawFeatures = Array.isArray(data.features) ? data.features : [];
-
-      console.log(`${config.name} 원본 데이터 수신: ${rawFeatures.length}개`);
-
-      // 최초 화면에 필요한 만큼만 먼저 골라 파싱해서 빠르게 표시 (전체 데이터를 한 번에 readFeatures 하지 않음)
-      let initialRawFeatures = rawFeatures;
-
-      const mapSize = map && map.getSize ? map.getSize() : null;
-
-      if (map && map.getView && mapSize && rawFeatures.length > 0) {
-        const currentExtent = map.getView().calculateExtent(mapSize);
-        const zoomLevel = map.getView().getZoom();
-        const maxFeatures = getMaxFeaturesByZoom(zoomLevel);
-
-        const viewportRawFeatures = filterRawPointFeaturesByExtent(
-          rawFeatures,
-          currentExtent
-        );
-
-        initialRawFeatures =
-          viewportRawFeatures.length > maxFeatures
-            ? spatialSampling(
-                viewportRawFeatures,
-                maxFeatures,
-                currentExtent,
-                (rawFeature) => rawFeature.geometry.coordinates
-              )
-            : viewportRawFeatures;
-
-        // 사전 필터링 결과가 0개면(좌표계가 예상과 다른 경우 등) 레이어가 아예 안 보이게 되므로 전체 데이터로 폴백
-        if (initialRawFeatures.length === 0) {
-          console.warn(
-            `${config.name}: 뷰포트 사전 필터링 결과가 0개 - 전체 데이터로 폴백 (뷰포트: ${currentExtent})`
-          );
-          initialRawFeatures = rawFeatures;
-        } else {
-          console.log(
-            `${config.name}: 빠른 초기 표시 - 전체 ${rawFeatures.length}개 중 ${initialRawFeatures.length}개 우선 파싱 (줌 레벨: ${zoomLevel})`
-          );
-        }
-      }
-
-      const initialFeatures = format.readFeatures(
-        { type: "FeatureCollection", features: initialRawFeatures },
-        { dataProjection: "EPSG:4326", featureProjection }
-      );
-
-      vectorSource.addFeatures(initialFeatures);
-
-      // 화면에 표시된 데이터로 우선 캐시를 채우고, 나머지는 백그라운드에서 이어서 채움
-      wfsDataCache[layerName] = initialFeatures.slice();
-      wfsDataLoaded[layerName] = true;
+      renderLayerFromCache(layerName, currentExtent, currentZoom);
 
       console.log(
-        `${config.name} 초기 표시 완료: ${initialFeatures.length}개 (나머지는 백그라운드 캐싱)`
+        `${config.name} 표시 완료: ${vectorSource.getFeatures().length}개 (총 ${Date.now() - startTime}ms)`
       );
 
-      // 진행률을 100%로 설정하고 완료 메시지 표시
       updateLoadingProgress(100);
       showLoadingMessage(
         `${config.name} 데이터 로딩 완료!`,
-        "이제 껐다 켜도 기다림 없이 바로 표시됩니다."
+        "지도를 옮기면 그 영역의 데이터를 이어서 불러옵니다."
       );
 
-      // 완료 후 잠시 대기 후 팝업 숨기기
       setTimeout(() => {
         hideLoadingMessage();
-      }, 800); // 완료 메시지를 더 오래 보여줌
-
-      // 초기 표시에 쓰이지 않은 나머지 원본 피처는 백그라운드에서 청크 단위로 파싱해 캐시에 채워
-      // 이후 팬/줌 시 wfs-move 핸들러가 전체 데이터를 사용할 수 있게 함 (메인 스레드 블로킹 없이)
-      const initialRawSet = new Set(initialRawFeatures);
-      const remainingRawFeatures = rawFeatures.filter(
-        (rawFeature) => !initialRawSet.has(rawFeature)
-      );
-      scheduleBackgroundFeatureCaching(
-        layerName,
-        remainingRawFeatures,
-        format,
-        featureProjection
-      );
+      }, 800);
     })
     .catch((error) => {
-      // 점진적 로딩 타이머 정리
       clearInterval(progressInterval);
-
       console.error(`${config.name} 데이터 로드 실패:`, error);
       hideLoadingMessage();
       throw error;
