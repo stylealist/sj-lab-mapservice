@@ -842,6 +842,12 @@
   border: 1px solid #e2e8f0;
 }
 
+/* 지도 이동·상세 로딩이 끝나 최종 위치가 정해질 때까지 숨김.
+   display: none 이 아니라 visibility 로 숨겨야 높이를 재서 위치를 계산할 수 있다. */
+.facility-popup.is-positioning {
+  visibility: hidden;
+}
+
 .facility-popup-header {
   display: flex;
   justify-content: space-between;

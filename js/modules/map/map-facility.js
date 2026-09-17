@@ -17,6 +17,8 @@ let facilityModuleInitialized = false;
 
 // 커서 호버 상태 관리 (wfs-pointer-move와의 커서 고착 방지)
 let isFacilityHovered = false;
+// 팝업 표시 순번 — 다른 시설물을 고르거나 닫으면 올려서 이전 표시 대기를 무효화
+let facilityPopupRevealToken = 0;
 
 // 요청 순서 경쟁 방지 (AbortController 및 요청 순번)
 let facilityAbortController = null;
@@ -216,6 +218,8 @@ const FACILITY_ICON_SIZE = [24, 32];
 // 선택된 핀은 원본 24x32 를 1.25배로 그리므로 기준점 기준 반폭이 15px,
 // 거기에 여백 9px 를 더해 24px 오른쪽에 붙인다(positioning: center-left 와 함께 사용).
 const FACILITY_POPUP_OFFSET = [24, 0];
+// 상세 응답이 이 시간(ms)보다 늦으면 "불러오는 중" 상태로 팝업을 먼저 보여준다
+const FACILITY_POPUP_SLOW_REVEAL_MS = 1200;
 const FACILITY_ICON_COLOR = "#2563eb"; // 기본 시설물 (파랑)
 const FACILITY_WARN_COLOR = "#d97706"; // 보수 필요 (주황)
 
@@ -567,12 +571,10 @@ function initializeFacilityModule() {
     positioning: "top-left",
     stopEvent: true,
     offset: FACILITY_POPUP_OFFSET.slice(),
-    // 팝업이 시설물 위쪽으로 그려지므로 화면 가장자리에서는 헤더(아이콘·제목·배지)가 잘림
-    // → 지도를 살짝 밀어 팝업 전체가 보이게 함. 왼쪽 패널(320px) 폭만큼 여유를 둠
-    autoPan: {
-      animation: { duration: 250 },
-      margin: 20,
-    },
+    // autoPan 은 끈다. setPosition 직후 실행되면 selectFacility 의 가운데 이동 애니메이션과
+    // 겹쳐 팝업이 한 번 보였다가 자리를 옮긴다. 화면 안 보정은 revealFacilityPopup 이
+    // 이동이 끝난 뒤 panIntoView 로 직접 한다.
+    autoPan: false,
   });
   map.addOverlay(facilityOverlay);
 
@@ -606,6 +608,7 @@ function initializeFacilityModule() {
 
     if (clickedFeature) {
       const totalId = clickedFeature.get("total_id") || clickedFeature.getId();
+      // 지도에서 직접 클릭한 경우: 가운데로만 옮기고 배율은 그대로 둔다
       selectFacility(totalId, false);
     }
   });
@@ -1144,28 +1147,44 @@ async function loadFacilities(filter = {}) {
 }
 
 /**
- * 팝업 전체가 지도 화면 안에 들어오도록 보정한다.
- *
- * 주의할 점 두 가지 때문에 setPosition 재호출이 아니라 panIntoView 를 쓴다.
- *  1) 같은 좌표로 setPosition 을 다시 호출하면 값이 바뀌지 않아 autoPan 이 아예 실행되지 않는다.
- *  2) 지도 이동 애니메이션이 끝나기 전에 보정하면 애니메이션이 팝업을 다시 화면 밖으로 밀어낸다.
- * 그래서 애니메이션이 끝난 뒤(최대 약 1.5초 대기) 한 번 보정한다.
+ * 지도 이동 애니메이션이 끝나면 callback 을 부른다(최대 약 1.5초 대기).
+ * token 이 바뀌면(다른 시설물을 고르거나 팝업을 닫으면) 부르지 않는다.
  */
-function ensureFacilityPopupVisible() {
-  const map = getMap();
-  if (!map || !facilityOverlay) return;
-
+function whenFacilityViewSettled(map, token, callback) {
   const deadline = Date.now() + 1500;
-
   const run = () => {
-    if (!facilityOverlay || facilityOverlay.getPosition() === undefined) return;
-
+    if (token !== facilityPopupRevealToken) return;
     if (map.getView().getAnimating() && Date.now() < deadline) {
       requestAnimationFrame(run);
       return;
     }
+    callback();
+  };
+  requestAnimationFrame(run);
+}
 
-    // 내용이 채워져 높이가 확정된 지금, 핀 세로 가운데에 맞춘다
+/**
+ * 지도 이동이 끝난 뒤 팝업을 최종 위치에 맞춰 한 번에 보여준다.
+ *
+ * showFacilityDetail 은 팝업을 숨긴 상태(is-positioning, visibility: hidden)로 자리만 잡아 두고,
+ * 여기서 ① 가운데 이동 애니메이션 종료 → ② 높이에 맞춘 세로 가운데 오프셋 → ③ 화면 밖이면 panIntoView
+ * → ④ 그 보정 이동까지 끝난 뒤 숨김을 푼다. 이동 도중에 보이면 핀 아래에 나왔다가 자리를 옮겨 어지럽다.
+ *
+ * setPosition 재호출이 아니라 panIntoView 를 쓰는 이유: 같은 좌표로 setPosition 을 다시 호출하면
+ * 값이 바뀌지 않아 보정이 실행되지 않는다. 이미 보이는 팝업에 다시 불러도(느린 응답 후 내용이 채워질 때)
+ * 위치만 다시 맞춘다.
+ */
+function revealFacilityPopup(token) {
+  const map = getMap();
+  if (!map || !facilityOverlay) return;
+
+  whenFacilityViewSettled(map, token, () => {
+    if (!facilityOverlay || facilityOverlay.getPosition() === undefined) return;
+
+    // 마지막 프레임을 반영해야 오버레이 픽셀 위치와 요소 크기를 정확히 잴 수 있다
+    map.renderSync();
+
+    // 핀 세로 가운데에 맞춘다 (visibility: hidden 이어도 레이아웃은 잡혀 높이를 잴 수 있음)
     const element = facilityOverlay.getElement();
     const height = element ? element.getBoundingClientRect().height : 0;
     if (height > 0) {
@@ -1176,9 +1195,11 @@ function ensureFacilityPopupVisible() {
     }
 
     facilityOverlay.panIntoView({ margin: 24, animation: { duration: 200 } });
-  };
 
-  requestAnimationFrame(run);
+    whenFacilityViewSettled(map, token, () => {
+      if (element) element.classList.remove("is-positioning");
+    });
+  });
 }
 
 /**
@@ -1207,8 +1228,56 @@ function scrollFacilityItemIntoView(item) {
   }
 }
 
-// 시설물 선택 (목록 또는 지도에서 호출)
-function selectFacility(totalId, animate = true) {
+/**
+ * 시설물이 "눈에 보이는 지도 영역"의 가운데에 오도록 하는 view center 를 계산한다.
+ *
+ * 지도 요소(#map)의 가운데와 사용자가 실제로 보는 지도의 가운데가 다르다.
+ *  - 가로: #map 은 화면 전체 너비이고, 좌측 레이어 패널(.layer-panel)이 그 위에 겹쳐 떠 있다.
+ *  - 세로: #map 은 화면 높이만큼인데 60px 헤더 아래에서 시작해, 아래쪽 일부가 화면 밖으로 넘친다.
+ * 그래서 view center 를 시설물 좌표로 그대로 두면 왼쪽·아래로 치우쳐 보인다.
+ * 화면 안에 보이는 부분과 패널이 가리는 폭을 매번 재서 반영하므로, 패널을 접었을 때나
+ * 창 크기가 바뀌어도 맞는다.
+ */
+function getFacilityViewCenter(coordinate, resolution) {
+  const map = getMap();
+  const size = map && map.getSize();
+  if (!size || !resolution) return coordinate;
+
+  const mapRect = map.getTargetElement().getBoundingClientRect();
+
+  // 화면(뷰포트) 안에 실제로 보이는 지도 영역
+  let left = Math.max(mapRect.left, 0);
+  const right = Math.min(mapRect.right, window.innerWidth);
+  const top = Math.max(mapRect.top, 0);
+  const bottom = Math.min(mapRect.bottom, window.innerHeight);
+
+  // 좌측 패널이 겹쳐 가리는 부분은 제외 (접혀 있으면 오른쪽 끝이 거의 0 이라 자연히 빠짐)
+  const panel = document.querySelector(".layer-panel");
+  if (panel) {
+    left = Math.max(left, Math.min(panel.getBoundingClientRect().right, right));
+  }
+  if (right <= left || bottom <= top) return coordinate;
+
+  // 지도 요소 기준 픽셀에서 "보이는 가운데"가 "요소 가운데"보다 얼마나 떨어져 있는지
+  const offsetX = (left + right) / 2 - mapRect.left - size[0] / 2;
+  const offsetY = (top + bottom) / 2 - mapRect.top - size[1] / 2;
+
+  // 시설물을 화면에서 (offsetX, offsetY) 만큼 옮겨 보이게 하려면 view center 를 반대로 둔다.
+  // 화면 y 는 아래로 커지고 지도 y 는 위로 커지므로 y 는 부호가 반대다.
+  return [
+    coordinate[0] - offsetX * resolution,
+    coordinate[1] + offsetY * resolution,
+  ];
+}
+
+/**
+ * 시설물 선택 (목록 또는 지도에서 호출)
+ *
+ * 어느 쪽에서 고르든 선택한 시설물을 지도 가운데로 옮긴다.
+ * zoomIn 은 "멀리 있을 수 있는 목록에서 골랐을 때만" 확대까지 할지를 정한다
+ * (지도에서 핀을 직접 클릭한 경우에는 이미 보고 있는 배율이므로 바꾸지 않는다).
+ */
+function selectFacility(totalId, zoomIn = true) {
   if (!totalId) return;
   selectedTotalId = String(totalId);
 
@@ -1250,14 +1319,15 @@ function selectFacility(totalId, animate = true) {
 
   const map = getMap();
   if (map && targetCoord) {
-    if (animate) {
-      const currentZoom = map.getView().getZoom();
-      map.getView().animate({
-        center: targetCoord,
-        zoom: Math.max(currentZoom, 16),
-        duration: 400,
-      });
-    }
+    const view = map.getView();
+    const targetZoom = zoomIn ? Math.max(view.getZoom(), 16) : view.getZoom();
+    // 확대까지 하는 경우 이동 후의 해상도로 계산해야 보이는 영역 가운데에 정확히 맞는다
+    const targetResolution = view.getResolutionForZoom(targetZoom);
+    view.animate({
+      center: getFacilityViewCenter(targetCoord, targetResolution),
+      zoom: targetZoom,
+      duration: 400,
+    });
     showFacilityDetail(selectedTotalId, targetCoord);
   } else if (targetCoord) {
     showFacilityDetail(selectedTotalId, targetCoord);
@@ -1272,11 +1342,23 @@ async function showFacilityDetail(totalId, coordinate) {
 
   if (!popupEl || !facilityOverlay) return;
 
+  // 이전 선택의 보정·표시 대기를 무효화
+  const revealToken = ++facilityPopupRevealToken;
+
   // 오버레이 위치 지정 (이전에 드래그로 옮겨 둔 위치는 초기화)
+  // 지도 이동과 상세 로딩이 끝날 때까지는 숨겨 두고 revealFacilityPopup 에서 보여준다
   if (coordinate) {
+    popupEl.classList.add("is-positioning");
     facilityOverlay.setOffset(FACILITY_POPUP_OFFSET.slice());
     facilityOverlay.setPosition(coordinate);
   }
+
+  // 응답이 늦으면 "불러오는 중" 상태로라도 먼저 보여준다 (내용이 채워지면 위치를 다시 맞춤)
+  setTimeout(() => {
+    if (revealToken === facilityPopupRevealToken && popupEl.classList.contains("is-positioning")) {
+      revealFacilityPopup(revealToken);
+    }
+  }, FACILITY_POPUP_SLOW_REVEAL_MS);
 
   // 상세 응답을 기다리는 동안에도 목록에 이미 있는 값으로 헤더를 먼저 채움
   const loadedFeature = facilitySource ? facilitySource.getFeatureById(totalId) : null;
@@ -1461,18 +1543,20 @@ async function showFacilityDetail(totalId, coordinate) {
       bodyEl.appendChild(detailList);
     }
 
-    // 내용이 채워진 뒤(=높이 확정) 지도 이동 애니메이션까지 끝나면 팝업 전체가 보이도록 보정
-    ensureFacilityPopupVisible();
   } catch (error) {
     console.error("시설물 상세정보 로드 오류:", error);
     if (bodyEl) {
       bodyEl.innerHTML = '<div class="facility-detail-error">상세정보를 불러오는 데 실패했습니다.</div>';
     }
+  } finally {
+    // 내용이 채워진 뒤(=높이 확정) 지도 이동까지 끝나면 최종 위치에서 보여줌 (오류 문구도 동일)
+    revealFacilityPopup(revealToken);
   }
 }
 
 // 팝업 닫기
 function closeFacilityPopup() {
+  facilityPopupRevealToken++; // 대기 중인 표시 보정 취소
   if (facilityOverlay) {
     facilityOverlay.setPosition(undefined);
   }

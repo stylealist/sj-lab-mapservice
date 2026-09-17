@@ -33,7 +33,15 @@
   - **아이콘 설정의 기준은 DB**(`qfield.facility_icon`)입니다. `loadFacilityIconConfig()`가 초기화 때 `GET /map/qfield/facility-icons`로 불러와 `facilityIconTypes`·`facilityDefaultIcon`을 교체하고 캐시를 비웁니다. **아이콘을 추가·변경할 때는 이 파일이 아니라 DB 행을 수정할 것**(생성·초기데이터 스크립트: `mapservice-rest/db/qfield_facility_icon.sql`). 파일 안의 `FALLBACK_FACILITY_ICON_TYPES`는 API 실패·빈 응답일 때만 쓰는 대체값이므로, DB에 종류를 추가했다고 해서 여기에 같이 넣지 말 것(둘이 어긋나면 어느 쪽이 보이는지 헷갈림).
   - 레이어 옵션: `updateWhileAnimating: false`, `updateWhileInteracting: false`, `declutter: false` (목록 건수와 지도 표출 건수 일치를 위해 비활성화).
   - **상세 팝업**: 헤더는 지도 핀과 같은 규칙으로 채웁니다(`renderFacilityPopupHeader()`) — 같은 SVG 아이콘 + 시설물명 + 종류·보수필요·상태 배지. 헤더에서 보여주는 `fclt_nm`·`facility_condition`·`repair_required_yn`은 `HEADER_FIELD_KEYS`로 본문 목록에서 제외하되 `DETAIL_FIELD_CONFIG`에는 남겨 둘 것(빼면 "그 밖의 항목" 목록으로 다시 새어 나옴). 배지 색은 핀 색과 맞춰 종류=파랑(`badge-type`), 보수 필요=주황(`badge-repair`)을 씁니다.
-  - **팝업 위치**: 오버레이는 `autoPan`을 켜고, **상세 내용을 그린 뒤 `setPosition(coordinate)`을 한 번 더 호출**해야 합니다. 처음 위치를 잡는 시점에는 "불러오는 중" 상태라 팝업 높이가 작아, autoPan이 실제 높이를 모른 채 계산해 헤더가 화면 위로 잘립니다.
+  - **선택 시 지도 가운데로 이동**: `selectFacility(totalId, zoomIn)`은 지도에서 핀을 클릭하든 목록에서 고르든 **선택한 시설물을 지도 가운데로 옮깁니다.** `zoomIn`은 목록에서 골랐을 때만 `true`(최소 줌 16까지 확대)이고, 지도에서 직접 클릭하면 배율은 그대로 둡니다.
+    - 가운데의 기준은 `#map` 요소가 아니라 **화면에 실제로 보이는 지도 영역**입니다(`getFacilityViewCenter()`). `#map`은 화면 전체 너비인데 좌측 `.layer-panel`(320px)이 그 위에 겹쳐 떠 있고, 세로로는 60px 헤더 아래에서 시작해 하단 60px가 화면 밖으로 넘칩니다. view center를 시설물 좌표로 그대로 두면 왼쪽으로 160px·아래로 30px 치우쳐 보입니다.
+    - 패널이 가리는 폭과 화면 안에 보이는 범위를 **클릭할 때마다 다시 재므로** 패널을 접거나 창 크기가 바뀌어도 맞습니다. 헤더·패널·`#map` 레이아웃을 바꾸면 이 함수 결과가 달라지니 함께 확인할 것.
+    - 확대까지 하는 경우 **이동 후 해상도**(`view.getResolutionForZoom(targetZoom)`)로 계산해야 정확히 가운데에 옵니다.
+    - 팝업이 핀 오른쪽에 들어갈 자리가 없으면(패널을 연 채 창 너비가 약 1,250px 미만) `panIntoView`가 팝업이 다 보이도록 지도를 그만큼만 밉니다. 이때는 핀이 가운데에서 왼쪽으로 조금 비켜납니다 — 팝업이 잘리지 않게 하려는 의도된 동작입니다.
+  - **팝업 위치·표시 시점**: 팝업은 **지도 이동과 상세 로딩이 모두 끝난 뒤 최종 위치에서 한 번에** 나타납니다. `showFacilityDetail()`이 `is-positioning`(`visibility: hidden`) 상태로 자리만 잡고, `revealFacilityPopup()`이 가운데 이동 종료 → 높이 기준 세로 가운데 오프셋 → `panIntoView` 보정 이동 종료 순으로 기다린 뒤 숨김을 풉니다.
+    - 오버레이 `autoPan`은 **끕니다**. 켜 두면 `setPosition` 직후 `selectFacility`의 이동 애니메이션과 겹쳐, 팝업이 핀 아래에 보였다가 자리를 옮기는 문제가 있었습니다.
+    - 숨길 때 `display: none`을 쓰지 말 것 — 높이를 잴 수 없어 세로 가운데·`panIntoView` 계산이 틀어집니다.
+    - `facilityPopupRevealToken`으로 대기 중인 표시를 무효화합니다(다른 시설물 선택·닫기). 응답이 `FACILITY_POPUP_SLOW_REVEAL_MS`(1.2초)보다 늦으면 "불러오는 중" 상태로 먼저 보여주고, 내용이 채워지면 위치만 다시 맞춥니다.
   - 이벤트 ID:
     - 클릭: `MapEventManager.registerClickHandler('facility-click-layer', handler)` (기존 `wfs-general-click`과 충돌하지 않도록 시설물 레이어 피처만 필터링 처리).
     - 호버 커서: `MapEventManager.registerPointerMoveHandler('facility-pointer-move', handler)` (자체 `isFacilityHovered` 상태를 두어 시설물 피처를 벗어날 때 `cursor = ""`로 즉시 복원하여 커서 고착 방지).
