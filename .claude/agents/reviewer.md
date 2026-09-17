@@ -26,7 +26,7 @@ VWorld/OpenLayers 기반 정적 SPA인 SJ 시설물 관리의 코드 변경을 �
 ### 지도 모듈
 - `MapEventManager.register*Handler(id, ...)`에 새로 넘긴 `id`가 기존 id와 충돌하지 않는가? (동일 id+타입이면 등록이 조용히 무시됨)
 - 새 벡터/타일 레이어의 `zIndex`가 기존 레이어(WFS 벡터·WMS 모두 `1000`)와 의도치 않게 겹치지 않는가?
-- 새 WFS 레이어가 `getMaxFeaturesByZoom`/`spatialSampling` 같은 성능 가드를 우회해 전체 피처를 무제한 렌더링하지 않는가?
+- WFS 레이어는 전체 데이터를 한 번 받아 화면 안 피처를 개수 제한 없이 모두 그리는 것이 현재 의도다. 요청에 `bbox`/`limit`을 다시 붙이거나 줌별 개수 상한·샘플링을 되살려 피처가 빠지게 만들지 않았는가? 반대로 `loadWfsData()`가 켤 때마다 서버를 다시 부르지 않는가(캐시·`wfsLoadPromises` 가드 유지)?
 - `updateWhileAnimating`/`updateWhileInteracting` 등 의도적으로 꺼둔 성능 옵션을 임의로 켜지 않았는가?
 - 새 POI 아이콘이 `size`/`imgSize [32, 32]`, `anchor [0.5, 1.0]` 컨벤션을 따르는가?
 - 새 WFS 엔드포인트가 하드코딩된 URL 대신 `getApiUrl()`을 거치는가?

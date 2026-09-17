@@ -17,15 +17,16 @@
 
 - `MapEventManager.register*Handler(id, handler)`(`map-events.js`)는 **동일 `id` + 동일 이벤트 타입이 이미 등록돼 있으면 조용히 무시(`return`)**합니다. 새 핸들러를 등록했는데 안 먹히면 가장 먼저 `id` 충돌을 의심할 것. `id`는 `map-wfs.js`의 `` `wfs-move-${layerName}` `` 처럼 `<모듈>-<이벤트>-<대상>` 형태로 매번 고유하게 지을 것.
 - 벡터/타일 레이어의 `zIndex`는 `map-wfs.js`의 WFS 벡터 레이어, `map-wms.js`의 WMS 레이어 모두 `1000`을 쓰고 있습니다. 새 레이어를 추가할 때 이 값과 겹쳐도 되는지, 위/아래에 와야 하는지 기존 레이어들과 순서를 맞출 것.
-- WFS 레이어는 `getMaxFeaturesByZoom()` + `spatialSampling()`으로 줌 레벨별 최대 표시 개수를 제한하는 성능 가드가 걸려 있습니다. 새 WFS 레이어를 추가하거나 기존 로직을 고칠 때 이 제한을 우회해서 전체 피처를 조건 없이 렌더링하지 말 것 — 대량 데이터에서 렌더링이 급격히 느려짐.
+- WFS 레이어는 **화면 안에 들어오는 피처를 개수 제한 없이 모두 표출**합니다(2026-09-17 결정). 예전의 줌 레벨별 최대 개수(`getMaxFeaturesByZoom()`)와 공간 샘플링(`spatialSampling()`)은 제거했으므로 다시 넣지 말 것 — 일부 피처가 빠져 보이는 원인이었습니다. 대신 광역 줌에서 피처가 많으면 렌더링이 무거워질 수 있으니, 성능 문제가 생기면 개수를 자르기 전에 사용자와 먼저 상의할 것.
 - 레이어 생성 옵션(`updateWhileAnimating: false`, `updateWhileInteracting: false`, `declutter: true` 등)은 성능을 위해 의도적으로 설정된 값입니다. 임의로 `true`로 바꾸지 말 것.
 - POI 아이콘 스타일은 `size`/`imgSize` `[32, 32]`, `anchor: [0.5, 1.0]`(하단 중앙 앵커)로 통일돼 있습니다. 새 POI 아이콘을 추가할 때 이 컨벤션을 맞출 것 — 앵커가 다르면 다른 레이어 아이콘과 위치 정렬이 어긋남.
 - `map-wfs.js`의 새 엔드포인트는 반드시 `getApiUrl()`을 통해서만 URL을 만들 것 (dev/prod 자동 전환). 절대 URL 하드코딩 금지.
-- **WFS 데이터는 화면에 보이는 영역만 서버에서 받아옵니다.** 예전에는 레이어를 켤 때마다 전국 데이터를 통째로(버스정류장 약 85MB) 받아 브라우저에서 잘라 썼고, 그래서 최초 표출에 수십 초가 걸렸습니다. 지금은 백엔드가 `bbox`(EPSG:3857 `minX,minY,maxX,maxY`)와 `limit`을 지원하므로 `fetchWfsFeaturesForExtent()`가 화면보다 가로·세로 **50% 넓은 영역**(`bufferExtent`)만 요청합니다.
-  - `wfsFetchState[layerName]`이 `{ extent, zoom, complete }`로 "어디까지 받아왔는지"를 들고 있고, `needsServerFetch()`가 ① 아직 안 받음 ② 화면이 받아둔 영역 밖 ③ 상한에 걸린 영역인데 줌인함 — 이 세 경우에만 서버를 다시 부릅니다. 버퍼 안에서 움직이는 동안은 요청이 나가지 않으므로, 이동할 때마다 요청이 나간다면 이 판정을 먼저 볼 것.
+- **WFS 데이터는 백엔드에서 영역을 자르지 않고 전체를 한 번에 받아옵니다**(2026-09-17 결정). 한때 백엔드 `bbox`·`limit`으로 화면 영역만 받았지만, 서버 상한·샘플링 때문에 피처가 다 나오지 않아 되돌렸습니다. 요청 URL에 `bbox`/`limit` 파라미터를 다시 붙이지 말 것.
+  - `loadWfsData()`는 레이어를 **처음 켤 때만** `fetchAllWfsFeatures()`로 전체 데이터를 받고(`wfsDataLoaded[layerName] = true`), 이후 켜기·이동·줌은 서버를 부르지 않고 캐시로만 그립니다. 받아오는 중에 버튼을 다시 누르면 `wfsLoadPromises[layerName]`의 같은 요청을 기다리므로 요청이 중복으로 나가지 않습니다.
+  - 응답이 수십 MB(버스정류장 약 85MB)라 한 번에 `readFeatures()`하면 메인 스레드가 수 초간 멈춥니다. 그래서 `filterRawPointFeaturesByExtent()`로 **화면 안쪽 피처만 먼저 파싱해 바로 그리고**, 나머지는 `scheduleBackgroundFeatureCaching()`이 1,000개씩 idle 시간에 파싱한 뒤 완료 콜백(`renderLayerForCurrentView()`)으로 현재 화면을 다시 그립니다.
   - 받아온 피처는 `mergeFeaturesIntoCache()`가 **피처 id 기준 중복 제거**로 `wfsDataCache`에 합칩니다. 캐시를 직접 `push`하지 말 것(같은 피처가 여러 번 들어가 개수 표시가 틀어짐).
-  - 화면에 그리는 일은 `renderLayerFromCache()` 한 곳에서만 합니다(뷰포트 필터 → `getMaxFeaturesByZoom()` 상한 → `spatialSampling()`). 레이어를 켤 때와 지도를 움직일 때 모두 이 함수를 씁니다.
-  - `filterRawPointFeaturesByExtent()` + `scheduleBackgroundFeatureCaching()`은 **`bbox`를 모르는 예전 백엔드에 붙었을 때의 안전장치**로만 남아 있습니다(요청한 상한보다 훨씬 많이 오면 예전 방식대로 화면 안쪽만 먼저 파싱). 정상 경로에서는 타지 않으므로, 이 두 함수가 자주 불린다면 백엔드 버전을 의심할 것.
+  - 화면에 그리는 일은 `renderLayerFromCache()` 한 곳에서만 합니다(뷰포트 필터만 하고 개수 제한 없음). 레이어를 켤 때, 지도를 움직일 때, 백그라운드 파싱이 끝났을 때 모두 이 함수를 씁니다.
+  - 레이어 옵션 `declutter: true`는 그대로라서 **아이콘이 서로 겹치는 자리에서는 OpenLayers가 일부를 숨깁니다**(데이터는 벡터 소스에 모두 들어가 있음). 겹친 것까지 전부 그려야 한다면 시설물 레이어처럼 `declutter: false`로 바꾸는 것을 검토할 것.
 - **`readFeatures()`에 넘기는 `featureProjection`은 반드시 `vectorSource.getProjection()`(= `null`)을 유지할 것.** OpenLayers 7.4.0에서 `ol.source.Vector`의 `getProjection()`은 `null`을 반환하고, `featureProjection`이 `null`이면 `readFeatures()`가 좌표를 **변환하지 않고 그대로** 사용합니다. 백엔드 응답 좌표가 이미 뷰 좌표계(EPSG:3857)이므로 이 동작에 의존하고 있습니다(옵션의 `dataProjection: "EPSG:4326"`은 실질적으로 무시됨). 여기에 `map.getView().getProjection()` 같은 실제 투영을 넘기면 미터 좌표를 경위도로 간주해 변환해버려 피처가 지도 밖으로 밀려나 **레이어가 아예 표시되지 않음**. 같은 이유로 원본 좌표 기반 뷰포트 필터링도 4326이 아니라 **뷰 좌표계 extent**로 비교해야 함.
 - **시설물 레이어 (`map-facility.js`) 규격**:
   - `zIndex`: `1010` (기존 WFS/WMS 레이어 1000 위에 배치하여 가시성 확보).

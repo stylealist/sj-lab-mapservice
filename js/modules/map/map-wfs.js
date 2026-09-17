@@ -9,10 +9,7 @@ let wfsDataCache = {}; // 캐시된 데이터 저장
 let wfsVectorSources = {}; // 벡터 소스 저장
 let wfsDataLoaded = {}; // 데이터 로드 상태 저장
 let wfsUpdating = {}; // 각 레이어별 업데이트 상태 저장
-// 레이어별로 "서버에서 어디까지 받아왔는지" 기록.
-// { extent: 받아온 영역, zoom: 받을 때의 줌, complete: 그 영역을 상한에 걸리지 않고 다 받았는지 }
-let wfsFetchState = {};
-// 이미 캐시에 넣은 피처 id 집합 (여러 번 나눠 받을 때 중복 추가 방지)
+// 이미 캐시에 넣은 피처 id 집합 (중복 추가 방지)
 let wfsCachedFeatureIds = {};
 
 // 환경별 API URL 설정
@@ -128,121 +125,6 @@ const WFS_CONFIG = {
 // WFS 레이어 초기화 상태 추적
 let wfsInitialized = false;
 
-// 줌 레벨에 따른 표출 개수 설정 함수
-const getMaxFeaturesByZoom = (zoomLevel) => {
-  if (zoomLevel >= 18) return 3000; // 줌 레벨 18 이상: 최대 3000개
-  if (zoomLevel >= 16) return 1500; // 줌 레벨 16-17: 최대 1500개
-  if (zoomLevel >= 14) return 800; // 줌 레벨 14-15: 최대 800개
-  if (zoomLevel >= 12) return 400; // 줌 레벨 12-13: 최대 400개
-  if (zoomLevel >= 10) return 200; // 줌 레벨 10-11: 최대 200개
-  return 100; // 줌 레벨 10 미만: 최대 100개
-};
-
-// 균등 분포와 중앙 가중치를 결합한 샘플링 함수
-// getCoordinates: OL Feature뿐 아니라 파싱 전 원본 GeoJSON 피처에도 재사용할 수 있도록 좌표 추출 방식을 주입받음
-const spatialSampling = (
-  features,
-  maxCount,
-  extent,
-  getCoordinates = (feature) => feature.getGeometry().getCoordinates()
-) => {
-  if (features.length <= maxCount) {
-    return features;
-  }
-
-  // 뷰포트의 중심점 계산
-  const centerX = (extent[0] + extent[2]) / 2;
-  const centerY = (extent[1] + extent[3]) / 2;
-
-  // 화면 비율을 고려한 그리드 분할
-  const viewportWidth = extent[2] - extent[0];
-  const viewportHeight = extent[3] - extent[1];
-  const aspectRatio = viewportWidth / viewportHeight;
-
-  // 고정된 그리드 크기로 균등 분포 보장
-  const gridCols = Math.ceil(Math.sqrt(maxCount * 4)); // 더 많은 셀로 분할
-  const gridRows = Math.ceil(Math.sqrt(maxCount * 4)); // 가로세로 동일하게
-
-  const cellWidth = viewportWidth / gridCols;
-  const cellHeight = viewportHeight / gridRows;
-
-  // 그리드 셀별로 피처 그룹화
-  const grid = {};
-  const cellDistances = {}; // 각 셀의 중심점까지의 거리
-
-  features.forEach((feature) => {
-    const coord = getCoordinates(feature);
-    if (!coord) return;
-
-    const gridX = Math.floor((coord[0] - extent[0]) / cellWidth);
-    const gridY = Math.floor((coord[1] - extent[1]) / cellHeight);
-
-    // 그리드 범위 내로 제한
-    const clampedX = Math.max(0, Math.min(gridX, gridCols - 1));
-    const clampedY = Math.max(0, Math.min(gridY, gridRows - 1));
-    const cellKey = `${clampedX},${clampedY}`;
-
-    if (!grid[cellKey]) {
-      grid[cellKey] = [];
-      // 셀의 중심점 계산
-      const cellCenterX = extent[0] + (clampedX + 0.5) * cellWidth;
-      const cellCenterY = extent[1] + (clampedY + 0.5) * cellHeight;
-      // 뷰포트 중심점까지의 거리 계산
-      cellDistances[cellKey] = Math.sqrt(
-        Math.pow(cellCenterX - centerX, 2) + Math.pow(cellCenterY - centerY, 2)
-      );
-    }
-    grid[cellKey].push(feature);
-  });
-
-  // 모든 그리드 셀을 포함하도록 보장
-  const allCells = [];
-  for (let x = 0; x < gridCols; x++) {
-    for (let y = 0; y < gridRows; y++) {
-      const cellKey = `${x},${y}`;
-      if (grid[cellKey]) {
-        allCells.push(cellKey);
-      }
-    }
-  }
-
-  // 셀을 랜덤 순서로 정렬 (편향 방지)
-  const sortedCells = allCells.sort(() => 0.5 - Math.random());
-
-  // 완전 균등 분포를 위한 선택 개수 계산
-  const selectedFeatures = [];
-  const totalCells = sortedCells.length;
-  const baseFeaturesPerCell = Math.floor(maxCount / totalCells);
-  const remainingFeatures = maxCount % totalCells;
-
-  sortedCells.forEach((cellKey, index) => {
-    const cellFeatures = grid[cellKey] || [];
-    if (cellFeatures.length === 0) return;
-
-    // 완전 균등 분배 (가중치 제거)
-    let targetCount = baseFeaturesPerCell;
-    if (index < remainingFeatures) {
-      targetCount += 1;
-    }
-
-    if (cellFeatures.length <= targetCount) {
-      // 셀의 피처가 적으면 모두 선택
-      selectedFeatures.push(...cellFeatures);
-    } else {
-      // 셀의 피처가 많으면 랜덤 선택
-      const shuffled = cellFeatures.sort(() => 0.5 - Math.random());
-      selectedFeatures.push(...shuffled.slice(0, targetCount));
-    }
-  });
-
-  // 최종 개수 조정
-  if (selectedFeatures.length > maxCount) {
-    return selectedFeatures.slice(0, maxCount);
-  }
-
-  return selectedFeatures;
-};
-
 // 원본 GeoJSON 피처(파싱 전) 중 확장영역과 겹치는 Point 피처만 남기는 저비용 사전 필터
 // OL Feature 객체를 만들기 전에 필터링해서 최초 로드 시 불필요한 readFeatures 비용을 줄이는 용도.
 // readFeatures가 좌표를 변환하지 않고 그대로 사용하므로(아래 loadWfsData 주석 참고),
@@ -264,57 +146,15 @@ const filterRawPointFeaturesByExtent = (rawFeatures, extent) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// 서버 측 화면 영역(bbox) 조회
+// 전체 데이터 조회
 //
-// 예전에는 레이어를 켤 때마다 전국 데이터를 통째로(버스정류장 기준 약 85MB) 받아
-// 브라우저에서 잘라 썼다. 지금은 백엔드가 bbox·limit 를 지원하므로 화면에 보이는 만큼만 받는다.
-// 작은 팬(이동)마다 다시 요청하지 않도록 화면보다 넓은 영역을 받아 두고, 그 안에서 움직이는 동안은
-// 캐시만 쓴다.
+// 서버에는 영역(bbox)·개수(limit) 조건을 넘기지 않고 레이어의 전체 데이터를 한 번만 받는다.
+// 받아온 데이터는 wfsDataCache 에 보관하고, 이후 지도 이동·줌은 서버를 다시 부르지 않고
+// 캐시에서 화면 영역에 들어오는 피처를 개수 제한 없이 모두 그린다.
 // ─────────────────────────────────────────────────────────────
 
-// 화면보다 얼마나 넓게 받아둘지(가로·세로 각각 이 비율만큼 양옆으로 확장)
-const WFS_FETCH_BUFFER_RATIO = 0.5;
-
-const bufferExtent = (extent, ratio = WFS_FETCH_BUFFER_RATIO) => {
-  const width = extent[2] - extent[0];
-  const height = extent[3] - extent[1];
-  return [
-    extent[0] - width * ratio,
-    extent[1] - height * ratio,
-    extent[2] + width * ratio,
-    extent[3] + height * ratio,
-  ];
-};
-
-// 서버에 요청할 개수 상한. 화면에 그리는 개수(getMaxFeaturesByZoom)보다 넉넉히 받아야
-// 버퍼 영역 안에서 팬할 때 빈 곳이 생기지 않는다.
-const getFetchLimitByZoom = (zoomLevel) => {
-  const maxFeatures = getMaxFeaturesByZoom(zoomLevel);
-  return Math.min(Math.max(maxFeatures * 3, 1500), 6000);
-};
-
-const isExtentCovered = (inner, outer) =>
-  !!outer &&
-  inner[0] >= outer[0] &&
-  inner[1] >= outer[1] &&
-  inner[2] <= outer[2] &&
-  inner[3] <= outer[3];
-
-// 서버에 다시 요청해야 하는지 판단
-// - 아직 한 번도 안 받았으면 받는다
-// - 화면이 받아둔 영역 밖으로 나갔으면 받는다
-// - 상한에 걸려 일부만 받은 영역이면, 줌인해서 더 조밀하게 보여줘야 할 때 다시 받는다
-const needsServerFetch = (layerName, extent, zoomLevel) => {
-  const state = wfsFetchState[layerName];
-  if (!state) return true;
-  if (!isExtentCovered(extent, state.extent)) return true;
-  return !state.complete && zoomLevel > state.zoom + 0.5;
-};
-
-const buildWfsRequestUrl = (layerName, extent, limit) => {
-  const bbox = extent.map((value) => Math.round(value)).join(",");
-  return `${WFS_CONFIG[layerName].url}?bbox=${encodeURIComponent(bbox)}&limit=${limit}`;
-};
+// 레이어별 진행 중인 전체 조회 Promise (켜기 버튼을 연달아 눌러도 요청이 한 번만 나가게 함)
+const wfsLoadPromises = {};
 
 // 받아온 피처를 캐시에 합친다(id 기준 중복 제거). 새로 추가된 피처 수를 돌려준다.
 const mergeFeaturesIntoCache = (layerName, features) => {
@@ -341,7 +181,7 @@ const mergeFeaturesIntoCache = (layerName, features) => {
   return added;
 };
 
-// 캐시에서 현재 화면에 맞는 피처만 골라 벡터 소스에 그린다
+// 캐시에서 현재 화면에 들어오는 피처를 모두(개수 제한 없이) 벡터 소스에 그린다
 const renderLayerFromCache = (layerName, extent, zoomLevel) => {
   const vectorSource = wfsVectorSources[layerName];
   const config = WFS_CONFIG[layerName];
@@ -353,29 +193,35 @@ const renderLayerFromCache = (layerName, extent, zoomLevel) => {
     return geometry.intersectsExtent(extent);
   });
 
-  const maxFeatures = getMaxFeaturesByZoom(zoomLevel);
-  const filteredFeatures =
-    viewportFeatures.length > maxFeatures
-      ? spatialSampling(viewportFeatures, maxFeatures, extent)
-      : viewportFeatures;
-
   vectorSource.clear();
-  vectorSource.addFeatures(filteredFeatures);
+  vectorSource.addFeatures(viewportFeatures);
 
   console.log(
-    `${config.name}: 뷰포트 내 ${viewportFeatures.length}개 중 ${filteredFeatures.length}개 표출 (줌 레벨: ${zoomLevel})`
+    `${config.name}: 뷰포트 내 ${viewportFeatures.length}개 모두 표출 (줌 레벨: ${zoomLevel})`
   );
 };
 
-// 화면 영역만큼 서버에서 받아 캐시에 합친다
-function fetchWfsFeaturesForExtent(layerName, extent, zoomLevel) {
+// 지도의 현재 화면 기준으로 캐시를 다시 그린다 (백그라운드 파싱이 끝났을 때 사용)
+const renderLayerForCurrentView = (layerName) => {
+  const map = getMap();
+  const mapSize = map && map.getSize ? map.getSize() : null;
+  if (!map || !mapSize) return;
+  renderLayerFromCache(
+    layerName,
+    map.getView().calculateExtent(mapSize),
+    map.getView().getZoom()
+  );
+};
+
+// 레이어의 전체 데이터를 서버에서 받아 캐시에 넣는다.
+// 화면 안쪽 피처를 먼저 파싱해 바로 그리고, 나머지는 백그라운드에서 나눠 파싱한 뒤 다시 그린다
+// (수십 MB 응답을 한 번에 readFeatures 하면 메인 스레드가 수 초간 멈추기 때문).
+function fetchAllWfsFeatures(layerName, extent, zoomLevel) {
   const config = WFS_CONFIG[layerName];
   const vectorSource = wfsVectorSources[layerName];
-  const requestExtent = bufferExtent(extent);
-  const limit = getFetchLimitByZoom(zoomLevel);
   const startTime = Date.now();
 
-  return fetch(buildWfsRequestUrl(layerName, requestExtent, limit))
+  return fetch(config.url)
     .then((response) => {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -385,7 +231,7 @@ function fetchWfsFeaturesForExtent(layerName, extent, zoomLevel) {
     .then((data) => {
       const rawFeatures = Array.isArray(data.features) ? data.features : [];
       console.log(
-        `${config.name} 화면 영역 수신: ${rawFeatures.length}개 (${Date.now() - startTime}ms)`
+        `${config.name} 전체 데이터 수신: ${rawFeatures.length}개 (${Date.now() - startTime}ms)`
       );
 
       const format = vectorSource.getFormat();
@@ -393,68 +239,41 @@ function fetchWfsFeaturesForExtent(layerName, extent, zoomLevel) {
       // 원본 좌표를 그대로 사용함(응답 좌표가 이미 뷰 좌표계). 여기에 실제 투영을 넘기면 좌표가 어긋나 레이어가 표시되지 않음.
       const featureProjection = vectorSource.getProjection();
 
-      // bbox 를 모르는 예전 백엔드로 붙은 경우(파라미터가 무시되어 전국 데이터가 옴)를 대비한 안전장치.
-      // 요청한 상한보다 훨씬 많이 오면 예전 방식대로 화면 안쪽만 먼저 파싱하고 나머지는 백그라운드로 넘긴다.
-      const overFetched = rawFeatures.length > limit * 1.5;
-      let targetRawFeatures = rawFeatures;
-
-      if (overFetched) {
-        console.warn(
-          `${config.name}: 서버가 bbox 를 적용하지 않은 것으로 보임(${rawFeatures.length}개 수신) - 화면 기준으로 직접 걸러냄`
-        );
-        const viewportRawFeatures = filterRawPointFeaturesByExtent(
-          rawFeatures,
-          requestExtent
-        );
-        targetRawFeatures =
-          viewportRawFeatures.length > limit
-            ? spatialSampling(
-                viewportRawFeatures,
-                limit,
-                requestExtent,
-                (rawFeature) => rawFeature.geometry.coordinates
-              )
-            : viewportRawFeatures;
-      }
-
-      const features = format.readFeatures(
-        { type: "FeatureCollection", features: targetRawFeatures },
+      const viewportRawFeatures = filterRawPointFeaturesByExtent(rawFeatures, extent);
+      const viewportFeatures = format.readFeatures(
+        { type: "FeatureCollection", features: viewportRawFeatures },
         { dataProjection: "EPSG:4326", featureProjection }
       );
 
-      mergeFeaturesIntoCache(layerName, features);
+      mergeFeaturesIntoCache(layerName, viewportFeatures);
       wfsDataLoaded[layerName] = true;
+      renderLayerFromCache(layerName, extent, zoomLevel);
 
-      // 상한에 걸리면 서버가 이 영역에 고르게 퍼진 표본을 내려주므로 영역 자체는 다 덮은 것이고,
-      // 다만 더 조밀하게 보려면(줌인) 다시 받아야 하므로 complete 로는 표시하지 않는다.
-      wfsFetchState[layerName] = {
-        extent: requestExtent,
-        zoom: zoomLevel,
-        complete: !overFetched && rawFeatures.length < limit,
-      };
-
-      if (overFetched) {
-        const usedRawSet = new Set(targetRawFeatures);
-        scheduleBackgroundFeatureCaching(
-          layerName,
-          rawFeatures.filter((rawFeature) => !usedRawSet.has(rawFeature)),
-          format,
-          featureProjection
-        );
-      }
+      const viewportRawSet = new Set(viewportRawFeatures);
+      scheduleBackgroundFeatureCaching(
+        layerName,
+        rawFeatures.filter((rawFeature) => !viewportRawSet.has(rawFeature)),
+        format,
+        featureProjection,
+        () => renderLayerForCurrentView(layerName)
+      );
     });
 }
 
-// 초기 화면에 필요 없는 나머지 원본 피처를 백그라운드에서 청크 단위로 파싱해 캐시를 채움
+// 화면에 먼저 그리지 않은 나머지 원본 피처를 백그라운드에서 청크 단위로 파싱해 캐시를 채움
 // (팬/줌 시 wfs-move 핸들러가 wfsDataCache를 참조하므로, 메인 스레드를 막지 않고 점진적으로 채워넣음)
 function scheduleBackgroundFeatureCaching(
   layerName,
   rawFeatures,
   format,
   featureProjection,
+  onComplete,
   chunkSize = 1000
 ) {
-  if (!rawFeatures.length) return;
+  if (!rawFeatures.length) {
+    if (onComplete) onComplete();
+    return;
+  }
 
   const scheduleIdle =
     typeof window.requestIdleCallback === "function"
@@ -480,6 +299,7 @@ function scheduleBackgroundFeatureCaching(
       console.log(
         `${WFS_CONFIG[layerName].name}: 백그라운드 캐싱 완료 (총 ${wfsDataCache[layerName].length}개)`
       );
+      if (onComplete) onComplete();
     }
   };
 
@@ -665,23 +485,7 @@ function initializeWfsLayers() {
             return;
           }
 
-          // 받아둔 영역을 벗어났으면 그 영역만 추가로 받아온 뒤 다시 그린다
-          if (needsServerFetch(layerName, currentExtent, currentZoom)) {
-            fetchWfsFeaturesForExtent(layerName, currentExtent, currentZoom)
-              .then(() => {
-                renderLayerFromCache(layerName, currentExtent, currentZoom);
-              })
-              .catch((error) => {
-                console.error(`${config.name} 화면 영역 추가 조회 실패:`, error);
-                // 실패해도 이미 받아둔 데이터로는 그려 둔다
-                renderLayerFromCache(layerName, currentExtent, currentZoom);
-              })
-              .finally(() => {
-                wfsUpdating[layerName] = false;
-              });
-            return;
-          }
-
+          // 전체 데이터를 이미 받아두었으므로 서버를 다시 부르지 않고 캐시로만 그린다
           renderLayerFromCache(layerName, currentExtent, currentZoom);
         }
 
@@ -798,6 +602,7 @@ function toggleWfsLayer(layerName) {
 }
 
 // WFS 데이터 로드 함수
+// 처음 켤 때 전체 데이터를 한 번 받아오고, 그 뒤에는 캐시로 바로 그린다.
 function loadWfsData(layerName) {
   const config = WFS_CONFIG[layerName];
   const vectorSource = wfsVectorSources[layerName];
@@ -812,15 +617,20 @@ function loadWfsData(layerName) {
   const currentExtent = map.getView().calculateExtent(mapSize);
   const currentZoom = map.getView().getZoom();
 
-  // 이미 받아둔 영역 안이면 서버를 다시 부르지 않고 캐시로 바로 그린다
-  if (!needsServerFetch(layerName, currentExtent, currentZoom)) {
+  // 이미 전체 데이터를 받아두었으면 서버를 다시 부르지 않고 캐시로 바로 그린다
+  if (wfsDataLoaded[layerName]) {
     console.log(`${config.name} 캐시 사용: ${wfsDataCache[layerName].length}개 보유`);
     renderLayerFromCache(layerName, currentExtent, currentZoom);
     return Promise.resolve();
   }
 
+  // 이미 받아오는 중이면 같은 요청을 기다린다
+  if (wfsLoadPromises[layerName]) {
+    return wfsLoadPromises[layerName];
+  }
+
   const startTime = Date.now();
-  const firstLoadHint = "⚡ 보이는 영역만 불러옵니다. 지도를 옮기면 그 영역을 이어서 불러와요.";
+  const firstLoadHint = "⚡ 처음 한 번만 전체 데이터를 불러옵니다. 다시 켤 때는 바로 표시됩니다.";
 
   // 점진적 로딩 진행 타이머: 실제 진행률이 아니라 "아직 작업 중"임을 알리는 용도.
   let progress = 10;
@@ -834,15 +644,9 @@ function loadWfsData(layerName) {
     }
   }, 300);
 
-  return fetchWfsFeaturesForExtent(layerName, currentExtent, currentZoom)
+  wfsLoadPromises[layerName] = fetchAllWfsFeatures(layerName, currentExtent, currentZoom)
     .then(() => {
       clearInterval(progressInterval);
-
-      progress = 80;
-      updateLoadingProgress(progress);
-      showLoadingMessage(`${config.name} 데이터를 표시하는 중...`, firstLoadHint);
-
-      renderLayerFromCache(layerName, currentExtent, currentZoom);
 
       console.log(
         `${config.name} 표시 완료: ${vectorSource.getFeatures().length}개 (총 ${Date.now() - startTime}ms)`
@@ -851,7 +655,7 @@ function loadWfsData(layerName) {
       updateLoadingProgress(100);
       showLoadingMessage(
         `${config.name} 데이터 로딩 완료!`,
-        "지도를 옮기면 그 영역의 데이터를 이어서 불러옵니다."
+        "이제 껐다 켜도 기다림 없이 바로 표시됩니다."
       );
 
       setTimeout(() => {
@@ -863,7 +667,12 @@ function loadWfsData(layerName) {
       console.error(`${config.name} 데이터 로드 실패:`, error);
       hideLoadingMessage();
       throw error;
+    })
+    .finally(() => {
+      delete wfsLoadPromises[layerName];
     });
+
+  return wfsLoadPromises[layerName];
 }
 
 // 줌 레벨과 뷰포트 기반 데이터 필터링 함수 (현재 사용하지 않음)
