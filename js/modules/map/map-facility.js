@@ -211,6 +211,11 @@ const INTERNAL_DETAIL_KEYS = new Set([
 // 시설물 아이콘 규격 (SVG 핀, 원본 24x32, anchor [0.5, 1.0])
 // 별도 이미지 파일 없이 data URI로 그리므로 확대해도 선명하고 색만 바꿔 재사용할 수 있음
 const FACILITY_ICON_SIZE = [24, 32];
+
+// 팝업 기본 위치 오프셋 — 핀 오른쪽에 띄운다.
+// 선택된 핀은 원본 24x32 를 1.25배로 그리므로 기준점 기준 반폭이 15px,
+// 거기에 여백 9px 를 더해 24px 오른쪽에 붙인다(positioning: center-left 와 함께 사용).
+const FACILITY_POPUP_OFFSET = [24, 0];
 const FACILITY_ICON_COLOR = "#2563eb"; // 기본 시설물 (파랑)
 const FACILITY_WARN_COLOR = "#d97706"; // 보수 필요 (주황)
 
@@ -432,6 +437,57 @@ function facilityStyleFunction(feature) {
   return getFacilityStyle(resolveFacilityIcon(feature.get("fclt_nm")), needsRepair, isSelected);
 }
 
+/**
+ * 팝업 헤더를 잡아 끌어 위치를 옮길 수 있게 한다.
+ *
+ * 오버레이의 좌표(position)는 시설물에 고정해 두고 offset 만 바꾼다.
+ * 그래야 지도를 움직여도 팝업이 시설물을 계속 따라다닌다.
+ * 닫기 버튼 위에서 시작한 드래그는 무시한다.
+ */
+function bindFacilityPopupDrag(popupEl) {
+  const header = popupEl.querySelector(".facility-popup-header");
+  if (!header) return;
+
+  let dragging = false;
+  let startX = 0;
+  let startY = 0;
+  let baseOffset = FACILITY_POPUP_OFFSET.slice();
+
+  header.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return; // 왼쪽 버튼만
+    if (event.target.closest(".facility-popup-close")) return; // 닫기 버튼 제외
+
+    dragging = true;
+    startX = event.clientX;
+    startY = event.clientY;
+    baseOffset = facilityOverlay ? facilityOverlay.getOffset().slice() : FACILITY_POPUP_OFFSET.slice();
+
+    header.setPointerCapture(event.pointerId);
+    header.classList.add("dragging");
+    event.preventDefault(); // 텍스트 선택 방지
+  });
+
+  header.addEventListener("pointermove", (event) => {
+    if (!dragging || !facilityOverlay) return;
+    facilityOverlay.setOffset([
+      baseOffset[0] + (event.clientX - startX),
+      baseOffset[1] + (event.clientY - startY),
+    ]);
+  });
+
+  const endDrag = (event) => {
+    if (!dragging) return;
+    dragging = false;
+    header.classList.remove("dragging");
+    if (event.pointerId !== undefined && header.hasPointerCapture(event.pointerId)) {
+      header.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  header.addEventListener("pointerup", endDrag);
+  header.addEventListener("pointercancel", endDrag);
+}
+
 // 팝업 요소 생성
 function createPopupElement() {
   const popup = document.createElement("div");
@@ -506,9 +562,11 @@ function initializeFacilityModule() {
   const popupEl = createPopupElement();
   facilityOverlay = new ol.Overlay({
     element: popupEl,
-    positioning: "bottom-center",
+    // 팝업을 핀 오른쪽에 붙인다. 세로 가운데 맞춤은 OpenLayers 의 center-left 가
+    // 내용이 채워지기 전 높이로 계산돼 어긋나므로, top-left 로 두고 아래에서 직접 계산한다.
+    positioning: "top-left",
     stopEvent: true,
-    offset: [0, -15],
+    offset: FACILITY_POPUP_OFFSET.slice(),
     // 팝업이 시설물 위쪽으로 그려지므로 화면 가장자리에서는 헤더(아이콘·제목·배지)가 잘림
     // → 지도를 살짝 밀어 팝업 전체가 보이게 함. 왼쪽 패널(320px) 폭만큼 여유를 둠
     autoPan: {
@@ -517,6 +575,9 @@ function initializeFacilityModule() {
     },
   });
   map.addOverlay(facilityOverlay);
+
+  // 헤더를 끌어 팝업 위치를 옮길 수 있게 함
+  bindFacilityPopupDrag(popupEl);
 
   // 팝업 닫기 버튼 이벤트 바인딩
   const closeBtn = popupEl.querySelector("#facilityPopupCloseBtn");
@@ -1104,6 +1165,16 @@ function ensureFacilityPopupVisible() {
       return;
     }
 
+    // 내용이 채워져 높이가 확정된 지금, 핀 세로 가운데에 맞춘다
+    const element = facilityOverlay.getElement();
+    const height = element ? element.getBoundingClientRect().height : 0;
+    if (height > 0) {
+      facilityOverlay.setOffset([
+        FACILITY_POPUP_OFFSET[0],
+        FACILITY_POPUP_OFFSET[1] - Math.round(height / 2),
+      ]);
+    }
+
     facilityOverlay.panIntoView({ margin: 24, animation: { duration: 200 } });
   };
 
@@ -1201,8 +1272,9 @@ async function showFacilityDetail(totalId, coordinate) {
 
   if (!popupEl || !facilityOverlay) return;
 
-  // 오버레이 위치 지정
+  // 오버레이 위치 지정 (이전에 드래그로 옮겨 둔 위치는 초기화)
   if (coordinate) {
+    facilityOverlay.setOffset(FACILITY_POPUP_OFFSET.slice());
     facilityOverlay.setPosition(coordinate);
   }
 

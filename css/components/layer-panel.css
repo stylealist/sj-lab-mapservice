@@ -836,8 +836,8 @@
   width: max-content;
   font-family: inherit;
   z-index: 2100;
-  transform: translate(-50%, -100%);
-  margin-top: -10px;
+  /* 위치는 OpenLayers 오버레이(positioning: center-left + offset)가 잡는다.
+     여기서 transform/margin 으로 다시 밀면 계산이 어긋나므로 두지 않는다. */
   overflow: hidden;
   border: 1px solid #e2e8f0;
 }
@@ -847,6 +847,10 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.7rem 1rem;
+  /* 헤더를 잡아 끌어 팝업을 옮길 수 있음 */
+  cursor: move;
+  user-select: none;
+  touch-action: none; /* 모바일에서 드래그가 지도 제스처로 새지 않도록 */
   background: linear-gradient(135deg, rgb(30, 41, 59) 0%, rgb(51, 65, 85) 100%);
   color: #ffffff;
 }
@@ -894,7 +898,12 @@
   margin-right: 0.5rem;
 }
 
+.facility-popup-header.dragging {
+  cursor: grabbing;
+}
+
 .facility-popup-close {
+  cursor: pointer;
   background: rgba(255, 255, 255, 0.15);
   border: none;
   color: #ffffff;
