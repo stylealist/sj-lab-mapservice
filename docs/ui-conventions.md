@@ -3,6 +3,7 @@
 - `index.html`은 SPA 형태로 `.page` 3개(지도/소개/연락처)를 갖고, `js/modules/ui.js`가 `data-page` 버튼 클릭에 따라 `.active` 클래스로 전환합니다. 지도 페이지 안에서도 우측 레이어 패널(`layer-panel.css`)이 탭(길찾기/레이어/검색/즐겨찾기/측정/그리기/내보내기) 구조인데, 실제 동작이 구현된 것은 지도·측정·레이어 관련 일부이고 나머지는 정적 마크업만 있는 상태이니 새 기능을 넣을 때 기존 탭 중 어디에 실제 로직이 연결돼 있는지 먼저 확인하세요.
 - `css/`는 `layouts/`(전역 레이아웃)와 `components/`(header, layer-panel, map-controls)로만 나뉘어 있고, `index.html` 안에도 CCTV 팝업·지도편집 탭용 `<style>` 블록이 인라인으로 남아 있습니다.
 - `js/utils/helpers.js`는 AJAX 요청 래퍼와 좌표 변환/거리 계산 등 범용 유틸을 제공합니다.
+- **탭 아이콘(favicon)**: `images/favicon.svg` 하나를 `index.html`과 독립 팝업 페이지(`html/loadview/load-view.html`, `html/fabric/fabric-editor.html`, 상대 경로 `../../images/favicon.svg`)가 함께 씁니다. 헤더 로고 배지(`.logo-mark`, `header.css`)와 같은 모양(파란 그라데이션 둥근 사각형 + 흰색 로고 글리프)을 SVG로 옮긴 것이므로, **로고 글리프나 배지 색을 바꾸면 이 파일도 같은 작업에서 고칠 것**. favicon은 `currentColor`를 상속받지 못하므로 색은 파일 안에 직접 적습니다. 새 HTML 페이지를 추가하면 `<link rel="icon">`도 넣을 것.
 
 ## 반드시 지킬 것
 
