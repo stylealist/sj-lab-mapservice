@@ -941,8 +941,6 @@
   background: #ffffff;
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
-  min-width: 320px;
-  max-width: 440px;
   width: max-content;
   font-family: inherit;
   z-index: 2100;
@@ -950,11 +948,26 @@
      여기서 transform/margin 으로 다시 밀면 계산이 어긋나므로 두지 않는다. */
   overflow: hidden;
   border: 1px solid #e2e8f0;
-  /* 헤더·배지줄(고정) → 본문(스크롤) → 내업 영역(하단 고정) 세로 배치.
-     높이 상한은 팝업 전체에 건다 (창이 낮으면 보이는 지도 높이에 맞춰 줄어듦) */
+  /* 가로 2칸: 왼쪽 .facility-popup-main(상세) + 오른쪽 내업 작성 칸(열 때만).
+     높이 상한은 팝업 전체에 건다 (창이 낮으면 보이는 지도 높이에 맞춰 줄어듦).
+     두 칸은 stretch 로 팝업 높이에 맞춰지고 각자 안에서 스크롤한다 */
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  max-height: min(600px, calc(100vh - 170px));
+}
+
+/* 왼쪽 상세 칸 — 헤더·배지줄(고정) → 본문(스크롤) → 내업 영역(하단 고정) 세로 배치.
+   min-height: 0 이 없으면 내용 높이 아래로 줄지 않아 팝업 상한을 넘는다 */
+.facility-popup-main {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  max-height: min(600px, calc(100vh - 170px));
+  min-width: 320px;
+  max-width: 440px;
+  width: max-content;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* 지도 이동·상세 로딩이 끝나 최종 위치가 정해질 때까지 숨김.
@@ -1243,9 +1256,60 @@
   display: none;
 }
 
-/* 영역 배경(#f8fafc)과 구분되도록 안쪽 카드·폼은 흰 바탕 */
-.facility-popup-office-footer .facility-office-card,
-.facility-popup-office-footer .facility-office-form-container {
+/* 상세 본문 ↔ 내업 영역 경계 리사이저 — 위아래로 끌거나 방향키로 내업 영역 높이를 조절.
+   높이 범위(최소 80px ~ 팝업 상한의 75%)와 보관은 map-facility.js 가 맡는다 */
+.facility-popup-resizer {
+  flex: 0 0 8px;
+  position: relative;
+  cursor: ns-resize;
+  touch-action: none; /* 터치로 끌 때 스크롤·지도 제스처로 새지 않도록 */
+  user-select: none;
+  background: #f1f5f9;
+  border-top: 1px solid #e2e8f0;
+  outline: none;
+}
+
+.facility-popup-resizer::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 36px;
+  height: 3px;
+  margin: -1.5px 0 0 -18px;
+  border-radius: 2px;
+  background: #94a3b8;
+}
+
+.facility-popup-resizer:hover,
+.facility-popup-resizer.dragging,
+.facility-popup-resizer:focus-visible {
+  background: #dbeafe;
+}
+
+.facility-popup-resizer:hover::after,
+.facility-popup-resizer.dragging::after,
+.facility-popup-resizer:focus-visible::after {
+  background: #2563eb;
+}
+
+.facility-popup-resizer.hidden {
+  display: none;
+}
+
+/* 리사이저가 경계를 대신하므로 내업 영역 위 테두리는 겹치지 않게 뺀다 */
+.facility-popup-resizer + .facility-popup-office-footer {
+  border-top: none;
+}
+
+/* 끄는 동안 팝업 안 텍스트가 선택되지 않게 */
+.facility-popup.is-resizing {
+  user-select: none;
+  cursor: ns-resize;
+}
+
+/* 영역 배경(#f8fafc)과 구분되도록 안쪽 카드는 흰 바탕 */
+.facility-popup-office-footer .facility-office-card {
   background: #ffffff;
 }
 
@@ -1301,46 +1365,138 @@
   background: #047857;
 }
 
-/* 폼 스타일 */
-.facility-office-form-container {
+/* 내업 작성·수정 칸 — 넓은 화면은 팝업 오른쪽 칸(.has-office-side), 좁은 화면은 상세 본문 자리(.has-office-inline).
+   구성: 헤더(고정) → 입력 항목(.facility-office-form-scroll, 스크롤) → 진행 표시·저장/취소(하단 고정).
+   어느 쪽에 둘지는 map-facility.js 의 applyOfficeFormLayout() 이 보이는 지도 폭을 재서 정한다 */
+.facility-office-form-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: #f8fafc;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 0.75rem;
-  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
 }
 
-.facility-office-form-container.hidden {
-  display: none !important;
+/* 오른쪽 칸 — 폭은 map-facility.js 의 OFFICE_FORM_SIDE_WIDTH 와 같게 */
+.facility-popup > .facility-office-form-panel {
+  flex: 0 0 400px;
+  width: 400px;
+  border-left: 1px solid #cbd5e1;
+  box-shadow: inset 3px 0 6px -4px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.facility-popup > .facility-office-form-panel.is-opening {
+  animation: facilityOfficeSideOpen 180ms ease-out;
+}
+
+@keyframes facilityOfficeSideOpen {
+  from {
+    flex-basis: 0;
+    width: 0;
+    opacity: 0.4;
+  }
+  to {
+    flex-basis: 400px;
+    width: 400px;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .facility-popup > .facility-office-form-panel.is-opening {
+    animation: none;
+  }
+}
+
+/* 좁은 화면 — 상세 본문 자리를 폼으로 바꾼다 (본문·리사이저·내업 영역은 숨김) */
+.facility-popup-main > .facility-office-form-panel {
+  flex: 1 1 auto;
+}
+
+.facility-popup.has-office-inline .facility-popup-body,
+.facility-popup.has-office-inline .facility-popup-resizer,
+.facility-popup.has-office-inline .facility-popup-office-footer {
+  display: none;
 }
 
 .facility-office-form-header {
+  flex: 0 0 auto;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.6rem;
-  padding-bottom: 0.4rem;
-  border-bottom: 1px solid #e2e8f0;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  background: #ecfdf5;
+  border-bottom: 1px solid #a7f3d0;
+}
+
+/* 오른쪽 칸 헤더로도 팝업을 옮길 수 있다 (bindOverlayHeaderDrag) */
+.facility-popup > .facility-office-form-panel .facility-office-form-header {
+  cursor: move;
+  user-select: none;
+  touch-action: none;
 }
 
 .facility-office-form-title {
-  font-size: 0.82rem;
+  flex: 1;
+  font-size: 0.88rem;
   font-weight: 700;
-  color: #1e293b;
+  color: #065f46;
 }
 
 .facility-office-form-close {
   background: none;
   border: none;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   line-height: 1;
   color: #64748b;
   cursor: pointer;
-  padding: 0 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .facility-office-form-close:hover {
   color: #0f172a;
+  background: rgba(15, 23, 42, 0.06);
+}
+
+/* "← 상세로" — 본문 교체 모드에서만 보이고, 닫기(×)는 오른쪽 칸에서만 보인다 */
+.facility-office-form-back {
+  display: none;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #047857;
+  background: #ffffff;
+  border: 1px solid #a7f3d0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.facility-office-form-back:hover {
+  background: #d1fae5;
+}
+
+.facility-popup.has-office-inline .facility-office-form-back {
+  display: inline-flex;
+}
+
+.facility-popup.has-office-inline .facility-office-form-close {
+  display: none;
+}
+
+.facility-office-form {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 입력 항목만 칸 안에서 스크롤 (저장/취소는 아래에 고정) */
+.facility-office-form-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 0.9rem;
 }
 
 .facility-office-form-error {
@@ -1409,11 +1565,15 @@
   box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15);
 }
 
+/* 저장/취소 — 칸 하단 고정 */
 .facility-office-form-actions {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   gap: 0.4rem;
-  margin-top: 0.6rem;
+  padding: 0.55rem 0.9rem;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
 }
 
 .facility-office-btn-cancel,
@@ -1612,4 +1772,182 @@
   color: #64748b;
   text-align: center;
   padding: 0.6rem 0;
+}
+
+/* 내업 저장 후 알림 (일부 사진 업로드 실패 등) */
+.facility-office-notice {
+  position: relative;
+  padding: 0.45rem 1.8rem 0.45rem 0.6rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.76rem;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 5px;
+}
+
+.facility-office-notice.hidden {
+  display: none;
+}
+
+.facility-office-notice ul {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.facility-office-notice-close {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  background: none;
+  border: none;
+  color: #92400e;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+/* 처리 전·후 사진 — 폼과 읽기 전용 카드 공통 썸네일 */
+.facility-office-photo-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.facility-office-photo-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  background: #f1f5f9;
+}
+
+.facility-office-photo-thumb.is-new {
+  border-color: #2563eb;
+}
+
+.facility-office-photo-thumb a,
+.facility-office-photo-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.facility-office-photo-thumb img {
+  object-fit: cover;
+}
+
+.facility-office-photo-new {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 0.6rem;
+  text-align: center;
+  color: #ffffff;
+  background: rgba(37, 99, 235, 0.85);
+  pointer-events: none;
+}
+
+.facility-office-photo-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 16px;
+  font-size: 0.8rem;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.7);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.facility-office-photo-remove:hover {
+  background: #dc2626;
+}
+
+.facility-office-photo-add,
+.facility-office-form-group .facility-office-photo-add {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  font-size: 0.72rem;
+  color: #2563eb;
+  border: 1px dashed #93c5fd;
+  border-radius: 5px;
+  background: #eff6ff;
+  cursor: pointer;
+}
+
+.facility-office-photo-add:hover {
+  background: #dbeafe;
+}
+
+/* 파일 입력은 숨기고 라벨 전체를 누르게 한다 (화면 낭독기에는 남도록 display 는 두지 않음) */
+.facility-office-photo-add input[type="file"] {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.facility-office-photo-hint {
+  margin-top: 0.25rem;
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.facility-office-form-progress {
+  flex: 0 0 auto;
+  margin: 0.4rem 0.9rem 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.74rem;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 5px;
+}
+
+.facility-office-form-progress.hidden {
+  display: none;
+}
+
+.facility-office-photos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.facility-office-photos.hidden {
+  display: none;
+}
+
+.facility-office-photo-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.facility-office-photo-row-label {
+  flex: 0 0 auto;
+  width: 3.2em;
+  padding-top: 2px;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.facility-office-photo-row .facility-office-photo-thumb {
+  width: 48px;
+  height: 48px;
 }

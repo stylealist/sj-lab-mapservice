@@ -518,20 +518,166 @@ function createPopupElement() {
   popup.id = "facility-popup";
   popup.className = "facility-popup";
 
+  // 가로 배치: 왼쪽 .facility-popup-main(기존 세로 플렉스 전체) + 오른쪽 내업 작성 칸(열 때만 붙음).
+  // 작성 칸을 별도 오버레이가 아니라 같은 요소 안에 두어야 헤더 드래그·지도 이동 때 함께 움직인다.
   popup.innerHTML = `
-    <div class="facility-popup-header">
-      <span class="facility-popup-icon" id="facilityPopupIcon" aria-hidden="true"></span>
-      <div class="facility-popup-title" id="facilityPopupTitle">시설물 상세정보</div>
-      <button class="facility-popup-close" id="facilityPopupCloseBtn" title="닫기 (ESC)">×</button>
+    <div class="facility-popup-main" id="facilityPopupMain">
+      <div class="facility-popup-header">
+        <span class="facility-popup-icon" id="facilityPopupIcon" aria-hidden="true"></span>
+        <div class="facility-popup-title" id="facilityPopupTitle">시설물 상세정보</div>
+        <button class="facility-popup-close" id="facilityPopupCloseBtn" title="닫기 (ESC)">×</button>
+      </div>
+      <div class="facility-popup-meta" id="facilityPopupMeta"></div>
+      <div class="facility-popup-body" id="facilityPopupBody">
+        <div class="facility-detail-loading">상세정보를 불러오는 중...</div>
+      </div>
+      <div class="facility-popup-resizer hidden" id="facilityOfficeResizer" role="separator"
+        aria-orientation="horizontal" tabindex="0" aria-controls="facilityOfficeFooter"
+        aria-label="상세정보와 내업 영역 크기 조절 (위/아래 방향키)" title="끌어서 내업 영역 크기 조절"></div>
+      <div class="facility-popup-office-footer hidden" id="facilityOfficeFooter"></div>
     </div>
-    <div class="facility-popup-meta" id="facilityPopupMeta"></div>
-    <div class="facility-popup-body" id="facilityPopupBody">
-      <div class="facility-detail-loading">상세정보를 불러오는 중...</div>
-    </div>
-    <div class="facility-popup-office-footer hidden" id="facilityOfficeFooter"></div>
   `;
 
   return popup;
+}
+
+// ==========================================================================
+// 상세 본문 ↔ 내업 영역 경계 리사이저
+// ==========================================================================
+
+const FACILITY_OFFICE_MIN_HEIGHT = 80; // 내업 요약 한 줄은 보이도록
+const FACILITY_OFFICE_MAX_RATIO = 0.75; // 팝업 높이 대비 상한 (상세 본문이 몇 줄은 남게)
+const FACILITY_OFFICE_KEY_STEP = 20; // 방향키 한 번에 조절하는 높이
+const FACILITY_OFFICE_HEIGHT_STORAGE_KEY = "sjlab.facilityOfficeFooterHeight";
+
+// 사용자가 조절한 내업 영역 높이(px). null 이면 CSS 기본값(min(300px, 45vh))을 쓴다.
+// 팝업을 닫았다 열어도 유지되도록 모듈 변수에 두고, 가능하면 localStorage 에도 남긴다.
+let facilityOfficeFooterHeight = readStoredFacilityOfficeHeight();
+
+function readStoredFacilityOfficeHeight() {
+  try {
+    const stored = Number(window.localStorage.getItem(FACILITY_OFFICE_HEIGHT_STORAGE_KEY));
+    return Number.isFinite(stored) && stored > 0 ? stored : null;
+  } catch (e) {
+    return null; // 저장소를 못 쓰는 환경이면 기본값
+  }
+}
+
+function storeFacilityOfficeHeight(height) {
+  try {
+    window.localStorage.setItem(FACILITY_OFFICE_HEIGHT_STORAGE_KEY, String(Math.round(height)));
+  } catch (e) {
+    // 저장 실패해도 모듈 변수로는 유지된다
+  }
+}
+
+// 내업 영역 높이 상한 — 팝업 높이 상한(CSS max-height: min(600px, 100vh - 170px))의 75%
+function getFacilityOfficeMaxHeight() {
+  const popupMaxHeight = Math.min(600, window.innerHeight - 170);
+  return Math.max(FACILITY_OFFICE_MIN_HEIGHT, Math.round(popupMaxHeight * FACILITY_OFFICE_MAX_RATIO));
+}
+
+function clampFacilityOfficeHeight(height) {
+  return Math.min(getFacilityOfficeMaxHeight(), Math.max(FACILITY_OFFICE_MIN_HEIGHT, height));
+}
+
+// 저장된 높이를 현재 창 크기 범위로 맞춰 내업 영역에 적용한다 (null 이면 CSS 기본값으로 둔다)
+function applyFacilityOfficeFooterHeight() {
+  const footerEl = document.getElementById("facilityOfficeFooter");
+  const resizerEl = document.getElementById("facilityOfficeResizer");
+  if (!footerEl) return;
+
+  if (facilityOfficeFooterHeight === null) {
+    footerEl.style.height = "";
+    footerEl.style.maxHeight = "";
+  } else {
+    const height = clampFacilityOfficeHeight(facilityOfficeFooterHeight);
+    footerEl.style.height = `${height}px`;
+    footerEl.style.maxHeight = "none";
+  }
+
+  if (resizerEl) {
+    resizerEl.setAttribute("aria-valuemin", String(FACILITY_OFFICE_MIN_HEIGHT));
+    resizerEl.setAttribute("aria-valuemax", String(getFacilityOfficeMaxHeight()));
+    resizerEl.setAttribute("aria-valuenow", String(Math.round(footerEl.getBoundingClientRect().height)));
+  }
+}
+
+function setFacilityOfficeFooterHeight(height) {
+  facilityOfficeFooterHeight = clampFacilityOfficeHeight(height);
+  applyFacilityOfficeFooterHeight();
+}
+
+// 내업 영역과 리사이저를 함께 보이거나 숨긴다 (보수 불필요 시설물은 둘 다 숨김)
+function setFacilityOfficeFooterVisible(visible) {
+  const footerEl = document.getElementById("facilityOfficeFooter");
+  const resizerEl = document.getElementById("facilityOfficeResizer");
+  if (footerEl) footerEl.classList.toggle("hidden", !visible);
+  if (resizerEl) resizerEl.classList.toggle("hidden", !visible);
+  if (visible) applyFacilityOfficeFooterHeight();
+}
+
+/**
+ * 리사이저 드래그·방향키 바인딩.
+ * 리사이저는 헤더 밖에 있어 bindOverlayHeaderDrag(헤더에만 걸림)와 겹치지 않고,
+ * pointerdown 전파도 막아 지도·팝업 이동으로 번지지 않게 한다.
+ * 높이를 바꾸는 동안 팝업 위치(offset)는 건드리지 않는다.
+ */
+function bindFacilityOfficeResizer(popupEl) {
+  const resizerEl = popupEl.querySelector("#facilityOfficeResizer");
+  const footerEl = popupEl.querySelector("#facilityOfficeFooter");
+  if (!resizerEl || !footerEl) return;
+
+  let dragging = false;
+  let startY = 0;
+  let startHeight = 0;
+
+  resizerEl.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    dragging = true;
+    startY = event.clientY;
+    startHeight = footerEl.getBoundingClientRect().height;
+    resizerEl.setPointerCapture(event.pointerId);
+    resizerEl.classList.add("dragging");
+    popupEl.classList.add("is-resizing");
+    event.preventDefault(); // 텍스트 선택 방지
+    event.stopPropagation();
+  });
+
+  resizerEl.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    // 위로 끌면(clientY 감소) 내업 영역이 커진다
+    setFacilityOfficeFooterHeight(startHeight + (startY - event.clientY));
+  });
+
+  const endDrag = (event) => {
+    if (!dragging) return;
+    dragging = false;
+    resizerEl.classList.remove("dragging");
+    popupEl.classList.remove("is-resizing");
+    if (event.pointerId !== undefined && resizerEl.hasPointerCapture(event.pointerId)) {
+      resizerEl.releasePointerCapture(event.pointerId);
+    }
+    if (facilityOfficeFooterHeight !== null) storeFacilityOfficeHeight(facilityOfficeFooterHeight);
+  };
+  resizerEl.addEventListener("pointerup", endDrag);
+  resizerEl.addEventListener("pointercancel", endDrag);
+
+  resizerEl.addEventListener("keydown", (event) => {
+    let delta = 0;
+    if (event.key === "ArrowUp") delta = FACILITY_OFFICE_KEY_STEP;
+    else if (event.key === "ArrowDown") delta = -FACILITY_OFFICE_KEY_STEP;
+    else return;
+    event.preventDefault();
+    event.stopPropagation(); // 지도 키보드 이동으로 번지지 않게
+    setFacilityOfficeFooterHeight(footerEl.getBoundingClientRect().height + delta);
+    storeFacilityOfficeHeight(facilityOfficeFooterHeight);
+  });
+
+  // 창 높이가 바뀌면 상한도 바뀌므로 범위를 다시 맞춘다
+  window.addEventListener("resize", () => {
+    if (!footerEl.classList.contains("hidden")) applyFacilityOfficeFooterHeight();
+  });
 }
 
 // 구역 extent로 지도 이동
@@ -603,6 +749,8 @@ function initializeFacilityModule() {
   bindOverlayHeaderDrag(facilityOverlay, popupEl.querySelector(".facility-popup-header"), {
     ignoreSelector: ".facility-popup-close",
   });
+  // 상세 본문과 내업 영역 사이 경계를 끌어 크기 조절 (헤더 드래그와는 별개 요소)
+  bindFacilityOfficeResizer(popupEl);
 
   // 팝업 닫기 버튼 이벤트 바인딩
   const closeBtn = popupEl.querySelector("#facilityPopupCloseBtn");
@@ -611,6 +759,11 @@ function initializeFacilityModule() {
       closeFacilityPopup();
     });
   }
+
+  // 창 크기가 바뀌면 작성 폼의 배치(오른쪽 칸 ↔ 본문 교체)를 다시 판단한다 (입력값은 그대로 유지)
+  window.addEventListener("resize", () => {
+    if (activeOfficeForm) applyOfficeFormLayout();
+  });
 
   // ESC 키로 팝업 닫기 이벤트 등록
   window.addEventListener("keydown", (e) => {
@@ -1196,7 +1349,7 @@ function bindFacilityRepairFilter() {
         (!matchesFacilityRepairFilter(selectedItem.needsRepair) ||
           !matchesFacilityOfficeFilter(selectedItem.needsRepair, selectedItem.officeWorkStatus))
       ) {
-        closeFacilityPopup();
+        closeFacilityPopup({ force: true });
       }
     }
 
@@ -1225,7 +1378,7 @@ function bindFacilityOfficeFilter() {
         (!matchesFacilityRepairFilter(selectedItem.needsRepair) ||
           !matchesFacilityOfficeFilter(selectedItem.needsRepair, selectedItem.officeWorkStatus))
       ) {
-        closeFacilityPopup();
+        closeFacilityPopup({ force: true });
       }
     }
 
@@ -1253,8 +1406,8 @@ async function loadFacilities(filter = {}) {
   const signal = facilityAbortController.signal;
   const currentSeq = ++facilityRequestSeq;
 
-  // 이전 선택 및 팝업 닫기
-  closeFacilityPopup();
+  // 이전 선택 및 팝업 닫기 (구역을 바꿔 목록을 새로 받으므로 확인 없이 닫음)
+  closeFacilityPopup({ force: true });
 
   // 상태 표시: 로딩 중
   if (loadingEl) loadingEl.classList.remove("hidden");
@@ -1473,6 +1626,8 @@ function getFacilityViewCenter(coordinate, resolution) {
  */
 function selectFacility(totalId, zoomIn = true) {
   if (!totalId) return;
+  // 작성 중인 내업 내용이 있으면 다른 시설물로 넘어가기 전에 확인한다 (취소하면 선택을 바꾸지 않음)
+  if (!confirmDiscardOfficeForm()) return;
   selectedTotalId = String(totalId);
 
   // 1) 목록 하이라이트 및 스크롤
@@ -1572,6 +1727,8 @@ async function showFacilityDetail(totalId, coordinate) {
     bodyEl.innerHTML = '<div class="facility-detail-loading">상세정보를 불러오는 중...</div>';
     bodyEl.scrollTop = 0;
   }
+  // 이전 시설물의 작성 폼은 닫는다 (확인은 selectFacility 에서 이미 받음)
+  closeOfficeWorkForm();
   // 하단 고정 내업 영역은 상세 응답에서 보수 필요로 확인된 뒤에만 채운다 (이전 시설물 내용 제거)
   clearFacilityOfficeFooter(officeFooterEl);
 
@@ -1765,7 +1922,7 @@ async function showFacilityDetail(totalId, coordinate) {
     if (String(properties.repair_required_yn || "").toUpperCase() === "Y" && officeFooterEl) {
       const officeSection = createOfficeWorkSection(totalId);
       officeFooterEl.appendChild(officeSection);
-      officeFooterEl.classList.remove("hidden");
+      setFacilityOfficeFooterVisible(true);
 
       // 내업 처리 이력 비동기 조회
       loadFacilityOfficeWorks(totalId);
@@ -1793,7 +1950,7 @@ function clearFacilityOfficeFooter(footerEl) {
   if (!footerEl) return;
   footerEl.innerHTML = "";
   footerEl.scrollTop = 0;
-  footerEl.classList.add("hidden");
+  setFacilityOfficeFooterVisible(false);
 }
 
 /**
@@ -1833,11 +1990,12 @@ function createOfficeWorkSection(totalId) {
   header.appendChild(createBtn);
   section.appendChild(header);
 
-  // 폼 컨테이너 (작성 / 수정 시 노출)
-  const formContainer = document.createElement("div");
-  formContainer.className = "facility-office-form-container hidden";
-  formContainer.id = "facilityOfficeFormContainer";
-  section.appendChild(formContainer);
+  // 저장 후 알림 (예: 기록은 저장됐지만 일부 사진 업로드 실패)
+  const notice = document.createElement("div");
+  notice.className = "facility-office-notice hidden";
+  notice.id = "facilityOfficeNotice";
+  notice.setAttribute("role", "alert");
+  section.appendChild(notice);
 
   // 이력 및 요약 내용 컨테이너
   const content = document.createElement("div");
@@ -1847,27 +2005,536 @@ function createOfficeWorkSection(totalId) {
   section.appendChild(content);
 
   createBtn.addEventListener("click", () => {
+    hideFacilityOfficeNotice();
     openOfficeWorkForm(totalId, null);
   });
 
   return section;
 }
 
+// 내업 섹션 상단 알림 표시 (문구와 세부 항목은 모두 textContent 로 넣는다)
+function showFacilityOfficeNotice(message, details = []) {
+  const notice = document.getElementById("facilityOfficeNotice");
+  if (!notice) return;
+  notice.innerHTML = "";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "facility-office-notice-close";
+  closeBtn.title = "알림 닫기";
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", hideFacilityOfficeNotice);
+  notice.appendChild(closeBtn);
+
+  const text = document.createElement("div");
+  text.textContent = message;
+  notice.appendChild(text);
+
+  if (details.length > 0) {
+    const list = document.createElement("ul");
+    details.forEach((detail) => {
+      const li = document.createElement("li");
+      li.textContent = detail;
+      list.appendChild(li);
+    });
+    notice.appendChild(list);
+  }
+  notice.classList.remove("hidden");
+
+  const officeFooterEl = document.getElementById("facilityOfficeFooter");
+  if (officeFooterEl) officeFooterEl.scrollTop = 0;
+}
+
+function hideFacilityOfficeNotice() {
+  const notice = document.getElementById("facilityOfficeNotice");
+  if (!notice) return;
+  notice.classList.add("hidden");
+  notice.innerHTML = "";
+}
+
+// ==========================================================================
+// 내업 처리 전·후 사진 (파일 업로드)
+// ==========================================================================
+
+const OFFICE_PHOTO_KINDS = [
+  { kind: "BEFORE", label: "처리 전 사진" },
+  { kind: "AFTER", label: "처리 후 사진" },
+];
+const OFFICE_PHOTO_MAX_COUNT = 5; // 종류별 최대 장수 (서버는 6장째를 409 로 거부)
+const OFFICE_PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 장당 10MB (서버 상한과 동일)
+const OFFICE_PHOTO_MAX_EDGE = 1600; // 업로드 전 브라우저 축소 — 긴 변 상한
+const OFFICE_PHOTO_JPEG_QUALITY = 0.8;
+const OFFICE_PHOTO_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const OFFICE_PHOTO_EXTENSIONS = /\.(jpe?g|png|webp)$/i;
+
+function getOfficePhotoKindLabel(kind) {
+  const found = OFFICE_PHOTO_KINDS.find((k) => k.kind === kind);
+  return found ? found.label : kind;
+}
+
+function isAllowedOfficePhoto(file) {
+  if (file.type) return OFFICE_PHOTO_MIME_TYPES.has(file.type);
+  return OFFICE_PHOTO_EXTENSIONS.test(file.name); // 형식을 모르는 브라우저는 확장자로 판정
+}
+
+// 저장된 사진 원본 URL — <img src> 에 바로 쓴다
+function buildOfficePhotoUrl(workId, photoId) {
+  return getApiUrl(
+    `/map/qfield/office-works/${encodeURIComponent(workId)}/photos/${encodeURIComponent(photoId)}`
+  );
+}
+
+async function loadOfficePhotoImage(file) {
+  if (window.createImageBitmap) {
+    try {
+      return await createImageBitmap(file);
+    } catch (e) {
+      // 아래 <img> 방식으로 다시 시도
+    }
+  }
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("이미지를 읽을 수 없습니다"));
+    };
+    img.src = objectUrl;
+  });
+}
+
+/**
+ * 업로드 전 브라우저 축소: 긴 변이 1600px 보다 크면 canvas 로 줄여 JPEG(품질 0.8)로 바꾼다.
+ * 원본이 이미 작으면 형식 그대로 둔다. PNG·WEBP 를 JPEG 로 바꾸면 파일명 확장자도 .jpg 로 맞춘다
+ * (투명 영역은 흰 바탕으로 채움).
+ */
+async function resizeOfficePhoto(file) {
+  const image = await loadOfficePhotoImage(file);
+  const width = image.width;
+  const height = image.height;
+  const longEdge = Math.max(width, height);
+
+  if (!longEdge || longEdge <= OFFICE_PHOTO_MAX_EDGE) {
+    if (image.close) image.close();
+    return file;
+  }
+
+  const scale = OFFICE_PHOTO_MAX_EDGE / longEdge;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  if (image.close) image.close();
+
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", OFFICE_PHOTO_JPEG_QUALITY)
+  );
+  if (!blob) throw new Error("사진을 변환하지 못했습니다");
+
+  const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
+  return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+}
+
+/**
+ * 내업 사진 목록 조회 (GET /map/qfield/office-works/{workId}/photos)
+ */
+async function fetchOfficeWorkPhotos(workId) {
+  const url = getApiUrl(`/map/qfield/office-works/${encodeURIComponent(workId)}/photos`);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`사진 목록 조회 실패 (${response.status})`);
+  }
+  const data = await response.json();
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+/**
+ * 내업 사진 업로드 (POST /map/qfield/office-works/{workId}/photos, multipart: file, kind)
+ */
+async function uploadOfficeWorkPhoto(workId, kind, file) {
+  const url = getApiUrl(`/map/qfield/office-works/${encodeURIComponent(workId)}/photos`);
+  const formData = new FormData();
+  formData.append("file", file, file.name);
+  formData.append("kind", kind);
+  // Content-Type 은 브라우저가 multipart 경계값과 함께 채우도록 지정하지 않는다
+  const response = await fetch(url, { method: "POST", body: formData });
+  if (!response.ok) {
+    const statusHint =
+      response.status === 413 ? "10MB 초과" : response.status === 409 ? "종류별 5장 초과" : "";
+    const message = await readApiErrorMessage(response);
+    throw new Error(`${response.status}${statusHint ? ` ${statusHint}` : ""}: ${message}`);
+  }
+  return await response.json();
+}
+
+/**
+ * 내업 사진 삭제 (DELETE /map/qfield/office-works/{workId}/photos/{photoId})
+ */
+async function deleteOfficeWorkPhoto(workId, photoId) {
+  const response = await fetch(buildOfficePhotoUrl(workId, photoId), { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(`사진 삭제 실패 (${response.status}): ${await readApiErrorMessage(response)}`);
+  }
+  return true;
+}
+
+// 썸네일 한 칸 — 누르면 원본을 새 창으로 연다. onRemove 가 있으면 × 버튼을 붙인다
+function createOfficePhotoThumb(src, href, options = {}) {
+  const { title = "", isNew = false, onRemove = null } = options;
+  const thumb = document.createElement("div");
+  thumb.className = `facility-office-photo-thumb${isNew ? " is-new" : ""}`;
+
+  const link = document.createElement("a");
+  link.href = href;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.title = title ? `${title} (원본 보기)` : "원본 보기";
+
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = title || "내업 사진";
+  img.loading = "lazy";
+  link.appendChild(img);
+  thumb.appendChild(link);
+
+  if (isNew) {
+    const badge = document.createElement("span");
+    badge.className = "facility-office-photo-new";
+    badge.textContent = "새 사진";
+    thumb.appendChild(badge);
+  }
+
+  if (onRemove) {
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "facility-office-photo-remove";
+    removeBtn.title = "사진 삭제";
+    removeBtn.setAttribute("aria-label", `${title || "사진"} 삭제`);
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      onRemove();
+    });
+    thumb.appendChild(removeBtn);
+  }
+  return thumb;
+}
+
+/**
+ * 작성·수정 폼의 사진 칸 (라벨 + 썸네일 + 파일 선택) 을 다시 그린다.
+ */
+function renderOfficePhotoField(fieldEl, state, handlers) {
+  const kind = fieldEl.dataset.kind;
+  const total = state.existing.length + state.pending.length;
+  const inputId = `officePhotoInput${kind}`;
+  fieldEl.innerHTML = "";
+
+  const label = document.createElement("label");
+  label.setAttribute("for", inputId);
+  label.textContent = `${getOfficePhotoKindLabel(kind)} (${total}/${OFFICE_PHOTO_MAX_COUNT})`;
+  fieldEl.appendChild(label);
+
+  const thumbs = document.createElement("div");
+  thumbs.className = "facility-office-photo-thumbs";
+
+  state.existing.forEach((photo) => {
+    const url = buildOfficePhotoUrl(state.workId, photo.photo_id);
+    thumbs.appendChild(
+      createOfficePhotoThumb(url, url, {
+        title: photo.file_name,
+        onRemove: () => handlers.onDeleteExisting(photo),
+      })
+    );
+  });
+  state.pending.forEach((pendingItem) => {
+    thumbs.appendChild(
+      createOfficePhotoThumb(pendingItem.previewUrl, pendingItem.previewUrl, {
+        title: pendingItem.file.name,
+        isNew: true,
+        onRemove: () => handlers.onRemovePending(pendingItem),
+      })
+    );
+  });
+
+  // 파일 선택 (여러 장). 5장이 차면 숨긴다
+  if (total < OFFICE_PHOTO_MAX_COUNT) {
+    const addLabel = document.createElement("label");
+    addLabel.className = "facility-office-photo-add";
+    addLabel.title = "jpg·png·webp, 장당 10MB";
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.id = inputId;
+    input.multiple = true;
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.addEventListener("change", () => {
+      const files = Array.from(input.files || []);
+      input.value = ""; // 같은 파일을 다시 골라도 change 가 나도록
+      if (files.length > 0) handlers.onAddFiles(files);
+    });
+
+    const plus = document.createElement("span");
+    plus.textContent = "+ 사진";
+    addLabel.appendChild(input);
+    addLabel.appendChild(plus);
+    thumbs.appendChild(addLabel);
+  }
+  fieldEl.appendChild(thumbs);
+
+  const hint = document.createElement("div");
+  hint.className = "facility-office-photo-hint";
+  hint.textContent = state.loadError
+    ? "저장된 사진 목록을 불러오지 못했습니다. 새 사진은 저장할 때 올립니다."
+    : state.pending.length > 0
+      ? "새 사진은 저장 버튼을 누르면 올라갑니다 (긴 변 1600px로 줄여서 업로드)."
+      : "jpg·png·webp, 종류별 최대 5장, 장당 10MB";
+  fieldEl.appendChild(hint);
+}
+
+/**
+ * 읽기 전용 카드에 저장된 사진 썸네일을 붙인다 (목록은 카드마다 한 번만 조회)
+ */
+async function loadOfficeWorkCardPhotos(photoWrap, workId) {
+  if (!photoWrap || !workId || photoWrap.dataset.loaded) return;
+  photoWrap.dataset.loaded = "true";
+  try {
+    const photos = await fetchOfficeWorkPhotos(workId);
+    photoWrap.innerHTML = "";
+    OFFICE_PHOTO_KINDS.forEach(({ kind, label }) => {
+      const kindPhotos = photos.filter((p) => String(p.kind).toUpperCase() === kind);
+      if (kindPhotos.length === 0) return;
+
+      const row = document.createElement("div");
+      row.className = "facility-office-photo-row";
+      const rowLabel = document.createElement("span");
+      rowLabel.className = "facility-office-photo-row-label";
+      rowLabel.textContent = label.replace(" 사진", "");
+      row.appendChild(rowLabel);
+
+      const thumbs = document.createElement("div");
+      thumbs.className = "facility-office-photo-thumbs";
+      kindPhotos.forEach((photo) => {
+        const url = buildOfficePhotoUrl(workId, photo.photo_id);
+        thumbs.appendChild(createOfficePhotoThumb(url, url, { title: photo.file_name }));
+      });
+      row.appendChild(thumbs);
+      photoWrap.appendChild(row);
+    });
+    photoWrap.classList.toggle("hidden", photoWrap.children.length === 0);
+  } catch (err) {
+    // 사진 조회 실패는 기록 표시를 막지 않는다
+    console.warn("내업 사진 조회 실패:", err.message);
+    photoWrap.classList.add("hidden");
+  }
+}
+
+// ==========================================================================
+// 내업 작성·수정 칸 배치
+//  - 넓은 화면: 상세 팝업(.facility-popup) 안 오른쪽 칸으로 펼친다 (같은 요소라 드래그·지도 이동에 함께 움직임)
+//  - 좁은 화면: 오른쪽으로 펼치지 않고 팝업 안에서 상세 본문 자리를 폼으로 바꾼다 ("← 상세로" 로 복귀)
+// ==========================================================================
+
+const OFFICE_FORM_SIDE_WIDTH = 400; // 오른쪽 칸 폭 — CSS .facility-popup > .facility-office-form-panel 과 같게
+const OFFICE_FORM_PIN_ROOM = 160; // 오른쪽 칸을 펼쳐도 핀 왼쪽에 남길 지도 폭 (핀 주변이 보이도록)
+const OFFICE_FORM_VIEW_MARGIN = 24; // panIntoView 여백 (revealFacilityPopup 과 같게)
+const OFFICE_FORM_OPEN_ANIMATION_MS = 180; // CSS facilityOfficeSideOpen 애니메이션 길이
+const OFFICE_FORM_DISCARD_MESSAGE = "작성 중인 내업 내용이 사라집니다. 닫을까요?";
+
+// 열려 있는 작성·수정 폼 { panel, mode, isDirty(), dispose(reload) }. 없으면 null
+let activeOfficeForm = null;
+
+function prefersReducedMotion() {
+  return Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+// 지도 위에 떠 있는 오른쪽 컨트롤(줌·사이드 탭·배경지도 선택). 팝업보다 위에 그려져 겹치면 입력란을 가린다
+const FACILITY_MAP_CONTROL_SELECTOR = ".ol-zoom, .cadastral-control, .map-type-selector";
+const FACILITY_MAP_CONTROL_COLUMN_SELECTOR = ".ol-zoom, .cadastral-control"; // 세로로 길게 뻗은 줄
+const FACILITY_MAP_CONTROL_GAP = 12; // 컨트롤과 팝업 사이 여백
+
+function getVisibleRect(el) {
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 ? rect : null;
+}
+
+// 화면에 실제로 보이는 지도 영역의 좌우 경계
+// (좌측 레이어 패널이 가리는 부분 제외 — getFacilityViewCenter 와 같은 기준, 오른쪽 세로 컨트롤 줄도 제외)
+function getVisibleMapBounds() {
+  const map = getMap();
+  const mapEl = map && map.getTargetElement();
+  if (!mapEl) return { left: 0, right: window.innerWidth };
+  const mapRect = mapEl.getBoundingClientRect();
+  let left = Math.max(mapRect.left, 0);
+  let right = Math.min(mapRect.right, window.innerWidth);
+  const panelRect = getVisibleRect(document.querySelector(".layer-panel"));
+  if (panelRect) left = Math.max(left, Math.min(panelRect.right, right));
+  document.querySelectorAll(FACILITY_MAP_CONTROL_COLUMN_SELECTOR).forEach((ctrl) => {
+    const rect = getVisibleRect(ctrl);
+    if (rect && rect.left > left) right = Math.min(right, rect.left - FACILITY_MAP_CONTROL_GAP);
+  });
+  return { left, right: Math.max(left, right) };
+}
+
+function getVisibleMapWidth() {
+  const { left, right } = getVisibleMapBounds();
+  return right - left;
+}
+
+/**
+ * 팝업이 오른쪽 지도 컨트롤에 가려지면 가려진 만큼 지도를 옆으로 민다 (팝업 offset 은 그대로).
+ * panIntoView 는 지도 요소 가장자리만 보므로, 그 위에 떠 있는 컨트롤까지는 피하지 못한다.
+ * 왼쪽 패널 밖으로 밀려나지 않는 범위에서만 옮긴다.
+ */
+function avoidFacilityMapControls() {
+  const map = getMap();
+  const popupEl = facilityOverlay && facilityOverlay.getElement();
+  if (!map || !popupEl || facilityOverlay.getPosition() === undefined) return;
+  map.renderSync();
+  const popupRect = popupEl.getBoundingClientRect();
+
+  let shift = 0;
+  document.querySelectorAll(FACILITY_MAP_CONTROL_SELECTOR).forEach((ctrl) => {
+    const rect = getVisibleRect(ctrl);
+    if (!rect) return;
+    const overlaps =
+      rect.top < popupRect.bottom && rect.bottom > popupRect.top &&
+      rect.left < popupRect.right && rect.right > popupRect.left;
+    if (overlaps) shift = Math.max(shift, popupRect.right - (rect.left - FACILITY_MAP_CONTROL_GAP));
+  });
+  const { left } = getVisibleMapBounds();
+  shift = Math.min(shift, popupRect.left - (left + OFFICE_FORM_VIEW_MARGIN));
+  if (shift <= 0) return;
+
+  const view = map.getView();
+  const center = view.getCenter();
+  view.animate({ center: [center[0] + shift * view.getResolution(), center[1]], duration: 200 });
+}
+
+// 핀 주변 여유 + 팝업 오프셋 + 상세 팝업 + 오른쪽 칸 + 양쪽 여백이 보이는 지도 폭에 들어가면 오른쪽 칸
+function resolveOfficeFormMode() {
+  const mainEl = document.getElementById("facilityPopupMain");
+  const mainWidth = mainEl ? mainEl.getBoundingClientRect().width : 0;
+  const requiredWidth =
+    OFFICE_FORM_PIN_ROOM +
+    FACILITY_POPUP_OFFSET[0] +
+    mainWidth +
+    OFFICE_FORM_SIDE_WIDTH +
+    OFFICE_FORM_VIEW_MARGIN * 2;
+  return getVisibleMapWidth() >= requiredWidth ? "side" : "inline";
+}
+
+// 팝업 폭·높이가 바뀐 뒤 화면 밖으로 나가거나 오른쪽 컨트롤에 가려진 부분만 지도를 밀어 보이게 한다
+// (offset 은 건드리지 않음)
+function panFacilityPopupIntoView(delay = 0) {
+  const token = facilityPopupRevealToken;
+  setTimeout(() => {
+    if (token !== facilityPopupRevealToken) return; // 그사이 다른 시설물을 골랐거나 닫힘
+    const map = getMap();
+    if (!map || !facilityOverlay || facilityOverlay.getPosition() === undefined) return;
+    facilityOverlay.panIntoView({ margin: OFFICE_FORM_VIEW_MARGIN, animation: { duration: 200 } });
+    whenFacilityViewSettled(map, token, avoidFacilityMapControls);
+  }, delay);
+}
+
+/**
+ * 열려 있는 폼을 현재 창 크기에 맞는 자리(오른쪽 칸 / 본문 교체)에 둔다.
+ * 폼 요소를 옮기기만 하므로 입력값·대기 중인 사진은 그대로 유지된다.
+ */
+function applyOfficeFormLayout() {
+  if (!activeOfficeForm) return;
+  const popupEl = document.getElementById("facility-popup");
+  const mainEl = document.getElementById("facilityPopupMain");
+  const bodyEl = document.getElementById("facilityPopupBody");
+  if (!popupEl || !mainEl || !bodyEl) return;
+
+  const { panel } = activeOfficeForm;
+  const mode = resolveOfficeFormMode();
+  if (mode === activeOfficeForm.mode && panel.isConnected) return;
+
+  const isFirstOpen = !panel.isConnected;
+  const scrollEl = panel.querySelector(".facility-office-form-scroll");
+  const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
+
+  activeOfficeForm.mode = mode;
+  if (mode === "side") {
+    mainEl.style.width = "";
+    popupEl.appendChild(panel);
+  } else {
+    // 본문 자리를 바꿔도 팝업 폭이 달라지지 않도록 지금 상세 폭을 고정한다 (닫을 때 풀림)
+    if (!popupEl.classList.contains("has-office-inline")) {
+      mainEl.style.width = `${Math.round(mainEl.getBoundingClientRect().width)}px`;
+    }
+    mainEl.insertBefore(panel, bodyEl); // 본문·리사이저·내업 영역은 CSS 로 숨김
+  }
+  popupEl.classList.toggle("has-office-side", mode === "side");
+  popupEl.classList.toggle("has-office-inline", mode === "inline");
+  if (scrollEl) scrollEl.scrollTop = scrollTop;
+
+  // 오른쪽 칸을 처음 펼칠 때만 폭 애니메이션 (움직임 줄이기 설정이면 CSS 에서 꺼짐)
+  const animate = isFirstOpen && mode === "side" && !prefersReducedMotion();
+  panel.classList.toggle("is-opening", animate);
+  if (animate) {
+    setTimeout(() => panel.classList.remove("is-opening"), OFFICE_FORM_OPEN_ANIMATION_MS + 20);
+  }
+  panFacilityPopupIntoView(animate ? OFFICE_FORM_OPEN_ANIMATION_MS + 20 : 0);
+}
+
+/**
+ * 작성 폼을 확인 없이 닫는다. reload 가 true 면(같은 시설물에서 폼만 닫을 때) 수정 중 지운 사진을
+ * 반영하도록 카드 목록을 다시 불러온다 — 다른 시설물로 넘어가는 중에는 새 팝업에 옛 목록이 그려지므로 false.
+ */
+function closeOfficeWorkForm(reload = false) {
+  if (!activeOfficeForm) return;
+  const closingForm = activeOfficeForm;
+  activeOfficeForm = null;
+
+  const wasSide = closingForm.mode === "side";
+  closingForm.dispose(reload);
+  closingForm.panel.remove();
+
+  const popupEl = document.getElementById("facility-popup");
+  const mainEl = document.getElementById("facilityPopupMain");
+  if (popupEl) popupEl.classList.remove("has-office-side", "has-office-inline");
+  if (mainEl) mainEl.style.width = "";
+  if (wasSide || reload) panFacilityPopupIntoView();
+}
+
+// 작성 중인 내용(바뀐 값·새로 고른 사진)이 있으면 버려도 되는지 묻는다. 폼이 없거나 바뀐 게 없으면 true
+function confirmDiscardOfficeForm() {
+  if (!activeOfficeForm || !activeOfficeForm.isDirty()) return true;
+  return window.confirm(OFFICE_FORM_DISCARD_MESSAGE);
+}
+
 /**
  * 내업 작성/수정 폼 열기
  */
 function openOfficeWorkForm(totalId, editItem = null) {
-  const formContainer = document.getElementById("facilityOfficeFormContainer");
-  if (!formContainer) return;
+  // 이미 열린 폼(다른 기록 수정 등)에 작성 중인 내용이 있으면 먼저 확인
+  if (!confirmDiscardOfficeForm()) return;
+  closeOfficeWorkForm();
 
   const isEdit = Boolean(editItem && editItem.work_id);
-  formContainer.classList.remove("hidden");
+  const formContainer = document.createElement("div");
+  formContainer.className = "facility-office-form-panel";
+  formContainer.id = "facilityOfficeFormPanel";
+  formContainer.setAttribute("role", "region");
+  formContainer.setAttribute("aria-label", isEdit ? "내업 수정" : "내업 작성");
   formContainer.innerHTML = `
     <div class="facility-office-form-header">
-      <span class="facility-office-form-title">${isEdit ? "내업 처리 수정" : "내업 처리 작성"}</span>
-      <button type="button" class="facility-office-form-close" id="facilityOfficeFormCloseBtn">×</button>
+      <button type="button" class="facility-office-form-back" id="facilityOfficeFormBackBtn">← 상세로</button>
+      <span class="facility-office-form-title">${isEdit ? "내업 수정" : "내업 작성"}</span>
+      <button type="button" class="facility-office-form-close" id="facilityOfficeFormCloseBtn" title="닫기">×</button>
     </div>
     <form class="facility-office-form" id="facilityOfficeForm">
+      <div class="facility-office-form-scroll">
       <div class="facility-office-form-error hidden" id="facilityOfficeFormError"></div>
       <div class="facility-office-form-grid">
         <div class="facility-office-form-group col-span-2">
@@ -1916,19 +2583,15 @@ function openOfficeWorkForm(totalId, editItem = null) {
           <label for="officeContractNo">계약번호</label>
           <input type="text" id="officeContractNo" name="contract_no" placeholder="계약번호" />
         </div>
-        <div class="facility-office-form-group col-span-2">
-          <label for="officeBeforePhoto">처리 전 사진 경로</label>
-          <input type="text" id="officeBeforePhoto" name="before_photo" placeholder="사진 경로 또는 URL" />
-        </div>
-        <div class="facility-office-form-group col-span-2">
-          <label for="officeAfterPhoto">처리 후 사진 경로</label>
-          <input type="text" id="officeAfterPhoto" name="after_photo" placeholder="사진 경로 또는 URL" />
-        </div>
+        <div class="facility-office-form-group col-span-2 facility-office-photo-field" data-kind="BEFORE"></div>
+        <div class="facility-office-form-group col-span-2 facility-office-photo-field" data-kind="AFTER"></div>
         <div class="facility-office-form-group col-span-2">
           <label for="officeRemark">비고</label>
           <textarea id="officeRemark" name="remark" placeholder="기타 비고사항"></textarea>
         </div>
       </div>
+      </div>
+      <div class="facility-office-form-progress hidden" id="facilityOfficeFormProgress"></div>
       <div class="facility-office-form-actions">
         <button type="button" class="facility-office-btn-cancel" id="facilityOfficeFormCancelBtn">취소</button>
         <button type="submit" class="facility-office-btn-submit" id="facilityOfficeFormSubmitBtn">저장</button>
@@ -1946,8 +2609,6 @@ function openOfficeWorkForm(totalId, editItem = null) {
   const costInput = formContainer.querySelector("#officeCost");
   const vendorInput = formContainer.querySelector("#officeVendorNm");
   const contractInput = formContainer.querySelector("#officeContractNo");
-  const beforePhotoInput = formContainer.querySelector("#officeBeforePhoto");
-  const afterPhotoInput = formContainer.querySelector("#officeAfterPhoto");
   const remarkInput = formContainer.querySelector("#officeRemark");
   const errorEl = formContainer.querySelector("#facilityOfficeFormError");
   const reqMark = formContainer.querySelector("#completeDateReqMark");
@@ -1968,21 +2629,164 @@ function openOfficeWorkForm(totalId, editItem = null) {
     costInput.value = editItem.cost !== null && editItem.cost !== undefined ? editItem.cost : "";
     vendorInput.value = editItem.vendor_nm || "";
     contractInput.value = editItem.contract_no || "";
-    beforePhotoInput.value = editItem.before_photo || "";
-    afterPhotoInput.value = editItem.after_photo || "";
     remarkInput.value = editItem.remark || "";
     updateReqMark();
   }
 
-  const closeForm = () => {
-    formContainer.classList.add("hidden");
-    formContainer.innerHTML = "";
+  const showFormError = (message) => {
+    errorEl.textContent = message;
+    errorEl.classList.remove("hidden");
+  };
+  const clearFormError = () => {
+    errorEl.classList.add("hidden");
+    errorEl.textContent = "";
+  };
+
+  // 처리 전·후 사진: 이미 저장된 사진(수정 시)과 저장 후 올릴 새 사진을 종류별로 관리한다
+  const photoState = {};
+  let photosChanged = false; // 수정 중 사진을 지웠으면 폼을 닫을 때 카드 목록을 다시 불러온다
+  OFFICE_PHOTO_KINDS.forEach(({ kind }) => {
+    photoState[kind] = { workId: isEdit ? editItem.work_id : null, existing: [], pending: [], loadError: false };
+  });
+
+  const renderPhotoFields = () => {
+    formContainer.querySelectorAll(".facility-office-photo-field").forEach((fieldEl) => {
+      renderOfficePhotoField(fieldEl, photoState[fieldEl.dataset.kind], {
+        onAddFiles: (files) => addPendingPhotos(fieldEl.dataset.kind, files),
+        onRemovePending: (pendingItem) => {
+          const state = photoState[fieldEl.dataset.kind];
+          state.pending = state.pending.filter((p) => p !== pendingItem);
+          URL.revokeObjectURL(pendingItem.previewUrl);
+          renderPhotoFields();
+        },
+        onDeleteExisting: (photo) => deleteExistingPhoto(fieldEl.dataset.kind, photo),
+      });
+    });
+  };
+
+  // 새로 고른 파일 검증(형식·장수) → 브라우저 축소 → 대기 목록에 추가. 서버는 저장 때 부른다
+  const addPendingPhotos = async (kind, files) => {
+    clearFormError();
+    const state = photoState[kind];
+    const kindLabel = getOfficePhotoKindLabel(kind);
+    const invalid = files.filter((file) => !isAllowedOfficePhoto(file));
+    if (invalid.length > 0) {
+      showFormError(
+        `jpg·png·webp 사진만 올릴 수 있습니다: ${invalid.map((file) => file.name).join(", ")}`
+      );
+      return;
+    }
+    const remain = OFFICE_PHOTO_MAX_COUNT - state.existing.length - state.pending.length;
+    if (files.length > remain) {
+      showFormError(
+        `${kindLabel}은 최대 ${OFFICE_PHOTO_MAX_COUNT}장까지 올릴 수 있습니다 (추가 가능 ${Math.max(remain, 0)}장).`
+      );
+      return;
+    }
+
+    const failed = [];
+    for (const file of files) {
+      try {
+        const resized = await resizeOfficePhoto(file);
+        if (resized.size > OFFICE_PHOTO_MAX_BYTES) {
+          failed.push(`${file.name} (10MB 초과)`);
+          continue;
+        }
+        state.pending.push({ file: resized, previewUrl: URL.createObjectURL(resized) });
+      } catch (err) {
+        failed.push(`${file.name} (${err.message || "읽기 실패"})`);
+      }
+    }
+    if (!formContainer.isConnected) return; // 준비 중에 폼이 닫힘
+    renderPhotoFields();
+    if (failed.length > 0) showFormError(`사진을 추가하지 못했습니다: ${failed.join(", ")}`);
+  };
+
+  const deleteExistingPhoto = async (kind, photo) => {
+    if (!window.confirm("이 사진을 삭제하시겠습니까?\n저장 버튼과 상관없이 바로 삭제됩니다.")) return;
+    clearFormError();
+    try {
+      await deleteOfficeWorkPhoto(editItem.work_id, photo.photo_id);
+      const state = photoState[kind];
+      state.existing = state.existing.filter((p) => p.photo_id !== photo.photo_id);
+      photosChanged = true;
+      renderPhotoFields();
+    } catch (err) {
+      console.error("사진 삭제 실패:", err);
+      showFormError(err.message || "사진 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  renderPhotoFields();
+  if (isEdit) {
+    fetchOfficeWorkPhotos(editItem.work_id)
+      .then((photos) => {
+        if (!formContainer.isConnected) return;
+        OFFICE_PHOTO_KINDS.forEach(({ kind }) => {
+          photoState[kind].existing = photos.filter((p) => String(p.kind).toUpperCase() === kind);
+        });
+        renderPhotoFields();
+      })
+      .catch((err) => {
+        console.warn("내업 사진 목록 조회 실패:", err.message);
+        OFFICE_PHOTO_KINDS.forEach(({ kind }) => {
+          photoState[kind].loadError = true;
+        });
+        renderPhotoFields();
+      });
+  }
+
+  const revokePendingPhotos = () => {
+    OFFICE_PHOTO_KINDS.forEach(({ kind }) => {
+      photoState[kind].pending.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+      photoState[kind].pending = [];
+    });
+  };
+
+  // 이탈 확인용: 연 시점의 입력값(수정이면 채운 뒤)과 비교하고, 새로 고른 사진이 있으면 바뀐 것으로 본다.
+  // 저장된 사진 삭제는 즉시 서버에 반영되므로 바뀐 값으로 치지 않는다.
+  const readFormValues = () =>
+    Array.from(formContainer.querySelectorAll("#facilityOfficeForm input:not([type=file]), #facilityOfficeForm select, #facilityOfficeForm textarea"))
+      .map((el) => el.value)
+      .join("");
+  const initialValues = readFormValues();
+  const isDirty = () =>
+    readFormValues() !== initialValues ||
+    OFFICE_PHOTO_KINDS.some(({ kind }) => photoState[kind].pending.length > 0);
+
+  // 이 폼이 아직 열려 있을 때만 닫는다 (저장 중에 팝업을 닫거나 다른 폼을 열었으면 이미 닫힘)
+  const closeThisForm = (reload) => {
+    if (activeOfficeForm && activeOfficeForm.panel === formContainer) closeOfficeWorkForm(reload);
+  };
+  const requestCloseForm = () => {
+    if (!confirmDiscardOfficeForm()) return;
+    closeThisForm(true);
   };
 
   const closeBtn = formContainer.querySelector("#facilityOfficeFormCloseBtn");
+  const backBtn = formContainer.querySelector("#facilityOfficeFormBackBtn");
   const cancelBtn = formContainer.querySelector("#facilityOfficeFormCancelBtn");
-  closeBtn.addEventListener("click", closeForm);
-  cancelBtn.addEventListener("click", closeForm);
+  closeBtn.addEventListener("click", requestCloseForm);
+  backBtn.addEventListener("click", requestCloseForm);
+  cancelBtn.addEventListener("click", requestCloseForm);
+
+  // 칸 안의 입력·버튼 조작이 헤더 드래그나 지도 제스처로 번지지 않게 한다
+  formContainer.addEventListener("pointerdown", (event) => event.stopPropagation());
+  // 오른쪽 칸 헤더를 잡아도 팝업 전체를 옮길 수 있게 한다 (버튼 위에서 시작한 드래그는 제외)
+  bindOverlayHeaderDrag(facilityOverlay, formContainer.querySelector(".facility-office-form-header"), {
+    ignoreSelector: ".facility-office-form-close, .facility-office-form-back",
+  });
+
+  activeOfficeForm = {
+    panel: formContainer,
+    mode: null,
+    isDirty,
+    dispose: (reload) => {
+      revokePendingPhotos();
+      if (reload && photosChanged) loadFacilityOfficeWorks(totalId);
+    },
+  };
+  applyOfficeFormLayout();
 
   const form = formContainer.querySelector("#facilityOfficeForm");
   const submitBtn = formContainer.querySelector("#facilityOfficeFormSubmitBtn");
@@ -2002,8 +2806,6 @@ function openOfficeWorkForm(totalId, editItem = null) {
     const costRaw = costInput.value.trim();
     const vendorVal = vendorInput.value.trim();
     const contractVal = contractInput.value.trim();
-    const beforePhotoVal = beforePhotoInput.value.trim();
-    const afterPhotoVal = afterPhotoInput.value.trim();
     const remarkVal = remarkInput.value.trim();
 
     // 폼 검증
@@ -2044,36 +2846,66 @@ function openOfficeWorkForm(totalId, editItem = null) {
       cost: costNum,
       vendor_nm: vendorVal || null,
       contract_no: contractVal || null,
-      before_photo: beforePhotoVal || null,
-      after_photo: afterPhotoVal || null,
+      // 예전 텍스트 경로 컬럼은 입력란을 없앴으므로 수정 시 기존 값을 그대로 보존한다 (PUT 은 전체 갱신)
+      before_photo: (isEdit && editItem.before_photo) || null,
+      after_photo: (isEdit && editItem.after_photo) || null,
       remark: remarkVal || null,
     };
 
     submitBtn.disabled = true;
+    cancelBtn.disabled = true;
     submitBtn.textContent = "저장 중...";
 
+    let saved;
     try {
-      if (isEdit) {
-        await updateFacilityOfficeWork(editItem.work_id, payload);
-      } else {
-        await createFacilityOfficeWork(totalId, payload);
-      }
-      closeForm();
-      await loadFacilityOfficeWorks(totalId);
+      saved = isEdit
+        ? await updateFacilityOfficeWork(editItem.work_id, payload)
+        : await createFacilityOfficeWork(totalId, payload);
     } catch (err) {
       console.error("내업 처리 저장 실패:", err);
-      errorEl.textContent = err.message || "저장 중 오류가 발생했습니다. 다시 시도해 주세요.";
-      errorEl.classList.remove("hidden");
-    } finally {
+      showFormError(err.message || "저장 중 오류가 발생했습니다. 다시 시도해 주세요.");
       submitBtn.disabled = false;
+      cancelBtn.disabled = false;
       submitBtn.textContent = "저장";
+      return;
+    }
+
+    // 기록이 저장된 뒤(work_id 확보) 고른 사진을 순서대로 올린다
+    const workId = isEdit ? editItem.work_id : saved && saved.work_id;
+    const uploads = [];
+    OFFICE_PHOTO_KINDS.forEach(({ kind }) => {
+      photoState[kind].pending.forEach((p) => uploads.push({ kind, file: p.file }));
+    });
+    const failedUploads = [];
+    if (uploads.length > 0) {
+      const progressEl = formContainer.querySelector("#facilityOfficeFormProgress");
+      for (let i = 0; i < uploads.length; i++) {
+        const { kind, file } = uploads[i];
+        if (progressEl) {
+          progressEl.textContent = `사진 업로드 중 ${i + 1} / ${uploads.length} (${getOfficePhotoKindLabel(kind)} · ${file.name})`;
+          progressEl.classList.remove("hidden");
+        }
+        submitBtn.textContent = `사진 업로드 ${i + 1}/${uploads.length}`;
+        try {
+          if (!workId) throw new Error("저장된 기록 번호를 확인하지 못했습니다");
+          await uploadOfficeWorkPhoto(workId, kind, file);
+        } catch (err) {
+          console.error("내업 사진 업로드 실패:", err);
+          failedUploads.push(`${getOfficePhotoKindLabel(kind)} ${file.name} — ${err.message}`);
+        }
+      }
+    }
+
+    // 저장이 끝나면 칸을 닫는다 (확인 없이). 목록은 아래에서 어차피 다시 불러온다
+    closeThisForm(false);
+    await loadFacilityOfficeWorks(totalId);
+    if (failedUploads.length > 0) {
+      showFacilityOfficeNotice(
+        `내업 기록은 저장되었습니다. 다만 사진 ${failedUploads.length}장을 올리지 못했습니다 — 수정에서 다시 올려 주세요.`,
+        failedUploads
+      );
     }
   });
-
-  // 폼은 하단 고정 영역의 섹션 헤더 바로 아래에 있으므로 그 영역만 맨 위로 올린다.
-  // scrollIntoView 는 지도 컨테이너·문서까지 함께 스크롤할 수 있어 쓰지 않는다.
-  const officeFooterEl = document.getElementById("facilityOfficeFooter");
-  if (officeFooterEl) officeFooterEl.scrollTop = 0;
 }
 
 /**
@@ -2123,6 +2955,7 @@ function createOfficeWorkCard(totalId, item, isLatest) {
   deleteBtn.className = "facility-office-card-btn btn-delete";
   deleteBtn.textContent = "삭제";
   deleteBtn.addEventListener("click", async () => {
+    hideFacilityOfficeNotice();
     if (window.confirm("내업 처리 기록을 삭제하시겠습니까?\n삭제된 기록은 복구할 수 없습니다.")) {
       try {
         await deleteFacilityOfficeWork(item.work_id);
@@ -2195,7 +3028,14 @@ function createOfficeWorkCard(totalId, item, isLatest) {
     card.appendChild(grid);
   }
 
-  // 사진 경로 표시
+  // 업로드한 처리 전·후 사진 썸네일 (최신 카드는 바로, 이전 이력은 펼칠 때 조회)
+  const photoWrap = document.createElement("div");
+  photoWrap.className = "facility-office-photos hidden";
+  photoWrap.dataset.workId = item.work_id || "";
+  card.appendChild(photoWrap);
+  if (isLatest) loadOfficeWorkCardPhotos(photoWrap, item.work_id);
+
+  // 예전 텍스트 경로(before_photo/after_photo)로 남은 사진 링크 표시
   const photos = [
     { label: "처리 전 사진", path: item.before_photo },
     { label: "처리 후 사진", path: item.after_photo },
@@ -2275,6 +3115,11 @@ function renderFacilityOfficeWorks(totalId, items) {
     historyToggle.addEventListener("click", () => {
       const isHidden = historyList.classList.toggle("hidden");
       toggleArrow.textContent = isHidden ? "▼" : "▲";
+      if (!isHidden) {
+        historyList.querySelectorAll(".facility-office-photos").forEach((photoWrap) => {
+          loadOfficeWorkCardPhotos(photoWrap, photoWrap.dataset.workId);
+        });
+      }
     });
   }
 }
@@ -2429,8 +3274,15 @@ async function deleteFacilityOfficeWork(workId) {
   return true;
 }
 
-// 팝업 닫기
-function closeFacilityPopup() {
+/**
+ * 팝업 닫기. 작성 중인 내업 내용이 있으면 확인을 받고, 취소하면 닫지 않고 false 를 돌려준다.
+ * 데이터 재조회·필터 변경처럼 사용자가 팝업을 직접 닫는 게 아닌 경우는 force 로 확인 없이 닫는다.
+ */
+function closeFacilityPopup(options = {}) {
+  const force = Boolean(options && options.force);
+  if (!force && !confirmDiscardOfficeForm()) return false;
+  closeOfficeWorkForm();
+
   facilityPopupRevealToken++; // 대기 중인 표시 보정 취소
   if (facilityOverlay) {
     facilityOverlay.setPosition(undefined);
@@ -2456,6 +3308,7 @@ function closeFacilityPopup() {
   if (facilitySource) {
     facilitySource.changed();
   }
+  return true;
 }
 
 // 레이어/소스 getter
