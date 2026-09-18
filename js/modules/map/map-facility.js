@@ -528,6 +528,7 @@ function createPopupElement() {
     <div class="facility-popup-body" id="facilityPopupBody">
       <div class="facility-detail-loading">상세정보를 불러오는 중...</div>
     </div>
+    <div class="facility-popup-office-footer hidden" id="facilityOfficeFooter"></div>
   `;
 
   return popup;
@@ -1532,6 +1533,7 @@ async function showFacilityDetail(totalId, coordinate) {
   const popupEl = document.getElementById("facility-popup");
   const titleEl = document.getElementById("facilityPopupTitle");
   const bodyEl = document.getElementById("facilityPopupBody");
+  const officeFooterEl = document.getElementById("facilityOfficeFooter");
 
   if (!popupEl || !facilityOverlay) return;
 
@@ -1568,7 +1570,10 @@ async function showFacilityDetail(totalId, coordinate) {
   });
   if (bodyEl) {
     bodyEl.innerHTML = '<div class="facility-detail-loading">상세정보를 불러오는 중...</div>';
+    bodyEl.scrollTop = 0;
   }
+  // 하단 고정 내업 영역은 상세 응답에서 보수 필요로 확인된 뒤에만 채운다 (이전 시설물 내용 제거)
+  clearFacilityOfficeFooter(officeFooterEl);
 
   try {
     const url = getApiUrl(`/map/qfield/facilities/${encodeURIComponent(totalId)}`);
@@ -1756,9 +1761,11 @@ async function showFacilityDetail(totalId, coordinate) {
     }
 
     // 내업 처리 섹션은 보수 필요 시설물에만 둔다 (백엔드도 보수 필요가 아닌 시설물의 작성은 400으로 거부)
-    if (String(properties.repair_required_yn || "").toUpperCase() === "Y") {
+    // 본문 스크롤과 상관없이 보이도록 본문이 아니라 팝업 하단 고정 영역에 넣는다
+    if (String(properties.repair_required_yn || "").toUpperCase() === "Y" && officeFooterEl) {
       const officeSection = createOfficeWorkSection(totalId);
-      bodyEl.appendChild(officeSection);
+      officeFooterEl.appendChild(officeSection);
+      officeFooterEl.classList.remove("hidden");
 
       // 내업 처리 이력 비동기 조회
       loadFacilityOfficeWorks(totalId);
@@ -1778,6 +1785,16 @@ async function showFacilityDetail(totalId, coordinate) {
 // ==========================================================================
 // 내업 처리 CRUD 및 UI 모듈
 // ==========================================================================
+
+/**
+ * 팝업 하단 고정 내업 영역을 비우고 숨긴다 (팝업을 열 때마다 호출)
+ */
+function clearFacilityOfficeFooter(footerEl) {
+  if (!footerEl) return;
+  footerEl.innerHTML = "";
+  footerEl.scrollTop = 0;
+  footerEl.classList.add("hidden");
+}
 
 /**
  * 내업 처리 섹션 생성
@@ -2053,7 +2070,10 @@ function openOfficeWorkForm(totalId, editItem = null) {
     }
   });
 
-  formContainer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  // 폼은 하단 고정 영역의 섹션 헤더 바로 아래에 있으므로 그 영역만 맨 위로 올린다.
+  // scrollIntoView 는 지도 컨테이너·문서까지 함께 스크롤할 수 있어 쓰지 않는다.
+  const officeFooterEl = document.getElementById("facilityOfficeFooter");
+  if (officeFooterEl) officeFooterEl.scrollTop = 0;
 }
 
 /**
