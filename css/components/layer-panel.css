@@ -1695,6 +1695,21 @@
   text-decoration: underline;
 }
 
+/* 보고서 PDF — 완료·보류 기록에만 나오며 지도 핀 기본색 계열로 구분 */
+.facility-office-card-btn.btn-report {
+  color: #1d4ed8;
+}
+
+.facility-office-card-btn.btn-report:hover {
+  color: #1e3a8a;
+}
+
+.facility-office-card-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  text-decoration: none;
+}
+
 .facility-office-card-btn:hover {
   color: #0f172a;
 }

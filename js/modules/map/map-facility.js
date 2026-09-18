@@ -2941,6 +2941,17 @@ function createOfficeWorkCard(totalId, item, isLatest) {
   const actions = document.createElement("div");
   actions.className = "facility-office-card-actions";
 
+  // 보고서 PDF — 완료·보류 기록에만 (백엔드도 그 외 상태는 거부한다)
+  if (statusKey === "DONE" || statusKey === "HOLD") {
+    const reportBtn = document.createElement("button");
+    reportBtn.type = "button";
+    reportBtn.className = "facility-office-card-btn btn-report";
+    reportBtn.textContent = "보고서";
+    reportBtn.title = "시설물 정보와 내업 처리 내용을 PDF로 내려받습니다";
+    reportBtn.addEventListener("click", () => downloadOfficeWorkReport(totalId, item, reportBtn));
+    actions.appendChild(reportBtn);
+  }
+
   const editBtn = document.createElement("button");
   editBtn.type = "button";
   editBtn.className = "facility-office-card-btn";
@@ -3263,6 +3274,82 @@ async function updateFacilityOfficeWork(workId, workData) {
 /**
  * 내업 삭제 API 호출 (DELETE /map/qfield/office-works/{workId})
  */
+/**
+ * 응답 헤더에서 파일명을 얻는다. filename*=UTF-8''... 를 우선 쓰고, 없으면 filename="..." 을 쓴다.
+ * 둘 다 없거나 파싱에 실패하면 null 을 돌려주고 호출부가 대체 이름을 만든다.
+ */
+function parseContentDispositionFileName(disposition) {
+  if (!disposition) return null;
+  const utf8Match = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8Match) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim().replace(/^"|"$/g, ""));
+    } catch (e) {
+      // 잘못 인코딩된 값이면 아래 filename= 으로 넘어간다
+    }
+  }
+  const plainMatch = disposition.match(/filename\s*=\s*"?([^";]+)"?/i);
+  return plainMatch ? plainMatch[1].trim() : null;
+}
+
+/**
+ * 내업 보고서 PDF 다운로드 (GET /map/qfield/facilities/{totalId}/report/pdf?workId=)
+ *
+ * 새 탭으로 열면 브라우저 뷰어가 뜨고 파일명이 사라지므로, 받아서 Blob 으로 저장한다.
+ * 사진이 많으면 몇 초 걸릴 수 있어 버튼을 잠그고 진행 상태를 보여준다.
+ */
+async function downloadOfficeWorkReport(totalId, item, buttonEl) {
+  hideFacilityOfficeNotice();
+  const originalText = buttonEl ? buttonEl.textContent : "";
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = "만드는 중...";
+  }
+
+  let objectUrl = null;
+  try {
+    const url = getApiUrl(
+      `/map/qfield/facilities/${encodeURIComponent(totalId)}/report/pdf?workId=${encodeURIComponent(item.work_id)}`
+    );
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const serverMessage = await readApiErrorMessage(response);
+      if (response.status === 404) {
+        throw new Error("보고서를 만들 기록을 찾을 수 없습니다.");
+      }
+      if (response.status === 400 || response.status === 409) {
+        throw new Error(serverMessage || "완료 또는 보류 상태에서만 보고서를 만들 수 있습니다.");
+      }
+      throw new Error(serverMessage || `보고서 생성 실패 (${response.status})`);
+    }
+
+    const blob = await response.blob();
+    const fallbackDate = item.complete_date || new Date().toISOString().slice(0, 10);
+    const fileName =
+      parseContentDispositionFileName(response.headers.get("Content-Disposition")) ||
+      `내업보고서_${totalId}_${fallbackDate}.pdf`;
+
+    objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error) {
+    console.error("내업 보고서 다운로드 오류:", error);
+    showFacilityOfficeNotice(error.message || "보고서를 내려받지 못했습니다.");
+  } finally {
+    // 브라우저가 저장을 시작할 시간을 준 뒤 해제한다
+    if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = originalText || "보고서";
+    }
+  }
+}
+
 async function deleteFacilityOfficeWork(workId) {
   const url = getApiUrl(`/map/qfield/office-works/${encodeURIComponent(workId)}`);
   const response = await fetch(url, {
