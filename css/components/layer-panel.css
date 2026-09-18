@@ -615,6 +615,27 @@
   color: #b45309;
 }
 
+/* 내업 상태 필터 — 보수 필요를 고른 경우에만 보이는 한 줄(라벨 + select).
+   행정구역 select 줄(.facility-select-item)과 같은 모양으로 맞춘다. */
+.facility-office-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.facility-office-filter.hidden {
+  display: none;
+}
+
+.facility-office-filter label {
+  width: 52px;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+}
+
 .facility-repair-option:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;
@@ -867,6 +888,14 @@
   color: #3b82f6;
 }
 
+.facility-item-badges {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .facility-badge {
   font-size: 0.7rem;
   padding: 2px 6px;
@@ -885,6 +914,12 @@
 .facility-badge.badge-no-repair {
   background-color: #dcfce7;
   color: #15803d;
+}
+
+/* 내업 완료 — 초록 계열(기존 badge-no-repair와 구분되는 짙은 톤) */
+.facility-badge.badge-office-done {
+  background-color: #059669;
+  color: #ffffff;
 }
 
 /* 시설물 종류 — 지도 핀 기본색(#2563eb)과 맞춤 */
@@ -907,7 +942,7 @@
   border-radius: 8px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
   min-width: 320px;
-  max-width: 420px;
+  max-width: 440px;
   width: max-content;
   font-family: inherit;
   z-index: 2100;
@@ -1003,7 +1038,7 @@
 
 .facility-popup-body {
   padding: 0.75rem 1rem;
-  max-height: 380px;
+  max-height: 440px;
   overflow-y: auto;
   font-size: 0.85rem;
 }
@@ -1176,4 +1211,374 @@
 
 .facility-detail-error {
   color: #dc2626;
+}
+
+/* ==========================================================================
+   내업 처리 섹션 스타일
+   ========================================================================== */
+.facility-office-section {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.facility-office-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.facility-office-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.facility-office-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.facility-office-count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #047857;
+  background: #d1fae5;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.facility-office-btn-create {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #059669;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.facility-office-btn-create:hover {
+  background: #047857;
+}
+
+/* 폼 스타일 */
+.facility-office-form-container {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.facility-office-form-container.hidden {
+  display: none !important;
+}
+
+.facility-office-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.facility-office-form-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.facility-office-form-close {
+  background: none;
+  border: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.facility-office-form-close:hover {
+  color: #0f172a;
+}
+
+.facility-office-form-error {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.76rem;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 5px;
+  margin-bottom: 0.5rem;
+}
+
+.facility-office-form-error.hidden {
+  display: none !important;
+}
+
+.facility-office-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.facility-office-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.facility-office-form-group.col-span-2 {
+  grid-column: span 2;
+}
+
+.facility-office-form-group label {
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.facility-office-form-group label .required {
+  color: #dc2626;
+  margin-left: 2px;
+}
+
+.facility-office-form-group input,
+.facility-office-form-group select,
+.facility-office-form-group textarea {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.78rem;
+  font-family: inherit;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+}
+
+.facility-office-form-group textarea {
+  resize: vertical;
+  min-height: 48px;
+}
+
+.facility-office-form-group input:focus,
+.facility-office-form-group select:focus,
+.facility-office-form-group textarea:focus {
+  border-color: #059669;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.15);
+}
+
+.facility-office-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.facility-office-btn-cancel,
+.facility-office-btn-submit {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.facility-office-btn-cancel {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.facility-office-btn-cancel:hover {
+  background: #e2e8f0;
+}
+
+.facility-office-btn-submit {
+  background: #059669;
+  color: #ffffff;
+  border: 1px solid #059669;
+}
+
+.facility-office-btn-submit:hover {
+  background: #047857;
+}
+
+.facility-office-btn-submit:disabled {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* 내업 카드 (최신 1건 요약 및 과거 이력) */
+.facility-office-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  padding: 0.6rem;
+  margin-bottom: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.facility-office-card.facility-office-latest {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.facility-office-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.facility-office-card-left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.facility-office-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* 미완료(내업 기록 없음) — 아직 손대지 않은 상태라 붉은 계열로 구분 */
+.status-badge-pending {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.status-badge-received {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-badge-in-progress {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.status-badge-done {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.status-badge-hold {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.facility-office-card-date {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.facility-office-card-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.facility-office-card-btn {
+  background: none;
+  border: none;
+  font-size: 0.72rem;
+  color: #64748b;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-decoration: underline;
+}
+
+.facility-office-card-btn:hover {
+  color: #0f172a;
+}
+
+.facility-office-card-btn.btn-delete {
+  color: #dc2626;
+}
+
+.facility-office-card-btn.btn-delete:hover {
+  color: #b91c1c;
+}
+
+.facility-office-card-content {
+  font-size: 0.8rem;
+  color: #1e293b;
+  font-weight: 500;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.facility-office-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.2rem 0.5rem;
+  font-size: 0.73rem;
+  color: #64748b;
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid #f1f5f9;
+}
+
+.facility-office-card.facility-office-past-item .facility-office-card-grid {
+  background: #f1f5f9;
+}
+
+.facility-office-grid-item span:first-child {
+  color: #94a3b8;
+  margin-right: 4px;
+}
+
+.facility-office-history-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  background: #f1f5f9;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  margin-top: 0.4rem;
+  user-select: none;
+}
+
+.facility-office-history-toggle:hover {
+  background: #e2e8f0;
+}
+
+.facility-office-history-list.hidden {
+  display: none !important;
+}
+
+.facility-office-history-list {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.facility-office-loading,
+.facility-office-empty {
+  font-size: 0.75rem;
+  color: #64748b;
+  text-align: center;
+  padding: 0.6rem 0;
 }

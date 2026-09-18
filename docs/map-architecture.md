@@ -30,10 +30,10 @@
 - **`readFeatures()`에 넘기는 `featureProjection`은 반드시 `vectorSource.getProjection()`(= `null`)을 유지할 것.** OpenLayers 7.4.0에서 `ol.source.Vector`의 `getProjection()`은 `null`을 반환하고, `featureProjection`이 `null`이면 `readFeatures()`가 좌표를 **변환하지 않고 그대로** 사용합니다. 백엔드 응답 좌표가 이미 뷰 좌표계(EPSG:3857)이므로 이 동작에 의존하고 있습니다(옵션의 `dataProjection: "EPSG:4326"`은 실질적으로 무시됨). 여기에 `map.getView().getProjection()` 같은 실제 투영을 넘기면 미터 좌표를 경위도로 간주해 변환해버려 피처가 지도 밖으로 밀려나 **레이어가 아예 표시되지 않음**. 같은 이유로 원본 좌표 기반 뷰포트 필터링도 4326이 아니라 **뷰 좌표계 extent**로 비교해야 함.
 - **시설물 레이어 (`map-facility.js`) 규격**:
   - `zIndex`: `1010` (기존 WFS/WMS 레이어 1000 위에 배치하여 가시성 확보).
-  - **아이콘**: PNG 파일이 아니라 `buildFacilityIconUrl()`이 만드는 **SVG data URI 핀**(원본 24×32, `anchor [0.5, 1.0]`)을 사용합니다. 시설물명(`fclt_nm`)에 포함된 키워드로 종류를 판별해 글리프를 고르고, `repair_required_yn === 'Y'`면 핀 색을 경고색으로 바꿉니다. 글리프 안의 문자열 `COLOR`는 핀 색으로 치환되므로 색을 직접 적지 말 것. 종류·색·선택 상태 조합은 `facilityStyleCache`에 캐시되므로(피처 2천여 건) 스타일 함수 안에서 `new ol.style.Style`을 새로 만들지 말 것.
-  - **아이콘 설정의 기준은 DB**(`qfield.facility_icon`)입니다. `loadFacilityIconConfig()`가 초기화 때 `GET /map/qfield/facility-icons`로 불러와 `facilityIconTypes`·`facilityDefaultIcon`을 교체하고 캐시를 비웁니다. **아이콘을 추가·변경할 때는 이 파일이 아니라 DB 행을 수정할 것**(생성·초기데이터 스크립트: `mapservice-rest/db/qfield_facility_icon.sql`). 파일 안의 `FALLBACK_FACILITY_ICON_TYPES`는 API 실패·빈 응답일 때만 쓰는 대체값이므로, DB에 종류를 추가했다고 해서 여기에 같이 넣지 말 것(둘이 어긋나면 어느 쪽이 보이는지 헷갈림).
+  - **아이콘**: PNG 파일이 아니라 `buildFacilityIconUrl()`이 만드는 **SVG data URI 핀**(원본 24×32, `anchor [0.5, 1.0]`)을 사용합니다. 시설물명(`fclt_nm`)에 포함된 키워드로 종류를 판별해 글리프를 고르고, `repair_required_yn === 'Y'`면 핀 색을 경고색(주황 `#d97706`)으로 바꾸되, 보수 필요 시설물 중 내업이 완료된(`office_work_status === 'DONE'`) 것은 초록 계열(`FACILITY_OFFICE_DONE_COLOR` `#059669`)로 구분합니다. 글리프 안의 문자열 `COLOR`는 핀 색으로 치환되므로 색을 직접 적지 말 것. 종류·색(base/warn/done)·선택 상태 조합은 `facilityStyleCache`에 캐시되므로(피처 2천여 건) 스타일 함수 안에서 `new ol.style.Style`을 새로 만들지 말 것.
+  - **아이콘 설정의 기준은 DB**(`map.facility_icon`)입니다. `loadFacilityIconConfig()`가 초기화 때 `GET /map/qfield/facility-icons`로 불러와 `facilityIconTypes`·`facilityDefaultIcon`을 교체하고 캐시를 비웁니다. **아이콘을 추가·변경할 때는 이 파일이 아니라 DB 행을 수정할 것**(생성·초기데이터 스크립트: `mapservice-rest/db/map_facility_icon.sql`). 파일 안의 `FALLBACK_FACILITY_ICON_TYPES`는 API 실패·빈 응답일 때만 쓰는 대체값이므로, DB에 종류를 추가했다고 해서 여기에 같이 넣지 말 것(둘이 어긋나면 어느 쪽이 보이는지 헷갈림).
   - 레이어 옵션: `updateWhileAnimating: false`, `updateWhileInteracting: false`, `declutter: false` (목록 건수와 지도 표출 건수 일치를 위해 비활성화).
-  - **상세 팝업**: 헤더는 지도 핀과 같은 규칙으로 채웁니다(`renderFacilityPopupHeader()`) — 같은 SVG 아이콘 + 시설물명 + 종류·보수필요·상태 배지. 헤더에서 보여주는 `fclt_nm`·`facility_condition`·`repair_required_yn`은 `HEADER_FIELD_KEYS`로 본문 목록에서 제외하되 `DETAIL_FIELD_CONFIG`에는 남겨 둘 것(빼면 "그 밖의 항목" 목록으로 다시 새어 나옴). 배지 색은 핀 색과 맞춰 종류=파랑(`badge-type`), 보수 필요=주황(`badge-repair`)을 씁니다.
+  - **상세 팝업**: 헤더는 지도 핀과 같은 규칙으로 채웁니다(`renderFacilityPopupHeader()`) — 같은 SVG 아이콘 + 시설물명 + 종류·보수필요·내업완료·상태 배지. 헤더에서 보여주는 `fclt_nm`·`facility_condition`·`repair_required_yn`은 `HEADER_FIELD_KEYS`로 본문 목록에서 제외하되 `DETAIL_FIELD_CONFIG`에는 남겨 둘 것(빼면 "그 밖의 항목" 목록으로 다시 새어 나옴). 배지 색은 핀 색과 맞춰 종류=파랑(`badge-type`), 보수 필요=주황(`badge-repair`), 내업 완료=초록(`badge-office-done`)을 씁니다.
     - **보수 필요 여부는 항상 표시**합니다 — `repair_required_yn`이 `Y`면 헤더에 `보수 필요`(주황), 그 밖(`N`·빈 값)이면 `보수 불필요`(초록, `badge-no-repair`). 본문 "보수 필요 여부" 행도 같은 용어(`FACILITY_VALUE_MAPS.repair`: Y=보수 필요, N=보수 불필요)이고, 설정의 `emptyValue: "N"` 때문에 빈 값이 `-`가 아니라 `보수 불필요`로 나옵니다. 목록 필터(`matchesFacilityRepairFilter`)와 같은 기준이므로 한쪽만 바꾸지 말 것. 앱 ValueMap 원문은 Y=정비요청, N=양호입니다.
   - **선택 시 지도 가운데로 이동**: `selectFacility(totalId, zoomIn)`은 지도에서 핀을 클릭하든 목록에서 고르든 **선택한 시설물을 지도 가운데로 옮깁니다.** `zoomIn`은 목록에서 골랐을 때만 `true`(최소 줌 16까지 확대)이고, 지도에서 직접 클릭하면 배율은 그대로 둡니다.
     - 가운데의 기준은 `#map` 요소가 아니라 **화면에 실제로 보이는 지도 영역**입니다(`getFacilityViewCenter()`). `#map`은 화면 전체 너비인데 좌측 `.layer-panel`(320px)이 그 위에 겹쳐 떠 있고, 세로로는 60px 헤더 아래에서 시작해 하단 60px가 화면 밖으로 넘칩니다. view center를 시설물 좌표로 그대로 두면 왼쪽으로 160px·아래로 30px 치우쳐 보입니다.
@@ -52,6 +52,10 @@
     - `GET /map/admin-area/sido`: 시도 목록 및 extent
     - `GET /map/admin-area/sgg?sidoCd={sidoCd}`: 시군구 목록 및 extent
     - `GET /map/admin-area/emd?sggCd={sggCd}`: 읍면동 목록 및 extent
-    - `GET /map/qfield/facilities`: 시설물 GeoJSON FeatureCollection (`sidoCd`, `sggCd`, `emdCd` 파라미터 지원)
+    - `GET /map/qfield/facilities`: 시설물 GeoJSON FeatureCollection (`sidoCd`, `sggCd`, `emdCd` 파라미터 지원, `office_work_status`, `office_work_complete_date` 속성 포함 — `office_work_status`는 보수 필요 시설물이면 최신 내업 `work_status` 또는 기록 없음 `PENDING`, 보수 필요가 아니면 `null`)
     - `GET /map/qfield/facilities/{totalId}`: 시설물 상세 GeoJSON Feature (모든 상세 속성 및 sido_nm, sgg_nm, emd_nm 포함)
+    - `GET /map/qfield/facilities/{totalId}/office-works`: 시설물별 내업 이력 목록 조회 (최신순)
+    - `POST /map/qfield/facilities/{totalId}/office-works`: 시설물 내업 등록 (보수 필요 시설물만 — 그 외 400, `DONE`이면 `complete_date` 필수)
+    - `PUT /map/qfield/office-works/{workId}`: 시설물 내업 수정 (전체 갱신)
+    - `DELETE /map/qfield/office-works/{workId}`: 시설물 내업 삭제 (소프트 삭제)
 

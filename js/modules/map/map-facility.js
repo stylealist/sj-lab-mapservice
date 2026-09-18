@@ -225,11 +225,43 @@ const FACILITY_POPUP_OFFSET = [24, 0];
 const FACILITY_POPUP_SLOW_REVEAL_MS = 1200;
 const FACILITY_ICON_COLOR = "#2563eb"; // 기본 시설물 (파랑)
 const FACILITY_WARN_COLOR = "#d97706"; // 보수 필요 (주황)
+const FACILITY_OFFICE_DONE_COLOR = "#059669"; // 보수 필요 중 내업 완료 (초록)
+
+// 내업 처리 상태 코드 및 한글 매핑
+// 내업은 보수 필요(repair_required_yn = Y) 시설물만 대상이며, 기록이 없으면 PENDING(미완료)이다.
+// PENDING 은 저장값이 아니라 "기록 없음" 표시값이므로 작성 폼 선택지에는 넣지 않는다.
+const OFFICE_WORK_STATUS_MAP = {
+  PENDING: "미완료",
+  RECEIVED: "접수",
+  IN_PROGRESS: "처리중",
+  DONE: "완료",
+  HOLD: "보류",
+};
+
+const OFFICE_WORK_STATUS_BADGE_CLASS = {
+  PENDING: "status-badge-pending",
+  RECEIVED: "status-badge-received",
+  IN_PROGRESS: "status-badge-in-progress",
+  DONE: "status-badge-done",
+  HOLD: "status-badge-hold",
+};
+
+// 시설물의 내업 상태 코드 — 보수 필요가 아니면 ""(내업 대상 아님), 보수 필요인데 값이 없거나 모르는 값이면 PENDING
+function resolveOfficeWorkStatus(needsRepair, status) {
+  if (!needsRepair) return "";
+  const code = String(status || "").toUpperCase();
+  return OFFICE_WORK_STATUS_MAP[code] ? code : "PENDING";
+}
+
+// 목록·팝업 헤더용 내업 배지 클래스 (완료는 지도 핀과 같은 짙은 초록)
+function getOfficeWorkBadgeClass(statusCode) {
+  return statusCode === "DONE" ? "badge-office-done" : OFFICE_WORK_STATUS_BADGE_CLASS[statusCode];
+}
 
 // 시설물 종류별 글리프 — fclt_nm 에 아래 keywords 가 포함되면 해당 아이콘을 사용
-// ※ 운영 기준은 DB(qfield.facility_icon)이며 `GET /map/qfield/facility-icons`로 불러온다.
+// ※ 운영 기준은 DB(map.facility_icon)이며 `GET /map/qfield/facility-icons`로 불러온다.
 //    아래 배열은 API 조회 실패·빈 응답일 때만 쓰는 **대체값**이므로, 아이콘을 추가·변경할 때는
-//    이 파일이 아니라 DB 행을 수정할 것 (생성 스크립트: mapservice-rest/db/qfield_facility_icon.sql)
+//    이 파일이 아니라 DB 행을 수정할 것 (생성 스크립트: mapservice-rest/db/map_facility_icon.sql)
 const FALLBACK_FACILITY_ICON_TYPES = [
   {
     type: "parking",
@@ -308,16 +340,19 @@ function resolveFacilityIcon(facilityName) {
   return matched || facilityDefaultIcon;
 }
 
-// 아이콘 설정에서 핀 색 결정 (설정에 색이 없으면 기본 상수 사용)
-function getFacilityPinColor(iconConfig, needsRepair) {
+// 아이콘 설정에서 핀 색 결정 (보수 필요 시설물 중 내업 완료는 초록 계열)
+function getFacilityPinColor(iconConfig, needsRepair, isOfficeDone = false) {
   if (needsRepair) {
+    if (isOfficeDone) {
+      return iconConfig.officeDoneColor || FACILITY_OFFICE_DONE_COLOR;
+    }
     return iconConfig.warnColor || FACILITY_WARN_COLOR;
   }
   return iconConfig.pinColor || FACILITY_ICON_COLOR;
 }
 
 /**
- * 시설물 아이콘 설정을 DB(qfield.facility_icon)에서 불러온다.
+ * 시설물 아이콘 설정을 DB(map.facility_icon)에서 불러온다.
  * 실패하거나 응답이 비어 있으면 내장 대체값을 그대로 쓰므로 지도는 항상 그려진다.
  */
 async function loadFacilityIconConfig() {
@@ -342,6 +377,7 @@ async function loadFacilityIconConfig() {
         glyph: row.glyph,
         pinColor: row.pinColor,
         warnColor: row.warnColor,
+        officeDoneColor: row.officeDoneColor,
         isDefault: Boolean(row.isDefault),
       }));
 
@@ -363,14 +399,15 @@ async function loadFacilityIconConfig() {
   }
 }
 
-// 팝업 헤더를 지도 아이콘과 같은 규칙으로 채움 (아이콘 + 종류·상태 배지)
-function renderFacilityPopupHeader(facilityName, needsRepair, conditionText) {
+// 팝업 헤더를 지도 아이콘과 같은 규칙으로 채움 (아이콘 + 종류·보수필요·내업완료·상태 배지)
+function renderFacilityPopupHeader(facilityName, needsRepair, conditionText, officeWorkInfo = null) {
   const iconEl = document.getElementById("facilityPopupIcon");
   const metaEl = document.getElementById("facilityPopupMeta");
   if (!iconEl || !metaEl) return;
 
+  const isOfficeDone = officeWorkInfo && String(officeWorkInfo.status || "").toUpperCase() === "DONE";
   const iconConfig = resolveFacilityIcon(facilityName);
-  const pinColor = getFacilityPinColor(iconConfig, needsRepair);
+  const pinColor = getFacilityPinColor(iconConfig, needsRepair, isOfficeDone);
 
   // 지도 핀과 같은 SVG를 그대로 사용해 아이콘이 어긋나지 않게 함
   iconEl.innerHTML = "";
@@ -389,6 +426,21 @@ function renderFacilityPopupHeader(facilityName, needsRepair, conditionText) {
   } else {
     badges.push({ text: "보수 불필요", className: "badge-no-repair" });
   }
+
+  // 내업 상태 배지 (보수 필요 시설물만): 미완료/접수/처리중/완료/보류
+  // 완료는 완료일·담당자 문구를 덧붙인다 (예: "내업 완료 · 2026-09-18 · 홍길동")
+  const officeStatusCode = resolveOfficeWorkStatus(needsRepair, officeWorkInfo && officeWorkInfo.status);
+  if (officeStatusCode) {
+    const parts = [`내업 ${OFFICE_WORK_STATUS_MAP[officeStatusCode]}`];
+    if (isOfficeDone && officeWorkInfo.completeDate) {
+      parts.push(officeWorkInfo.completeDate);
+    }
+    if (isOfficeDone && officeWorkInfo.managerNm) {
+      parts.push(officeWorkInfo.managerNm);
+    }
+    badges.push({ text: parts.join(" · "), className: getOfficeWorkBadgeClass(officeStatusCode) });
+  }
+
   if (conditionText) {
     badges.push({ text: conditionText, className: "badge-condition" });
   }
@@ -401,14 +453,15 @@ function renderFacilityPopupHeader(facilityName, needsRepair, conditionText) {
   });
 }
 
-// 종류·보수필요·선택 상태에 맞는 스타일 반환 (캐시)
-function getFacilityStyle(iconConfig, needsRepair, isSelected) {
-  const cacheKey = `${iconConfig.type}|${needsRepair ? "warn" : "base"}|${isSelected ? "sel" : "def"}`;
+// 종류·보수필요·내업완료·선택 상태에 맞는 스타일 반환 (캐시)
+function getFacilityStyle(iconConfig, needsRepair, isOfficeDone, isSelected) {
+  const statusKey = needsRepair ? (isOfficeDone ? "done" : "warn") : "base";
+  const cacheKey = `${iconConfig.type}|${statusKey}|${isSelected ? "sel" : "def"}`;
   if (facilityStyleCache.has(cacheKey)) {
     return facilityStyleCache.get(cacheKey);
   }
 
-  const pinColor = getFacilityPinColor(iconConfig, needsRepair);
+  const pinColor = getFacilityPinColor(iconConfig, needsRepair, isOfficeDone);
   const iconStyle = new ol.style.Style({
     image: new ol.style.Icon({
       src: buildFacilityIconUrl(iconConfig.glyph, pinColor),
@@ -444,9 +497,19 @@ function facilityStyleFunction(feature) {
   const totalId = feature.get("total_id") || feature.getId();
   const isSelected = Boolean(selectedTotalId) && String(totalId) === String(selectedTotalId);
   const needsRepair = String(feature.get("repair_required_yn") || "").toUpperCase() === "Y";
-  // 보수 필요 여부 필터에 맞지 않는 핀은 그리지 않는다 (스타일이 없으면 클릭·호버 대상에서도 빠짐)
+  const officeWorkStatus = feature.get("office_work_status") || "";
+  const isOfficeDone = String(officeWorkStatus).toUpperCase() === "DONE";
+
+  // 보수 필요 여부 필터 및 내업 필터에 맞지 않는 핀은 그리지 않는다 (스타일이 없으면 클릭·호버 대상에서도 빠짐)
   if (!matchesFacilityRepairFilter(needsRepair)) return null;
-  return getFacilityStyle(resolveFacilityIcon(feature.get("fclt_nm")), needsRepair, isSelected);
+  if (!matchesFacilityOfficeFilter(needsRepair, officeWorkStatus)) return null;
+
+  return getFacilityStyle(
+    resolveFacilityIcon(feature.get("fclt_nm")),
+    needsRepair,
+    isOfficeDone,
+    isSelected
+  );
 }
 
 // 팝업 요소 생성
@@ -606,10 +669,11 @@ function initializeFacilityModule() {
   window.loadFacilitySggList = loadFacilitySggList;
   window.loadFacilityEmdList = loadFacilityEmdList;
 
-  // 아이콘 설정은 DB(qfield.facility_icon)에서 불러오며, 실패해도 내장 기본 아이콘으로 계속 동작함
+  // 아이콘 설정은 DB(map.facility_icon)에서 불러오며, 실패해도 내장 기본 아이콘으로 계속 동작함
   loadFacilityIconConfig();
   bindFacilityKeywordSearch();
   bindFacilityRepairFilter();
+  bindFacilityOfficeFilter();
   // 시도 목록을 불러온 뒤 기본 시·도(서울)를 적용하며 시설물도 함께 조회한다
   // (여기서 loadFacilities 를 따로 부르면 전체 조회 → 서울 조회로 두 번 요청하게 됨)
   loadFacilitySidoList();
@@ -862,11 +926,19 @@ let facilityListItems = [];
 let facilityKeyword = "";
 // 보수 필요 여부 필터: "all"(기본) | "repair"(repair_required_yn = Y) | "noRepair"(Y 가 아닌 전부 — N·빈 값)
 let facilityRepairFilter = "all";
+// 내업 상태 필터: "all"(기본) | "PENDING"(미완료) | "RECEIVED" | "IN_PROGRESS" | "DONE" | "HOLD"
+// "all" 이 아니면 보수 필요 시설물 중 그 상태인 것만 남는다 (보수 불필요 시설물은 내업 대상이 아님)
+let facilityOfficeFilter = "all";
 
 function matchesFacilityRepairFilter(needsRepair) {
   if (facilityRepairFilter === "repair") return needsRepair;
   if (facilityRepairFilter === "noRepair") return !needsRepair;
   return true;
+}
+
+function matchesFacilityOfficeFilter(needsRepair, officeWorkStatus) {
+  if (facilityOfficeFilter === "all") return true;
+  return resolveOfficeWorkStatus(needsRepair, officeWorkStatus) === facilityOfficeFilter;
 }
 
 // 응답 피처에서 목록 항목 데이터만 뽑아낸다 (중복 제거)
@@ -891,6 +963,8 @@ function buildFacilityListItems(rawFeatures) {
       name,
       sub: subParts.join(" · "),
       needsRepair: String(props.repair_required_yn || "").toUpperCase() === "Y",
+      officeWorkStatus: props.office_work_status || null,
+      officeWorkCompleteDate: props.office_work_complete_date || null,
       condition: String(props.facility_condition || "").trim(),
       searchText: `${name} ${subParts.join(" ")}`.toLowerCase(),
     });
@@ -899,7 +973,7 @@ function buildFacilityListItems(rawFeatures) {
   return items;
 }
 
-// 목록 DOM 생성 — 검색어·보수 필요 여부 필터 적용, 지도와 같은 아이콘 표시
+// 목록 DOM 생성 — 검색어·보수 필요 여부·내업 처리 필터 적용, 지도와 같은 아이콘 표시
 function renderFacilityList() {
   const listEl = document.getElementById("facilityList");
   const countEl = document.getElementById("facilityCount");
@@ -911,15 +985,38 @@ function renderFacilityList() {
   const keywordItems = keyword
     ? facilityListItems.filter((item) => item.searchText.includes(keyword))
     : facilityListItems;
-  const visibleItems = keywordItems.filter((item) => matchesFacilityRepairFilter(item.needsRepair));
 
-  // 필터 버튼 옆 건수는 검색어까지 반영한 기준으로 표시 (어느 쪽을 눌러야 결과가 있는지 보이도록)
-  const repairCount = keywordItems.filter((item) => item.needsRepair).length;
+  // 보수 필요 필터와 내업 필터가 함께 적용(AND)
+  const visibleItems = keywordItems.filter(
+    (item) =>
+      matchesFacilityRepairFilter(item.needsRepair) &&
+      matchesFacilityOfficeFilter(item.needsRepair, item.officeWorkStatus)
+  );
+
+  // 보수 필요 필터 건수 (현재 내업 필터 적용 기준)
+  const itemsForRepairCounts = keywordItems.filter((item) =>
+    matchesFacilityOfficeFilter(item.needsRepair, item.officeWorkStatus)
+  );
+  const repairCount = itemsForRepairCounts.filter((item) => item.needsRepair).length;
   updateFacilityRepairCounts({
-    all: keywordItems.length,
+    all: itemsForRepairCounts.length,
     repair: repairCount,
-    noRepair: keywordItems.length - repairCount,
+    noRepair: itemsForRepairCounts.length - repairCount,
   });
+
+  // 내업 필터 건수 (현재 보수 필요 필터 적용 기준)
+  const itemsForOfficeCounts = keywordItems.filter((item) =>
+    matchesFacilityRepairFilter(item.needsRepair)
+  );
+  const officeCounts = { all: itemsForOfficeCounts.length };
+  Object.keys(OFFICE_WORK_STATUS_MAP).forEach((code) => {
+    officeCounts[code] = 0;
+  });
+  itemsForOfficeCounts.forEach((item) => {
+    const code = resolveOfficeWorkStatus(item.needsRepair, item.officeWorkStatus);
+    if (code) officeCounts[code] += 1;
+  });
+  updateFacilityOfficeCounts(officeCounts);
 
   if (countEl) countEl.textContent = visibleItems.length.toLocaleString();
   if (panelCountEl) panelCountEl.textContent = facilityListItems.length.toLocaleString();
@@ -939,14 +1036,16 @@ function renderFacilityList() {
       li.classList.add("selected");
     }
 
-    // 지도 핀과 같은 아이콘 (종류·보수필요 색 규칙 공유)
+    const isOfficeDone = String(item.officeWorkStatus || "").toUpperCase() === "DONE";
+
+    // 지도 핀과 같은 아이콘 (종류·보수필요·내업완료 색 규칙 공유)
     const iconConfig = resolveFacilityIcon(item.name);
     const iconWrap = document.createElement("span");
     iconWrap.className = "facility-item-icon";
     const iconImg = document.createElement("img");
     iconImg.src = buildFacilityIconUrl(
       iconConfig.glyph,
-      getFacilityPinColor(iconConfig, item.needsRepair)
+      getFacilityPinColor(iconConfig, item.needsRepair, isOfficeDone)
     );
     iconImg.alt = iconConfig.label;
     iconWrap.appendChild(iconImg);
@@ -969,17 +1068,33 @@ function renderFacilityList() {
     }
     li.appendChild(body);
 
-    // 보수필요 / 상태 뱃지
+    // 배지 영역: 보수필요 배지 옆에 내업 완료 배지 표시
+    const badgesWrap = document.createElement("div");
+    badgesWrap.className = "facility-item-badges";
+
     if (item.needsRepair) {
       const badge = document.createElement("span");
       badge.className = "facility-badge badge-repair";
       badge.textContent = "보수필요";
-      li.appendChild(badge);
+      badgesWrap.appendChild(badge);
     } else if (item.condition) {
       const badge = document.createElement("span");
       badge.className = "facility-badge badge-condition";
       badge.textContent = item.condition;
-      li.appendChild(badge);
+      badgesWrap.appendChild(badge);
+    }
+
+    // 보수 필요 시설물은 내업 상태(미완료/접수/처리중/완료/보류)를 항상 표시
+    const officeStatusCode = resolveOfficeWorkStatus(item.needsRepair, item.officeWorkStatus);
+    if (officeStatusCode) {
+      const officeBadge = document.createElement("span");
+      officeBadge.className = `facility-badge ${getOfficeWorkBadgeClass(officeStatusCode)}`;
+      officeBadge.textContent = `내업 ${OFFICE_WORK_STATUS_MAP[officeStatusCode]}`;
+      badgesWrap.appendChild(officeBadge);
+    }
+
+    if (badgesWrap.children.length > 0) {
+      li.appendChild(badgesWrap);
     }
 
     li.addEventListener("click", () => {
@@ -1029,6 +1144,32 @@ function updateFacilityRepairCounts(counts) {
   });
 }
 
+// 내업 select 의 각 항목 뒤에 건수를 붙인다 (예: "완료 (3)")
+function updateFacilityOfficeCounts(counts) {
+  const selectEl = document.getElementById("facilityOfficeSelect");
+  if (!selectEl) return;
+  Array.from(selectEl.options).forEach((option) => {
+    const label = option.getAttribute("data-label") || option.textContent.replace(/\s*\(\d[\d,]*\)$/, "");
+    option.setAttribute("data-label", label);
+    option.textContent = `${label} (${(counts[option.value] || 0).toLocaleString()})`;
+  });
+}
+
+// 내업 필터 줄은 "보수 필요"를 고른 경우에만 보인다 (내업은 보수 요청 건의 후속 처리)
+function syncFacilityOfficeFilterVisibility() {
+  const rowEl = document.getElementById("facilityOfficeFilterRow");
+  if (!rowEl) return;
+  const visible = facilityRepairFilter === "repair";
+  rowEl.classList.toggle("hidden", !visible);
+
+  // 숨기면서 필터가 남아 있으면 보이지 않는 조건이 목록을 계속 거르게 되므로 전체로 되돌린다
+  if (!visible && facilityOfficeFilter !== "all") {
+    facilityOfficeFilter = "all";
+    const selectEl = document.getElementById("facilityOfficeSelect");
+    if (selectEl) selectEl.value = "all";
+  }
+}
+
 // 보수 필요 여부 필터 바인딩 — 목록을 다시 그리고 지도 핀 스타일도 갱신 (서버 재조회 없음)
 function bindFacilityRepairFilter() {
   const groupEl = document.getElementById("facilityRepairFilter");
@@ -1043,10 +1184,17 @@ function bindFacilityRepairFilter() {
       option.setAttribute("aria-checked", isActive ? "true" : "false");
     });
 
+    // 보수 필요를 벗어나면 내업 줄을 감추고 필터도 전체로 되돌린다
+    syncFacilityOfficeFilterVisibility();
+
     // 열려 있는 팝업의 시설물이 필터에서 빠지면 핀이 사라지므로 팝업도 닫는다
     if (selectedTotalId) {
       const selectedItem = facilityListItems.find((item) => item.totalId === String(selectedTotalId));
-      if (selectedItem && !matchesFacilityRepairFilter(selectedItem.needsRepair)) {
+      if (
+        selectedItem &&
+        (!matchesFacilityRepairFilter(selectedItem.needsRepair) ||
+          !matchesFacilityOfficeFilter(selectedItem.needsRepair, selectedItem.officeWorkStatus))
+      ) {
         closeFacilityPopup();
       }
     }
@@ -1058,6 +1206,34 @@ function bindFacilityRepairFilter() {
   options.forEach((option) => {
     option.addEventListener("click", () => applyRepairFilter(option.getAttribute("data-repair-filter")));
   });
+}
+
+// 내업 상태 필터 바인딩 — 목록을 다시 그리고 지도 핀 스타일도 갱신 (서버 재조회 없음)
+function bindFacilityOfficeFilter() {
+  const selectEl = document.getElementById("facilityOfficeSelect");
+  if (!selectEl) return;
+
+  const applyOfficeFilter = (value) => {
+    facilityOfficeFilter = value;
+
+    // 열려 있는 팝업의 시설물이 필터에서 빠지면 핀이 사라지므로 팝업도 닫는다
+    if (selectedTotalId) {
+      const selectedItem = facilityListItems.find((item) => item.totalId === String(selectedTotalId));
+      if (
+        selectedItem &&
+        (!matchesFacilityRepairFilter(selectedItem.needsRepair) ||
+          !matchesFacilityOfficeFilter(selectedItem.needsRepair, selectedItem.officeWorkStatus))
+      ) {
+        closeFacilityPopup();
+      }
+    }
+
+    renderFacilityList();
+    if (facilitySource) facilitySource.changed();
+  };
+
+  selectEl.addEventListener("change", () => applyOfficeFilter(selectEl.value));
+  syncFacilityOfficeFilterVisibility();
 }
 
 // 시설물 목록 및 지도 데이터 로드
@@ -1122,6 +1298,7 @@ async function loadFacilities(filter = {}) {
       const panelCountEl = document.getElementById("panelCount");
       if (panelCountEl) panelCountEl.textContent = "0";
       updateFacilityRepairCounts({ all: 0, repair: 0, noRepair: 0 });
+      updateFacilityOfficeCounts({ all: 0, done: 0, notDone: 0 });
       if (facilitySource) facilitySource.clear();
       return;
     }
@@ -1381,9 +1558,14 @@ async function showFacilityDetail(totalId, coordinate) {
   const loadedName = loadedFeature ? loadedFeature.get("fclt_nm") : "";
   const loadedNeedsRepair =
     String(loadedFeature ? loadedFeature.get("repair_required_yn") : "").toUpperCase() === "Y";
+  const loadedOfficeStatus = loadedFeature ? loadedFeature.get("office_work_status") : null;
+  const loadedOfficeCompleteDate = loadedFeature ? loadedFeature.get("office_work_complete_date") : null;
 
   if (titleEl) titleEl.textContent = loadedName || "시설물 상세정보";
-  renderFacilityPopupHeader(loadedName, loadedNeedsRepair, "");
+  renderFacilityPopupHeader(loadedName, loadedNeedsRepair, "", {
+    status: loadedOfficeStatus,
+    completeDate: loadedOfficeCompleteDate,
+  });
   if (bodyEl) {
     bodyEl.innerHTML = '<div class="facility-detail-loading">상세정보를 불러오는 중...</div>';
   }
@@ -1402,11 +1584,18 @@ async function showFacilityDetail(totalId, coordinate) {
     if (titleEl) {
       titleEl.textContent = properties.fclt_nm || "시설물 상세정보";
     }
-    // 상태 값은 본문에 행으로 나오므로 헤더에는 종류와 보수 필요 배지만 둔다
+    const featOfficeStatus = properties.office_work_status !== undefined ? properties.office_work_status : loadedOfficeStatus;
+    const featOfficeCompleteDate = properties.office_work_complete_date !== undefined ? properties.office_work_complete_date : loadedOfficeCompleteDate;
+
+    // 상태 값은 본문에 행으로 나오므로 헤더에는 종류, 보수 필요, 내업 완료 배지만 둔다
     renderFacilityPopupHeader(
       properties.fclt_nm,
       String(properties.repair_required_yn || "").toUpperCase() === "Y",
-      ""
+      "",
+      {
+        status: featOfficeStatus,
+        completeDate: featOfficeCompleteDate,
+      }
     );
 
     if (!bodyEl) return;
@@ -1566,6 +1755,15 @@ async function showFacilityDetail(totalId, coordinate) {
       bodyEl.appendChild(detailList);
     }
 
+    // 내업 처리 섹션은 보수 필요 시설물에만 둔다 (백엔드도 보수 필요가 아닌 시설물의 작성은 400으로 거부)
+    if (String(properties.repair_required_yn || "").toUpperCase() === "Y") {
+      const officeSection = createOfficeWorkSection(totalId);
+      bodyEl.appendChild(officeSection);
+
+      // 내업 처리 이력 비동기 조회
+      loadFacilityOfficeWorks(totalId);
+    }
+
   } catch (error) {
     console.error("시설물 상세정보 로드 오류:", error);
     if (bodyEl) {
@@ -1575,6 +1773,640 @@ async function showFacilityDetail(totalId, coordinate) {
     // 내용이 채워진 뒤(=높이 확정) 지도 이동까지 끝나면 최종 위치에서 보여줌 (오류 문구도 동일)
     revealFacilityPopup(revealToken);
   }
+}
+
+// ==========================================================================
+// 내업 처리 CRUD 및 UI 모듈
+// ==========================================================================
+
+/**
+ * 내업 처리 섹션 생성
+ */
+function createOfficeWorkSection(totalId) {
+  const section = document.createElement("div");
+  section.className = "facility-office-section";
+  section.id = "facilityOfficeSection";
+
+  // 헤더 (제목 + 건수 배지 + 내업 작성 버튼)
+  const header = document.createElement("div");
+  header.className = "facility-office-section-header";
+
+  const titleWrap = document.createElement("div");
+  titleWrap.className = "facility-office-title-wrap";
+
+  const title = document.createElement("h4");
+  title.className = "facility-office-title";
+  title.textContent = "내업 처리 내역";
+
+  const countPill = document.createElement("span");
+  countPill.className = "facility-office-count";
+  countPill.id = "facilityOfficeCount";
+  countPill.textContent = "0";
+
+  titleWrap.appendChild(title);
+  titleWrap.appendChild(countPill);
+
+  const createBtn = document.createElement("button");
+  createBtn.type = "button";
+  createBtn.className = "facility-office-btn-create";
+  createBtn.id = "facilityOfficeCreateBtn";
+  createBtn.textContent = "+ 내업 작성";
+
+  header.appendChild(titleWrap);
+  header.appendChild(createBtn);
+  section.appendChild(header);
+
+  // 폼 컨테이너 (작성 / 수정 시 노출)
+  const formContainer = document.createElement("div");
+  formContainer.className = "facility-office-form-container hidden";
+  formContainer.id = "facilityOfficeFormContainer";
+  section.appendChild(formContainer);
+
+  // 이력 및 요약 내용 컨테이너
+  const content = document.createElement("div");
+  content.className = "facility-office-content";
+  content.id = "facilityOfficeContent";
+  content.innerHTML = '<div class="facility-office-loading">내업 처리 이력을 불러오는 중...</div>';
+  section.appendChild(content);
+
+  createBtn.addEventListener("click", () => {
+    openOfficeWorkForm(totalId, null);
+  });
+
+  return section;
+}
+
+/**
+ * 내업 작성/수정 폼 열기
+ */
+function openOfficeWorkForm(totalId, editItem = null) {
+  const formContainer = document.getElementById("facilityOfficeFormContainer");
+  if (!formContainer) return;
+
+  const isEdit = Boolean(editItem && editItem.work_id);
+  formContainer.classList.remove("hidden");
+  formContainer.innerHTML = `
+    <div class="facility-office-form-header">
+      <span class="facility-office-form-title">${isEdit ? "내업 처리 수정" : "내업 처리 작성"}</span>
+      <button type="button" class="facility-office-form-close" id="facilityOfficeFormCloseBtn">×</button>
+    </div>
+    <form class="facility-office-form" id="facilityOfficeForm">
+      <div class="facility-office-form-error hidden" id="facilityOfficeFormError"></div>
+      <div class="facility-office-form-grid">
+        <div class="facility-office-form-group col-span-2">
+          <label for="officeWorkStatus">처리 상태 <span class="required">*</span></label>
+          <select id="officeWorkStatus" name="work_status">
+            <option value="">-- 상태 선택 --</option>
+            <option value="RECEIVED">접수</option>
+            <option value="IN_PROGRESS">처리중</option>
+            <option value="DONE">완료</option>
+            <option value="HOLD">보류</option>
+          </select>
+        </div>
+        <div class="facility-office-form-group col-span-2">
+          <label for="officeWorkContent">처리 내용</label>
+          <textarea id="officeWorkContent" name="work_content" placeholder="처리할 내업 내용을 입력하세요"></textarea>
+        </div>
+        <div class="facility-office-form-group">
+          <label for="officeDeptNm">담당 부서</label>
+          <input type="text" id="officeDeptNm" name="dept_nm" placeholder="담당 부서명" />
+        </div>
+        <div class="facility-office-form-group">
+          <label for="officeManagerNm">담당자</label>
+          <input type="text" id="officeManagerNm" name="manager_nm" placeholder="담당자 이름" />
+        </div>
+        <div class="facility-office-form-group">
+          <label for="officeManagerTel">연락처</label>
+          <input type="text" id="officeManagerTel" name="manager_tel" placeholder="연락처" />
+        </div>
+        <div class="facility-office-form-group">
+          <label for="officePlanDate">처리 예정일</label>
+          <input type="date" id="officePlanDate" name="plan_date" />
+        </div>
+        <div class="facility-office-form-group">
+          <label for="officeCompleteDate">완료일 <span class="required" id="completeDateReqMark" style="display:none;">*</span></label>
+          <input type="date" id="officeCompleteDate" name="complete_date" />
+        </div>
+        <div class="facility-office-form-group">
+          <label for="officeCost">비용 (원)</label>
+          <input type="number" id="officeCost" name="cost" min="0" step="1" placeholder="숫자만 입력" />
+        </div>
+        <div class="facility-office-form-group">
+          <label for="officeVendorNm">시공 업체</label>
+          <input type="text" id="officeVendorNm" name="vendor_nm" placeholder="시공 업체명" />
+        </div>
+        <div class="facility-office-form-group">
+          <label for="officeContractNo">계약번호</label>
+          <input type="text" id="officeContractNo" name="contract_no" placeholder="계약번호" />
+        </div>
+        <div class="facility-office-form-group col-span-2">
+          <label for="officeBeforePhoto">처리 전 사진 경로</label>
+          <input type="text" id="officeBeforePhoto" name="before_photo" placeholder="사진 경로 또는 URL" />
+        </div>
+        <div class="facility-office-form-group col-span-2">
+          <label for="officeAfterPhoto">처리 후 사진 경로</label>
+          <input type="text" id="officeAfterPhoto" name="after_photo" placeholder="사진 경로 또는 URL" />
+        </div>
+        <div class="facility-office-form-group col-span-2">
+          <label for="officeRemark">비고</label>
+          <textarea id="officeRemark" name="remark" placeholder="기타 비고사항"></textarea>
+        </div>
+      </div>
+      <div class="facility-office-form-actions">
+        <button type="button" class="facility-office-btn-cancel" id="facilityOfficeFormCancelBtn">취소</button>
+        <button type="submit" class="facility-office-btn-submit" id="facilityOfficeFormSubmitBtn">저장</button>
+      </div>
+    </form>
+  `;
+
+  const statusSelect = formContainer.querySelector("#officeWorkStatus");
+  const contentInput = formContainer.querySelector("#officeWorkContent");
+  const deptInput = formContainer.querySelector("#officeDeptNm");
+  const managerInput = formContainer.querySelector("#officeManagerNm");
+  const telInput = formContainer.querySelector("#officeManagerTel");
+  const planDateInput = formContainer.querySelector("#officePlanDate");
+  const completeDateInput = formContainer.querySelector("#officeCompleteDate");
+  const costInput = formContainer.querySelector("#officeCost");
+  const vendorInput = formContainer.querySelector("#officeVendorNm");
+  const contractInput = formContainer.querySelector("#officeContractNo");
+  const beforePhotoInput = formContainer.querySelector("#officeBeforePhoto");
+  const afterPhotoInput = formContainer.querySelector("#officeAfterPhoto");
+  const remarkInput = formContainer.querySelector("#officeRemark");
+  const errorEl = formContainer.querySelector("#facilityOfficeFormError");
+  const reqMark = formContainer.querySelector("#completeDateReqMark");
+
+  const updateReqMark = () => {
+    if (reqMark) reqMark.style.display = statusSelect.value === "DONE" ? "inline" : "none";
+  };
+  statusSelect.addEventListener("change", updateReqMark);
+
+  if (editItem) {
+    statusSelect.value = editItem.work_status || "";
+    contentInput.value = editItem.work_content || "";
+    deptInput.value = editItem.dept_nm || "";
+    managerInput.value = editItem.manager_nm || "";
+    telInput.value = editItem.manager_tel || "";
+    planDateInput.value = editItem.plan_date || "";
+    completeDateInput.value = editItem.complete_date || "";
+    costInput.value = editItem.cost !== null && editItem.cost !== undefined ? editItem.cost : "";
+    vendorInput.value = editItem.vendor_nm || "";
+    contractInput.value = editItem.contract_no || "";
+    beforePhotoInput.value = editItem.before_photo || "";
+    afterPhotoInput.value = editItem.after_photo || "";
+    remarkInput.value = editItem.remark || "";
+    updateReqMark();
+  }
+
+  const closeForm = () => {
+    formContainer.classList.add("hidden");
+    formContainer.innerHTML = "";
+  };
+
+  const closeBtn = formContainer.querySelector("#facilityOfficeFormCloseBtn");
+  const cancelBtn = formContainer.querySelector("#facilityOfficeFormCancelBtn");
+  closeBtn.addEventListener("click", closeForm);
+  cancelBtn.addEventListener("click", closeForm);
+
+  const form = formContainer.querySelector("#facilityOfficeForm");
+  const submitBtn = formContainer.querySelector("#facilityOfficeFormSubmitBtn");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorEl.classList.add("hidden");
+    errorEl.textContent = "";
+
+    const statusVal = statusSelect.value.trim();
+    const contentVal = contentInput.value.trim();
+    const deptVal = deptInput.value.trim();
+    const managerVal = managerInput.value.trim();
+    const telVal = telInput.value.trim();
+    const planDateVal = planDateInput.value.trim();
+    const completeDateVal = completeDateInput.value.trim();
+    const costRaw = costInput.value.trim();
+    const vendorVal = vendorInput.value.trim();
+    const contractVal = contractInput.value.trim();
+    const beforePhotoVal = beforePhotoInput.value.trim();
+    const afterPhotoVal = afterPhotoInput.value.trim();
+    const remarkVal = remarkInput.value.trim();
+
+    // 폼 검증
+    if (!statusVal) {
+      errorEl.textContent = "처리 상태를 선택해 주세요.";
+      errorEl.classList.remove("hidden");
+      statusSelect.focus();
+      return;
+    }
+
+    if (statusVal === "DONE" && !completeDateVal) {
+      errorEl.textContent = "완료 상태인 경우 완료일을 입력해 주세요.";
+      errorEl.classList.remove("hidden");
+      completeDateInput.focus();
+      return;
+    }
+
+    let costNum = null;
+    if (costRaw !== "") {
+      const parsed = Number(costRaw);
+      if (isNaN(parsed) || parsed < 0) {
+        errorEl.textContent = "비용은 0 이상의 숫자만 입력해 주세요.";
+        errorEl.classList.remove("hidden");
+        costInput.focus();
+        return;
+      }
+      costNum = parsed;
+    }
+
+    const payload = {
+      work_status: statusVal,
+      work_content: contentVal || null,
+      dept_nm: deptVal || null,
+      manager_nm: managerVal || null,
+      manager_tel: telVal || null,
+      plan_date: planDateVal || null,
+      complete_date: completeDateVal || null,
+      cost: costNum,
+      vendor_nm: vendorVal || null,
+      contract_no: contractVal || null,
+      before_photo: beforePhotoVal || null,
+      after_photo: afterPhotoVal || null,
+      remark: remarkVal || null,
+    };
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "저장 중...";
+
+    try {
+      if (isEdit) {
+        await updateFacilityOfficeWork(editItem.work_id, payload);
+      } else {
+        await createFacilityOfficeWork(totalId, payload);
+      }
+      closeForm();
+      await loadFacilityOfficeWorks(totalId);
+    } catch (err) {
+      console.error("내업 처리 저장 실패:", err);
+      errorEl.textContent = err.message || "저장 중 오류가 발생했습니다. 다시 시도해 주세요.";
+      errorEl.classList.remove("hidden");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "저장";
+    }
+  });
+
+  formContainer.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/**
+ * 내업 개별 카드 DOM 생성 (XSS 방지 textContent 사용)
+ */
+function createOfficeWorkCard(totalId, item, isLatest) {
+  const card = document.createElement("div");
+  card.className = `facility-office-card ${isLatest ? "facility-office-latest" : "facility-office-past-item"}`;
+
+  // 헤더: 상태 배지 + 일자 + 액션(수정/삭제)
+  const header = document.createElement("div");
+  header.className = "facility-office-card-header";
+
+  const left = document.createElement("div");
+  left.className = "facility-office-card-left";
+
+  const statusBadge = document.createElement("span");
+  const statusKey = String(item.work_status || "").toUpperCase();
+  const statusName = OFFICE_WORK_STATUS_MAP[statusKey] || item.work_status || "미지정";
+  const badgeClass = OFFICE_WORK_STATUS_BADGE_CLASS[statusKey] || "status-badge-hold";
+  statusBadge.className = `facility-office-status-badge ${badgeClass}`;
+  statusBadge.textContent = statusName;
+  left.appendChild(statusBadge);
+
+  const dateSpan = document.createElement("span");
+  dateSpan.className = "facility-office-card-date";
+  const dateVal = item.complete_date || item.plan_date || (item.reg_date ? formatFacilityDateTime(item.reg_date) : "");
+  dateSpan.textContent = dateVal ? `· ${dateVal}` : "";
+  left.appendChild(dateSpan);
+
+  header.appendChild(left);
+
+  const actions = document.createElement("div");
+  actions.className = "facility-office-card-actions";
+
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.className = "facility-office-card-btn";
+  editBtn.textContent = "수정";
+  editBtn.addEventListener("click", () => {
+    openOfficeWorkForm(totalId, item);
+  });
+  actions.appendChild(editBtn);
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "facility-office-card-btn btn-delete";
+  deleteBtn.textContent = "삭제";
+  deleteBtn.addEventListener("click", async () => {
+    if (window.confirm("내업 처리 기록을 삭제하시겠습니까?\n삭제된 기록은 복구할 수 없습니다.")) {
+      try {
+        await deleteFacilityOfficeWork(item.work_id);
+        await loadFacilityOfficeWorks(totalId);
+      } catch (err) {
+        console.error("삭제 실패:", err);
+        alert(err.message || "삭제 중 오류가 발생했습니다.");
+      }
+    }
+  });
+  actions.appendChild(deleteBtn);
+
+  header.appendChild(actions);
+  card.appendChild(header);
+
+  // 본문: 처리 내용
+  if (item.work_content) {
+    const content = document.createElement("div");
+    content.className = "facility-office-card-content";
+    content.textContent = item.work_content;
+    card.appendChild(content);
+  }
+
+  // 상세 그리드: 담당부서, 담당자, 연락처, 비용, 업체, 계약번호, 비고
+  const grid = document.createElement("div");
+  grid.className = "facility-office-card-grid";
+
+  const addGridItem = (label, val) => {
+    if (!val && val !== 0) return;
+    const gItem = document.createElement("div");
+    gItem.className = "facility-office-grid-item";
+
+    const labelSpan = document.createElement("span");
+    labelSpan.textContent = label + ":";
+    const valSpan = document.createElement("span");
+    valSpan.textContent = String(val);
+
+    gItem.appendChild(labelSpan);
+    gItem.appendChild(valSpan);
+    grid.appendChild(gItem);
+  };
+
+  const deptParts = [item.dept_nm, item.manager_nm].filter(Boolean);
+  if (deptParts.length > 0) {
+    addGridItem("담당", deptParts.join(" · "));
+  }
+  if (item.manager_tel) {
+    addGridItem("연락처", item.manager_tel);
+  }
+  if (item.cost !== null && item.cost !== undefined && item.cost !== "") {
+    addGridItem("비용", Number(item.cost).toLocaleString() + "원");
+  }
+  if (item.vendor_nm) {
+    addGridItem("시공업체", item.vendor_nm);
+  }
+  if (item.contract_no) {
+    addGridItem("계약번호", item.contract_no);
+  }
+  if (item.plan_date && !item.complete_date) {
+    addGridItem("예정일", item.plan_date);
+  }
+  if (item.complete_date) {
+    addGridItem("완료일", item.complete_date);
+  }
+  if (item.remark) {
+    addGridItem("비고", item.remark);
+  }
+
+  if (grid.children.length > 0) {
+    card.appendChild(grid);
+  }
+
+  // 사진 경로 표시
+  const photos = [
+    { label: "처리 전 사진", path: item.before_photo },
+    { label: "처리 후 사진", path: item.after_photo },
+  ].filter((p) => p.path && String(p.path).trim());
+
+  if (photos.length > 0) {
+    const photoRow = document.createElement("div");
+    photoRow.style.display = "flex";
+    photoRow.style.gap = "8px";
+    photoRow.style.marginTop = "4px";
+    photoRow.style.fontSize = "0.72rem";
+
+    photos.forEach((p) => {
+      const a = document.createElement("a");
+      a.className = "facility-media-link";
+      a.href = buildFacilityMediaUrl(totalId, p.path);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = p.label;
+      photoRow.appendChild(a);
+    });
+    card.appendChild(photoRow);
+  }
+
+  return card;
+}
+
+/**
+ * 내업 목록 UI 렌더링 (최신 1건 요약 + 이전 이력 아코디언)
+ */
+function renderFacilityOfficeWorks(totalId, items) {
+  const container = document.getElementById("facilityOfficeContent");
+  if (!container) return;
+
+  container.innerHTML = "";
+
+  if (!items || items.length === 0) {
+    const emptyEl = document.createElement("div");
+    emptyEl.className = "facility-office-empty";
+    emptyEl.textContent = "등록된 내업 처리 내역이 없습니다.";
+    container.appendChild(emptyEl);
+    return;
+  }
+
+  // 1. 최신 1건 요약 카드
+  const latestItem = items[0];
+  const latestCard = createOfficeWorkCard(totalId, latestItem, true);
+  container.appendChild(latestCard);
+
+  // 2. 이력이 여러 건이면 접었다 펼 수 있는 이전 이력 목록
+  if (items.length > 1) {
+    const historyToggle = document.createElement("div");
+    historyToggle.className = "facility-office-history-toggle";
+    historyToggle.id = "facilityOfficeHistoryToggle";
+
+    const toggleText = document.createElement("span");
+    toggleText.textContent = `이전 내업 이력 (${items.length - 1}건)`;
+
+    const toggleArrow = document.createElement("span");
+    toggleArrow.className = "facility-office-history-arrow";
+    toggleArrow.textContent = "▼";
+
+    historyToggle.appendChild(toggleText);
+    historyToggle.appendChild(toggleArrow);
+    container.appendChild(historyToggle);
+
+    const historyList = document.createElement("div");
+    historyList.className = "facility-office-history-list hidden";
+    historyList.id = "facilityOfficeHistoryList";
+
+    for (let i = 1; i < items.length; i++) {
+      const pastCard = createOfficeWorkCard(totalId, items[i], false);
+      historyList.appendChild(pastCard);
+    }
+    container.appendChild(historyList);
+
+    historyToggle.addEventListener("click", () => {
+      const isHidden = historyList.classList.toggle("hidden");
+      toggleArrow.textContent = isHidden ? "▼" : "▲";
+    });
+  }
+}
+
+/**
+ * 시설물 내업 상태 갱신 (목록 데이터, 벡터 피처, 팝업 헤더, 지도 핀 동기화)
+ */
+function updateFacilityOfficeState(totalId, status, completeDate, managerNm) {
+  // 1. facilityListItems 데이터 갱신
+  const item = facilityListItems.find((it) => it.totalId === String(totalId));
+  if (item) {
+    item.officeWorkStatus = status;
+    item.officeWorkCompleteDate = completeDate;
+  }
+
+  // 2. OpenLayers feature properties 갱신
+  if (facilitySource) {
+    const feature = facilitySource.getFeatureById(String(totalId));
+    if (feature) {
+      feature.set("office_work_status", status);
+      feature.set("office_work_complete_date", completeDate);
+    }
+  }
+
+  // 3. 팝업 헤더 갱신
+  const loadedFeature = facilitySource ? facilitySource.getFeatureById(String(totalId)) : null;
+  const name = (item && item.name) || (loadedFeature && loadedFeature.get("fclt_nm")) || "";
+  const needsRepair = item
+    ? item.needsRepair
+    : String(loadedFeature ? loadedFeature.get("repair_required_yn") : "").toUpperCase() === "Y";
+
+  renderFacilityPopupHeader(name, needsRepair, "", {
+    status: status,
+    completeDate: completeDate,
+    managerNm: managerNm,
+  });
+
+  // 4. 목록 배지 및 지도 핀 갱신
+  renderFacilityList();
+  if (facilitySource) {
+    facilitySource.changed();
+  }
+}
+
+/**
+ * 특정 시설물의 내업 목록 로드
+ */
+async function loadFacilityOfficeWorks(totalId) {
+  const container = document.getElementById("facilityOfficeContent");
+  const countEl = document.getElementById("facilityOfficeCount");
+  if (!container) return;
+
+  try {
+    const url = getApiUrl(`/map/qfield/facilities/${encodeURIComponent(totalId)}/office-works`);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`내업 목록 조회 실패: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+
+    if (countEl) countEl.textContent = items.length.toString();
+
+    // UI 렌더링
+    renderFacilityOfficeWorks(totalId, items);
+
+    // 최신 상태로 시설물 데이터 및 지도 핀 갱신 (기록이 없으면 미완료 — 삭제로 0건이 된 경우 포함)
+    const latest = items.length > 0 ? items[0] : null;
+    const latestStatus = latest ? latest.work_status : "PENDING";
+    const latestCompleteDate = latest ? latest.complete_date : null;
+    const latestManager = latest ? latest.manager_nm : null;
+
+    updateFacilityOfficeState(totalId, latestStatus, latestCompleteDate, latestManager);
+  } catch (error) {
+    console.warn("내업 정보 조회 실패:", error.message);
+    if (countEl) countEl.textContent = "0";
+    if (container) {
+      container.innerHTML = '<div class="facility-office-empty">등록된 내업 처리 내역이 없습니다.</div>';
+    }
+  } finally {
+    // 팝업 내용 갱신 후 오버레이 크기 변경에 따른 위치 보정
+    if (facilityOverlay && facilityOverlay.getPosition() !== undefined) {
+      const el = facilityOverlay.getElement();
+      const h = el ? el.getBoundingClientRect().height : 0;
+      if (h > 0) {
+        facilityOverlay.setOffset([
+          FACILITY_POPUP_OFFSET[0],
+          FACILITY_POPUP_OFFSET[1] - Math.round(h / 2),
+        ]);
+        facilityOverlay.panIntoView({ margin: 24, animation: { duration: 150 } });
+      }
+    }
+  }
+}
+
+// 오류 응답 본문의 {"message": "..."} 를 사용자에게 보여줄 문구로 꺼낸다 (JSON 이 아니면 본문 그대로)
+async function readApiErrorMessage(response) {
+  const errorText = await response.text().catch(() => "");
+  try {
+    const parsed = JSON.parse(errorText);
+    if (parsed && parsed.message) return parsed.message;
+  } catch (e) {
+    // JSON 이 아니면 아래에서 원문 사용
+  }
+  return errorText || response.statusText;
+}
+
+/**
+ * 내업 생성 API 호출 (POST /map/qfield/facilities/{totalId}/office-works)
+ */
+async function createFacilityOfficeWork(totalId, workData) {
+  const url = getApiUrl(`/map/qfield/facilities/${encodeURIComponent(totalId)}/office-works`);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(workData),
+  });
+  if (!response.ok) {
+    throw new Error(`저장 실패 (${response.status}): ${await readApiErrorMessage(response)}`);
+  }
+  return await response.json();
+}
+
+/**
+ * 내업 수정 API 호출 (PUT /map/qfield/office-works/{workId})
+ */
+async function updateFacilityOfficeWork(workId, workData) {
+  const url = getApiUrl(`/map/qfield/office-works/${encodeURIComponent(workId)}`);
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(workData),
+  });
+  if (!response.ok) {
+    throw new Error(`수정 실패 (${response.status}): ${await readApiErrorMessage(response)}`);
+  }
+  return await response.json();
+}
+
+/**
+ * 내업 삭제 API 호출 (DELETE /map/qfield/office-works/{workId})
+ */
+async function deleteFacilityOfficeWork(workId) {
+  const url = getApiUrl(`/map/qfield/office-works/${encodeURIComponent(workId)}`);
+  const response = await fetch(url, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    throw new Error(`삭제 실패 (${response.status}): ${await readApiErrorMessage(response)}`);
+  }
+  return true;
 }
 
 // 팝업 닫기
@@ -1626,4 +2458,6 @@ export {
   loadFacilityEmdList,
   getFacilityLayer,
   getFacilitySource,
+  loadFacilityOfficeWorks,
+  matchesFacilityOfficeFilter,
 };

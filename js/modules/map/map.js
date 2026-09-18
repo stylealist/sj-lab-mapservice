@@ -48,6 +48,8 @@ import {
   loadFacilitySidoList,
   getFacilityLayer,
   getFacilitySource,
+  loadFacilityOfficeWorks,
+  matchesFacilityOfficeFilter,
 } from "./map-facility.js";
 
 // 맵 초기화 함수 - 모든 모듈을 초기화
@@ -141,6 +143,8 @@ window.closeFacilityPopup = closeFacilityPopup;
 window.loadFacilitySidoList = loadFacilitySidoList;
 window.getFacilityLayer = getFacilityLayer;
 window.getFacilitySource = getFacilitySource;
+window.loadFacilityOfficeWorks = loadFacilityOfficeWorks;
+window.matchesFacilityOfficeFilter = matchesFacilityOfficeFilter;
 
 // 테스트 함수들 추가
 window.testPharmacyHospitalApis = window.testPharmacyHospitalApis;
@@ -155,4 +159,6 @@ export {
   selectFacility,
   showFacilityDetail,
   closeFacilityPopup,
+  loadFacilityOfficeWorks,
+  matchesFacilityOfficeFilter,
 };

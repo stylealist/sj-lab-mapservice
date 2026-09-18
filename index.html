@@ -367,6 +367,19 @@
                       <button type="button" class="facility-repair-option" role="radio" aria-checked="false"
                         data-repair-filter="noRepair">보수 불필요 <span class="facility-repair-count" data-repair-count="noRepair">0</span></button>
                     </div>
+                    <!-- 내업 상태 필터 — 내업은 보수 요청 건의 후속 처리라 "보수 필요"를 고른 경우에만 보인다.
+                         6개 세그먼트가 두 줄로 늘 떠 있으면 패널이 복잡해져 한 줄 select 로 둔다. -->
+                    <div class="facility-office-filter hidden" id="facilityOfficeFilterRow">
+                      <label for="facilityOfficeSelect">내업상태</label>
+                      <select id="facilityOfficeSelect" class="facility-select" aria-label="내업 상태">
+                        <option value="all">전체</option>
+                        <option value="PENDING">미완료</option>
+                        <option value="RECEIVED">접수</option>
+                        <option value="IN_PROGRESS">처리중</option>
+                        <option value="DONE">완료</option>
+                        <option value="HOLD">보류</option>
+                      </select>
+                    </div>
                     <div class="facility-select-group">
                       <div class="facility-select-item">
                         <label for="facilitySidoSelect">시·도</label>
