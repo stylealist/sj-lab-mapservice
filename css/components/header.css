@@ -105,18 +105,32 @@
   border-left: 1px solid rgba(148, 178, 232, 0.2);
 }
 
+/* "👤 아이디님" 형태의 로그인 사용자 표시 */
 .user-name {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   font-size: 0.82rem;
-  font-weight: 500;
-  color: rgba(226, 232, 240, 0.85);
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 400;
+  color: rgba(226, 232, 240, 0.7);
   white-space: nowrap;
 }
 
-.user-name:empty {
+.user-name[hidden] {
   display: none;
+}
+
+.user-name strong {
+  font-weight: 600;
+  color: #f8fafc;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-icon {
+  flex-shrink: 0;
+  color: rgba(148, 178, 232, 0.9);
 }
 
 .logout-btn {

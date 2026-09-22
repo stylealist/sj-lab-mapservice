@@ -28,7 +28,7 @@ window.MapEventManager.debugHandlers()
 
 ### SSO 로그인 게이트 (2026-09-22 추가)
 
-`js/auth-gate.js`가 `index.html`의 `<head>` 맨 위, 다른 모든 스크립트·CSS보다 먼저 로드된다(로그인 안 된 화면이 잠깐이라도 그려지지 않게 하기 위함). `localStorage`(`sjLabAuthToken`)에 유효한 토큰이 없으면 `sj-lab-authserver`의 공유 로그인 페이지(`/auth/login.html?redirect_uri=...`)로 즉시 리다이렉트하고, 로그인 서버가 돌려보낼 때 URL 해시(`#auth_token=...`)에 실려 오는 토큰을 저장한다. 전역 `window.SjLabAuth`(`getToken`/`getUsername`/`logout`)를 다른 모듈에서도 쓸 수 있다. 헤더 오른쪽의 `.user-box`(네비 탭 `.nav`와 분리된 영역)에 접속자 아이디(`#currentUserName`, `SjLabAuth.getUsername()`)와 로그아웃 버튼(`#logoutBtn`, `.logout-btn`)이 있다 — 로그아웃 버튼을 `.nav-btn`으로 만들지 말 것(`ui.js`가 `.nav-btn` 전부를 페이지 전환 버튼으로 바인딩함). 이 게이트는 화면 접근만 막는 **UX 게이트**이며, 백엔드 API(mapservice-rest 등)는 이 토큰 검증을 강제하지 않는다.
+`js/auth-gate.js`가 `index.html`의 `<head>` 맨 위, 다른 모든 스크립트·CSS보다 먼저 로드된다(로그인 안 된 화면이 잠깐이라도 그려지지 않게 하기 위함). `localStorage`(`sjLabAuthToken`)에 유효한 토큰이 없으면 `sj-lab-authserver`의 공유 로그인 페이지(`/auth/login.html?redirect_uri=...`)로 즉시 리다이렉트하고, 로그인 서버가 돌려보낼 때 URL 해시(`#auth_token=...`)에 실려 오는 토큰을 저장한다. 전역 `window.SjLabAuth`(`getToken`/`getUsername`/`logout`)를 다른 모듈에서도 쓸 수 있다. 헤더 오른쪽의 `.user-box`(네비 탭 `.nav`와 분리된 영역)에 "👤 아이디님" 형태의 접속자 표시(`#currentUser` 안의 `#currentUserName`, `SjLabAuth.getUsername()`, 아이디가 없으면 `hidden` 유지)와 로그아웃 버튼(`#logoutBtn`, `.logout-btn`)이 있다 — 로그아웃 버튼을 `.nav-btn`으로 만들지 말 것(`ui.js`가 `.nav-btn` 전부를 페이지 전환 버튼으로 바인딩함). 이 게이트는 화면 접근만 막는 **UX 게이트**이며, 백엔드 API(mapservice-rest 등)는 이 토큰 검증을 강제하지 않는다.
 
 `sj-lab-hub`에도 로직이 동일한 게이트가 있다(그쪽은 webpack 빌드라 인라인 스크립트로 넣음). 한쪽을 고치면 다른 쪽도 함께 고쳐야 한다. 자세한 SSO 흐름(로그인 페이지, 세션 쿠키, 토큰 발급)은 `sj-lab-authserver`의 `CLAUDE.md` 참고.
 
