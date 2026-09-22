@@ -26,12 +26,6 @@ window.MapEventManager.debugHandlers()
 
 ## 아키텍처
 
-### SSO 로그인 게이트 (2026-09-22 추가)
-
-`js/auth-gate.js`가 `index.html`의 `<head>` 맨 위, 다른 모든 스크립트·CSS보다 먼저 로드된다(로그인 안 된 화면이 잠깐이라도 그려지지 않게 하기 위함). `localStorage`(`sjLabAuthToken`)에 유효한 토큰이 없으면 `sj-lab-authserver`의 공유 로그인 페이지(`/auth/login.html?redirect_uri=...`)로 즉시 리다이렉트하고, 로그인 서버가 돌려보낼 때 URL 해시(`#auth_token=...`)에 실려 오는 토큰을 저장한다. 전역 `window.SjLabAuth`(`getToken`/`getUsername`/`logout`)를 다른 모듈에서도 쓸 수 있다(헤더의 로그아웃 버튼이 `SjLabAuth.logout()`을 호출). 이 게이트는 화면 접근만 막는 **UX 게이트**이며, 백엔드 API(mapservice-rest 등)는 이 토큰 검증을 강제하지 않는다.
-
-`sj-lab-hub`에도 로직이 동일한 게이트가 있다(그쪽은 webpack 빌드라 인라인 스크립트로 넣음). 한쪽을 고치면 다른 쪽도 함께 고쳐야 한다. 자세한 SSO 흐름(로그인 페이지, 세션 쿠키, 토큰 발급)은 `sj-lab-authserver`의 `CLAUDE.md` 참고.
-
 ### 모듈 통합 방식 — window 전역 객체가 진짜 API 경계
 
 번들러가 없고 `index.html`의 `onclick="toggleRoadviewBtn()"` 같은 인라인 핸들러가 다수 존재하기 때문에, ES 모듈 간 실제 통합 지점은 `import`가 아니라 **`window` 전역 객체**입니다. `js/modules/map/map.js`는 각 하위 모듈(`map-core`, `map-events`, `map-layers`, `map-tools`, `map-measure`, `map-roadview`, `map-wfs`, `map-wms`)을 import한 뒤 그 함수 대부분을 `window.*`에 재할당하는 "배럴/브리지" 파일입니다. 새 지도 기능을 추가해 인라인 HTML이나 다른 모듈에서 호출해야 한다면, 반드시 이 패턴을 따라 `map.js`에서 `window`에 등록해야 합니다.
