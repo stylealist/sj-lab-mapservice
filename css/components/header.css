@@ -89,6 +89,54 @@
   color: rgba(226, 232, 240, 0.55);
 }
 
+/* 우측: 네비 탭 + 사용자 영역 */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+/* 로그인 사용자 영역 (네비와 분리) */
+.user-box {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding-left: 1.25rem;
+  border-left: 1px solid rgba(148, 178, 232, 0.2);
+}
+
+.user-name {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: rgba(226, 232, 240, 0.85);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-name:empty {
+  display: none;
+}
+
+.logout-btn {
+  padding: 0.4rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(226, 232, 240, 0.85);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
 .nav {
   flex-shrink: 0;
   display: flex;
@@ -239,6 +287,19 @@
   .nav-btn {
     padding: 0.4rem 1rem;
     font-size: 0.8rem;
+  }
+
+  .header-right,
+  .user-box {
+    gap: 0.6rem;
+  }
+
+  .user-box {
+    padding-left: 0.6rem;
+  }
+
+  .user-name {
+    display: none;
   }
 }
 
