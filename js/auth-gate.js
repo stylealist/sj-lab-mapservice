@@ -53,9 +53,11 @@
     } catch (e) { /* no-op */ }
   }
 
-  function redirectToLogin() {
+  function redirectToLogin(isLogout) {
     var redirectUri = window.location.href.split("#")[0];
     var loginUrl = getAuthBaseUrl() + LOGIN_PATH + "?redirect_uri=" + encodeURIComponent(redirectUri);
+    // logout=1 이면 로그인 페이지가 세션 쿠키까지 지운다(안 그러면 곧바로 재로그인됨)
+    if (isLogout) loginUrl += "&logout=1";
     window.location.replace(loginUrl);
   }
 
@@ -83,7 +85,7 @@
     },
     logout: function () {
       clearStoredToken();
-      redirectToLogin();
+      redirectToLogin(true);
     },
     getAuthBaseUrl: getAuthBaseUrl
   };
