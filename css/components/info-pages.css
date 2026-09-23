@@ -1,0 +1,588 @@
+/* 소개(About) 및 연락처(Contact) 전용 모던 스타일 */
+
+/* 컨테이너 전역 설정 */
+.info-container {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 4rem 2rem;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* 스크롤바 미려하게 커스텀 */
+.info-container::-webkit-scrollbar {
+  width: 8px;
+}
+.info-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.info-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.info-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 히어로 섹션 */
+.info-hero {
+  text-align: center;
+  margin-bottom: 2.75rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  border-radius: 9999px;
+  font-size: 0.825rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  margin-bottom: 1rem;
+}
+
+.info-badge svg {
+  width: 14px;
+  height: 14px;
+}
+
+.info-hero h2 {
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.35;
+  margin-bottom: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.info-hero p {
+  font-size: 1.05rem;
+  color: #475569;
+  line-height: 1.75;
+  max-width: 860px;
+  margin: 0 auto;
+  word-break: keep-all;
+}
+
+/* 지표 그리드 (Metrics Grid) */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 2.75rem;
+}
+
+.metric-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.4rem 1.2rem;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.metric-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px -4px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
+}
+
+.metric-val {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #1e3a8a;
+  line-height: 1.2;
+  margin-bottom: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.metric-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.35rem;
+}
+
+.metric-desc {
+  font-size: 0.775rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+/* 섹션 타이틀 공통 */
+.info-section {
+  margin-bottom: 3rem;
+}
+
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 1.25rem;
+}
+
+.section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.info-section h3 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* 파이프라인 플로우 (Timeline Flow) */
+.pipeline-flow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+  position: relative;
+}
+
+.pipeline-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.pipeline-step-badge {
+  align-self: flex-start;
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+}
+
+.pipeline-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+  line-height: 1.35;
+}
+
+.pipeline-module {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0369a1;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-bottom: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.pipeline-desc {
+  font-size: 0.85rem;
+  color: #475569;
+  line-height: 1.55;
+  word-break: keep-all;
+}
+
+/* 기능 카드 그리드 */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.feature-box {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.feature-box:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px -4px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
+}
+
+.feature-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 0.85rem;
+}
+
+.feature-box-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feature-box-icon.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.feature-box-icon.emerald {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.feature-box-icon.amber {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.feature-box-icon.violet {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.feature-box-icon.indigo {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.feature-box-icon.rose {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.feature-header h4 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.feature-box p {
+  font-size: 0.875rem;
+  color: #475569;
+  line-height: 1.6;
+  margin: 0;
+  word-break: keep-all;
+}
+
+/* 기술 스택 섹션 */
+.tech-groups {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.tech-group-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.tech-group-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tech-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tech-badge {
+  font-size: 0.775rem;
+  font-weight: 600;
+  background: #ffffff;
+  color: #1e293b;
+  border: 1px solid #cbd5e1;
+  padding: 4px 9px;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* 연락처 페이지 전용 스타일 */
+.contact-lead-card {
+  display: flex;
+  gap: 2rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  margin-bottom: 2.5rem;
+  align-items: center;
+}
+
+.lead-avatar-wrap {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 6px 16px -2px rgba(37, 99, 235, 0.3);
+}
+
+.lead-avatar-wrap svg {
+  width: 48px;
+  height: 48px;
+}
+
+.lead-info-content {
+  flex: 1;
+}
+
+.lead-role-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  margin-bottom: 0.5rem;
+}
+
+.lead-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.25rem;
+}
+
+.lead-position {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+}
+
+.lead-quote {
+  font-size: 0.925rem;
+  color: #334155;
+  line-height: 1.65;
+  font-style: italic;
+  border-left: 3px solid #2563eb;
+  padding-left: 12px;
+  margin: 0;
+  word-break: keep-all;
+}
+
+/* 연락처 채널 그리드 */
+.contact-channels-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+
+.contact-channel-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.channel-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+}
+
+.channel-icon.github {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.channel-icon.email {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.channel-icon.infra {
+  background: #fdf2f8;
+  color: #db2777;
+}
+
+.channel-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.channel-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+  word-break: keep-all;
+  flex-grow: 1;
+}
+
+.channel-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.channel-links li a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2563eb;
+  text-decoration: none;
+  transition: color 0.15s ease, text-decoration 0.15s ease;
+  word-break: break-all;
+}
+
+.channel-links li a:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.channel-links li a svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* 가이드 및 팁 박스 */
+.support-tips-box {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 1.5rem 1.75rem;
+}
+
+.support-tips-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.support-tips-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.support-tip-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.support-tip-item h5 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.35rem;
+}
+
+.support-tip-item p {
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.5;
+  margin: 0;
+  word-break: keep-all;
+}
+
+/* 반응형 미디어 쿼리 */
+@media (max-width: 1024px) {
+  .metrics-grid,
+  .pipeline-flow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .feature-grid,
+  .tech-groups,
+  .contact-channels-grid,
+  .support-tips-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .info-container {
+    padding: 1.5rem 1rem 3rem 1rem;
+  }
+  .info-hero h2 {
+    font-size: 1.6rem;
+  }
+  .metrics-grid,
+  .pipeline-flow,
+  .feature-grid,
+  .tech-groups,
+  .contact-channels-grid,
+  .support-tips-list {
+    grid-template-columns: 1fr;
+  }
+  .contact-lead-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 1.25rem;
+  }
+  .lead-quote {
+    border-left: none;
+    border-top: 2px solid #2563eb;
+    padding-left: 0;
+    padding-top: 8px;
+  }
+}

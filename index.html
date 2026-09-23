@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="css/components/header.css?v=20260923" />
   <link rel="stylesheet" href="css/components/layer-panel.css?v=20260923" />
   <link rel="stylesheet" href="css/components/map-controls.css" />
+  <link rel="stylesheet" href="css/components/info-pages.css?v=20260923" />
   <style>
     /* CCTV 팝업 비디오 스타일 */
     .cctv-video-container {
@@ -624,24 +625,268 @@
 
       <!-- 소개 페이지 -->
       <div id="about-page" class="page">
-        <div class="content-container">
-          <h2>서비스 소개</h2>
-          <p>
-            이 서비스는 OpenLayers와 VWorld를 활용한 인터랙티브 맵
-            서비스입니다.
-          </p>
-          <div class="features">
-            <div class="feature">
-              <h3>다양한 배경지도</h3>
-              <p>일반지도, 위성영상, 하이브리드 지도를 제공합니다.</p>
+        <div class="info-container">
+          <!-- 히어로 헤더 -->
+          <div class="info-hero">
+            <div class="info-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              </svg>
+              <span>SJ-LAB 플래그십 GIS 서비스</span>
             </div>
-            <div class="feature">
-              <h3>반응형 디자인</h3>
-              <p>모바일과 데스크톱에서 최적화된 사용자 경험을 제공합니다.</p>
+            <h2>현장 점검부터 사무실 조치까지,<br>원스톱 공간정보(GIS) 시설물 관리 플랫폼</h2>
+            <p>
+              SJ 시설물 관리는 현장 모바일 조사원(외업)과 관제실 및 사무국 관리자(내업)의 업무를 실시간으로 연결하는 
+              차세대 클라우드 GIS 웹 서비스입니다. 2,500여 건의 대용량 시설물 데이터를 OGC 표준 기반으로 시각화하고, 
+              공간 클러스터링, 현장 미디어 관제, 인라인 조치 등록, 공공 표준 PDF 보고서 발행까지 엔드투엔드로 완결합니다.
+            </p>
+          </div>
+
+          <!-- 주요 운영 지표 (Metrics Grid) -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <div class="metric-val">2,500+</div>
+              <div class="metric-label">실시간 시설물 POI</div>
+              <div class="metric-desc">BBOX 뷰포트 프리패칭 및 최적화 렌더링</div>
             </div>
-            <div class="feature">
-              <h3>SPA 구조</h3>
-              <p>페이지 새로고침 없이 부드러운 네비게이션을 제공합니다.</p>
+            <div class="metric-card">
+              <div class="metric-val">30s</div>
+              <div class="metric-label">무중단 증분 동기화</div>
+              <div class="metric-desc">모바일 현장점검 → PostGIS 실시간 적재</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-val">6단계</div>
+              <div class="metric-label">내업 조치 워크플로우</div>
+              <div class="metric-desc">미완료·접수·처리중·완료·보류 상태 제어</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-val">100%</div>
+              <div class="metric-label">OGC 표준 & 공공데이터</div>
+              <div class="metric-desc">WFS/GeoJSON 및 전국 CCTV/버스 연계</div>
+            </div>
+          </div>
+
+          <!-- 엔드투엔드 데이터 파이프라인 -->
+          <div class="info-section">
+            <div class="section-title-wrap">
+              <div class="section-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+              </div>
+              <h3>엔드투엔드(End-to-End) 데이터 아키텍처</h3>
+            </div>
+            <div class="pipeline-flow">
+              <div class="pipeline-card">
+                <span class="pipeline-step-badge">Step 1. 현장 외업</span>
+                <div class="pipeline-title">모바일 현장 점검</div>
+                <span class="pipeline-module">infra-manage-app</span>
+                <p class="pipeline-desc">
+                  QField 기반 모바일 앱으로 현장 조사원이 지오메트리, 파손 상태, 보수 필요 여부, 사진·음성·동영상을 오프라인/온라인으로 수집합니다.
+                </p>
+              </div>
+              <div class="pipeline-card">
+                <span class="pipeline-step-badge">Step 2. 클라우드 연동</span>
+                <div class="pipeline-title">증분 동기화 엔진</div>
+                <span class="pipeline-module">sj-qfieldsync</span>
+                <p class="pipeline-desc">
+                  Python 백그라운드 데몬이 30초 주기로 변경 델타 패킷을 감지하여 PostGIS <code>infra_facilities</code> 공간 테이블로 자동 머지합니다.
+                </p>
+              </div>
+              <div class="pipeline-card">
+                <span class="pipeline-step-badge">Step 3. 공간 API</span>
+                <div class="pipeline-title">고성능 공간 백엔드</div>
+                <span class="pipeline-module">mapservice-rest</span>
+                <p class="pipeline-desc">
+                  Spring Boot 3 + PostGIS GiST 인덱스 기반으로 뷰포트 BBOX 공간 질의를 초고속 처리하고 표준 GeoJSON 피처 컬렉션을 스트리밍합니다.
+                </p>
+              </div>
+              <div class="pipeline-card">
+                <span class="pipeline-step-badge">Step 4. 웹 관제</span>
+                <div class="pipeline-title">인터랙티브 웹 관제</div>
+                <span class="pipeline-module">sj-lab-mapservice</span>
+                <p class="pipeline-desc">
+                  OpenLayers 기반 클러스터링/스파이더링 핀 표출, 멀티미디어 실시간 검토, 내업 인라인 조치 및 공공 서식 PDF 보고서를 원클릭 발행합니다.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 주요 기능 하이라이트 -->
+          <div class="info-section">
+            <div class="section-title-wrap">
+              <div class="section-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+              </div>
+              <h3>주요 기능 및 엔지니어링 하이라이트</h3>
+            </div>
+            <div class="feature-grid">
+              <div class="feature-box">
+                <div class="feature-header">
+                  <div class="feature-box-icon blue">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                      <path d="M2 12h20"/>
+                    </svg>
+                  </div>
+                  <h4>클러스터링 & Spidering 분산</h4>
+                </div>
+                <p>
+                  대규모 시설물 핀을 지도 축척에 맞게 지능적으로 그룹화하고, <code>geometryFunction</code> 연산으로 UI 목록과 배지 건수를 100% 동기화합니다. 동일 좌표 초근접 지점은 고배율 시 나선형(Spidering)으로 펼쳐 정밀 선택성을 보장합니다.
+                </p>
+              </div>
+
+              <div class="feature-box">
+                <div class="feature-header">
+                  <div class="feature-box-icon emerald">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polygon points="23 7 16 12 23 17 23 7"/>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                  </div>
+                  <h4>현장 멀티미디어 실시간 관제</h4>
+                </div>
+                <p>
+                  현장 조사원이 스마트폰으로 기록한 고화질 사진, 현장 음성(M4A) 녹음, 동영상(MP4)을 브라우저 상세 팝업에서 별도 다운로드 없이 즉시 스트리밍 재생하여 파손 및 결함 현황을 신속히 파악합니다.
+                </p>
+              </div>
+
+              <div class="feature-box">
+                <div class="feature-header">
+                  <div class="feature-box-icon amber">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                      <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                  </div>
+                  <h4>내업 조치 & 표준 PDF 보고서</h4>
+                </div>
+                <p>
+                  보수 필요 시설물에 대해 접수·처리중·완료 등 상태 전환, 조치 내용, 전/후 사진 Canvas 자동 압축 업로드를 지원하며, 1클릭으로 공공기관 표준 서식의 PDF 현장점검 보고서를 즉각 생성·다운로드합니다.
+                </p>
+              </div>
+
+              <div class="feature-box">
+                <div class="feature-header">
+                  <div class="feature-box-icon violet">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="2"/>
+                      <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>
+                    </svg>
+                  </div>
+                  <h4>전국 실시간 교통 CCTV 연계</h4>
+                </div>
+                <p>
+                  국가교통정보센터(ITS) API와 연동하여 전국 고속도로 및 주요 국도 CCTV 위치를 지도 상에 오버레이하고, Hls.js 기반 저지연 스트리밍 엔진을 통해 실시간 도로 및 기상 상황을 동시 모니터링합니다.
+                </p>
+              </div>
+
+              <div class="feature-box">
+                <div class="feature-header">
+                  <div class="feature-box-icon indigo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                      <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                  </div>
+                  <h4>3단계 행정구역 연쇄 필터</h4>
+                </div>
+                <p>
+                  시·도 → 시·군·구 → 읍·면·동으로 이어지는 동적 연쇄 드롭다운을 통해 목적 구역으로 즉각 뷰포트를 이동하고, 키워드 검색 및 보수 필요 여부 라디오 필터와 결합하여 대규모 시설물을 신속히 탐색합니다.
+                </p>
+              </div>
+
+              <div class="feature-box">
+                <div class="feature-header">
+                  <div class="feature-box-icon rose">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="6" cy="6" r="3"/>
+                      <circle cx="18" cy="18" r="3"/>
+                      <line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/>
+                    </svg>
+                  </div>
+                  <h4>정밀 공간 측정 도구 & 캡처</h4>
+                </div>
+                <p>
+                  거리, 면적, 반경, 각도 등 공간 분석 인터랙션 도구를 완비하였으며, 브라우저 Canvas 기반 지도 캡처 기능과 VWorld 일반·위성·하이브리드 베이스맵 스위칭을 지원합니다.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 기술 스택 -->
+          <div class="info-section">
+            <div class="section-title-wrap">
+              <div class="section-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+              </div>
+              <h3>적용 기술 스택 (Technology Stack)</h3>
+            </div>
+            <div class="tech-groups">
+              <div class="tech-group-card">
+                <div class="tech-group-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="16 18 22 12 16 6"/>
+                    <polyline points="8 6 2 12 8 18"/>
+                  </svg>
+                  Frontend & GIS
+                </div>
+                <div class="tech-badges">
+                  <span class="tech-badge">OpenLayers 7.x</span>
+                  <span class="tech-badge">Vanilla JavaScript</span>
+                  <span class="tech-badge">ES Modules</span>
+                  <span class="tech-badge">Hls.js</span>
+                  <span class="tech-badge">jsPDF</span>
+                  <span class="tech-badge">VWorld Open API</span>
+                </div>
+              </div>
+
+              <div class="tech-group-card">
+                <div class="tech-group-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                    <line x1="6" y1="6" x2="6.01" y2="6"/>
+                    <line x1="6" y1="18" x2="6.01" y2="18"/>
+                  </svg>
+                  Backend & Database
+                </div>
+                <div class="tech-badges">
+                  <span class="tech-badge">Spring Boot 3.x</span>
+                  <span class="tech-badge">Java 17</span>
+                  <span class="tech-badge">PostgreSQL 15</span>
+                  <span class="tech-badge">PostGIS Spatial Engine</span>
+                  <span class="tech-badge">HikariCP</span>
+                  <span class="tech-badge">MyBatis</span>
+                </div>
+              </div>
+
+              <div class="tech-group-card">
+                <div class="tech-group-title">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>
+                  </svg>
+                  DevOps & Cloud
+                </div>
+                <div class="tech-badges">
+                  <span class="tech-badge">Kubernetes (k3s)</span>
+                  <span class="tech-badge">ArgoCD GitOps</span>
+                  <span class="tech-badge">Jenkins CI/CD</span>
+                  <span class="tech-badge">Spring Cloud Gateway</span>
+                  <span class="tech-badge">Eureka Discovery</span>
+                  <span class="tech-badge">Docker Container</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -649,20 +894,156 @@
 
       <!-- 연락처 페이지 -->
       <div id="contact-page" class="page">
-        <div class="content-container">
-          <h2>연락처</h2>
-          <div class="contact-info">
-            <div class="contact-item">
-              <h3>이메일</h3>
-              <p>contact@sjlab.com</p>
+        <div class="info-container">
+          <!-- 헤더 섹션 -->
+          <div class="info-hero">
+            <div class="info-badge">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span>SJ-LAB DevOps & Engineering</span>
             </div>
-            <div class="contact-item">
-              <h3>전화번호</h3>
-              <p>02-1234-5678</p>
+            <h2>시스템 문의 및 플랫폼 기술 지원</h2>
+            <p>
+              SJ-LAB 공간정보(GIS) 시설물 관리 플랫폼에 대한 기술 문의, 아키텍처 연동, 시스템 개선 피드백 또는 
+              장애 제보는 아래 공식 채널을 통해 언제든 연락해 주시기 바랍니다.
+            </p>
+          </div>
+
+          <!-- 개발자 & 리드 프로필 카드 -->
+          <div class="contact-lead-card">
+            <div class="lead-avatar-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
             </div>
-            <div class="contact-item">
-              <h3>주소</h3>
-              <p>서울특별시 강남구 테헤란로 123</p>
+            <div class="lead-info-content">
+              <span class="lead-role-badge">Platform Architect & Lead Engineer</span>
+              <div class="lead-name">주성중 (Sungjoong Joo)</div>
+              <div class="lead-position">SJ-LAB Project Lead · DevOps & Full-Stack Platform Engineer</div>
+              <p class="lead-quote">
+                "현장 모바일 조사원과 관제실의 공간 데이터를 오차 없이 매끄럽게 연결하고, GitOps 기반의 자동화된 
+                클라우드 네이티브 인프라 위에서 24/7 견고하게 작동하는 소프트웨어를 추구합니다."
+              </p>
+            </div>
+          </div>
+
+          <!-- 공식 연락처 및 채널 그리드 -->
+          <div class="contact-channels-grid">
+            <div class="contact-channel-card">
+              <div class="channel-icon github">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                </svg>
+              </div>
+              <div class="channel-title">GitHub 저장소</div>
+              <p class="channel-desc">SJ-LAB의 전체 마이크로서비스 및 공간정보 웹 소스코드가 오픈되어 있습니다.</p>
+              <ul class="channel-links">
+                <li>
+                  <a href="https://github.com/stylealist/sj-lab" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    stylealist/sj-lab (메인 플랫폼)
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/stylealist/sj-lab-mapservice" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    stylealist/sj-lab-mapservice (GIS 웹)
+                  </a>
+                </li>
+                <li>
+                  <a href="https://github.com/stylealist/mapservice-rest" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    stylealist/mapservice-rest (공간 REST)
+                  </a>
+                </li>
+              </ul>
+            </div>
+
+            <div class="contact-channel-card">
+              <div class="channel-icon email">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                  <polyline points="22,6 12,13 2,6"/>
+                </svg>
+              </div>
+              <div class="channel-title">이메일 문의 & 지원</div>
+              <p class="channel-desc">기술 지원, 시스템 연동 및 비즈니스 협력 제안은 아래 이메일로 수신 즉시 검토됩니다.</p>
+              <ul class="channel-links">
+                <li>
+                  <a href="mailto:stylealist@naver.com">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    stylealist@naver.com
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:contact@sj-lab.co.kr">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    contact@sj-lab.co.kr
+                  </a>
+                </li>
+                <li>
+                  <span style="font-size:0.8rem; color:#64748b; margin-top:4px;">(영업일 기준 24시간 이내 회신)</span>
+                </li>
+              </ul>
+            </div>
+
+            <div class="contact-channel-card">
+              <div class="channel-icon infra">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+              </div>
+              <div class="channel-title">플랫폼 포털 & 인프라</div>
+              <p class="channel-desc">SJ-LAB 클라우드 생태계의 중앙 허브 및 DevOps 관제 대시보드 링크입니다.</p>
+              <ul class="channel-links">
+                <li>
+                  <a href="https://sj-lab.co.kr" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    SJ-LAB 통합 허브 포털
+                  </a>
+                </li>
+                <li>
+                  <a href="https://argo.sj-lab.co.kr" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    ArgoCD GitOps 대시보드
+                  </a>
+                </li>
+                <li>
+                  <a href="https://jenkins.sj-lab.co.kr" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    Jenkins CI 자동화 파이프라인
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 기술 지원 가이드 박스 -->
+          <div class="support-tips-box">
+            <div class="support-tips-title">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              <span>효율적인 기술 지원 및 이슈 리포트 안내</span>
+            </div>
+            <div class="support-tips-list">
+              <div class="support-tip-item">
+                <h5>1. 공간 데이터 오류 제보</h5>
+                <p>시설물 좌표 불일치나 행정구역 경계 표출 오류는 시설물 ID 또는 화면 우측 상단의 '지도캡쳐' 이미지를 첨부해 주시면 신속히 교정됩니다.</p>
+              </div>
+              <div class="support-tip-item">
+                <h5>2. 현장 미디어 동기화 문의</h5>
+                <p>현장 모바일 앱 조사 결과가 30초 내에 웹에 반영되지 않는 경우, 모바일 기기의 네트워크 상태 및 QFieldCloud 동기화 로그를 함께 확인합니다.</p>
+              </div>
+              <div class="support-tip-item">
+                <h5>3. 공공 API 및 신규 레이어 연동</h5>
+                <p>국가교통정보센터(ITS) CCTV 외 추가 지자체 CCTV, 하천 수위계, 지진 가속도계 등 신규 OGC 레이어 연동 요청을 환영합니다.</p>
+              </div>
             </div>
           </div>
         </div>
