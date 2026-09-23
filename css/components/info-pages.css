@@ -1,12 +1,20 @@
 /* 소개(About) 및 연락처(Contact) 전용 모던 스타일 */
 
-/* 컨테이너 전역 설정 */
+/* 컨테이너 전역 설정: 화면 전체(100%)를 차지하여 스크롤바(사이드바)가 화면 맨 우측 끝에 밀착되도록 설정 */
 .info-container {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 2.5rem 2rem 4rem 2rem;
+  width: 100%;
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* 내부 콘텐츠: 화면을 전체적으로 시원하게 활용할 수 있도록 max-width를 1480px로 확장 */
+.info-inner {
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 2.75rem clamp(1.5rem, 3.5vw, 3.5rem) 5rem clamp(1.5rem, 3.5vw, 3.5rem);
   box-sizing: border-box;
 }
 
@@ -66,9 +74,43 @@
   font-size: 1.05rem;
   color: #475569;
   line-height: 1.75;
-  max-width: 860px;
+  max-width: 1040px;
   margin: 0 auto;
   word-break: keep-all;
+}
+
+.info-hero-actions {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: center;
+}
+
+.info-video-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #ffffff;
+  color: #1e3a8a;
+  border: 1px solid #bfdbfe;
+  padding: 8px 18px;
+  border-radius: 9999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.08);
+  transition: all 0.2s ease;
+}
+
+.info-video-trigger-btn:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.16);
+}
+
+.info-video-trigger-btn svg {
+  fill: currentColor;
 }
 
 /* 지표 그리드 (Metrics Grid) */
@@ -560,7 +602,7 @@
 }
 
 @media (max-width: 768px) {
-  .info-container {
+  .info-inner {
     padding: 1.5rem 1rem 3rem 1rem;
   }
   .info-hero h2 {
