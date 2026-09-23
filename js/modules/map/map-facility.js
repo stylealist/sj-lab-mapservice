@@ -480,6 +480,7 @@ function getFacilityStyle(iconConfig, needsRepair, isOfficeDone, isSelected) {
       rotation: 0,
       size: FACILITY_ICON_SIZE,
       imgSize: FACILITY_ICON_SIZE,
+      declutterMode: FACILITY_DECLUTTER_MODE,
     }),
   });
 
@@ -491,6 +492,7 @@ function getFacilityStyle(iconConfig, needsRepair, isOfficeDone, isSelected) {
             radius: 20,
             fill: new ol.style.Fill({ color: "rgba(59, 130, 246, 0.35)" }),
             stroke: new ol.style.Stroke({ color: "#2563eb", width: 3 }),
+            declutterMode: FACILITY_DECLUTTER_MODE,
           }),
         }),
         iconStyle,
@@ -501,8 +503,9 @@ function getFacilityStyle(iconConfig, needsRepair, isOfficeDone, isSelected) {
   return style;
 }
 
-// 시설물 레이어 스타일 함수
-function facilityStyleFunction(feature) {
+// 시설물 핀 스타일 — 필터만 보고 만든다(펼침 여부는 보지 않음).
+// 펼친 핀은 원래 자리 대신 펼쳐진 자리에 그려야 하므로 펼침 레이어가 이 함수를 직접 쓴다.
+function buildFacilityPinStyle(feature) {
   const totalId = feature.get("total_id") || feature.getId();
   const isSelected = Boolean(selectedTotalId) && String(totalId) === String(selectedTotalId);
   const needsRepair = String(feature.get("repair_required_yn") || "").toUpperCase() === "Y";
@@ -519,6 +522,485 @@ function facilityStyleFunction(feature) {
     isOfficeDone,
     isSelected
   );
+}
+
+// 시설물 레이어 스타일 함수 — 펼쳐 놓은 시설물은 펼침 레이어가 대신 그리므로 여기서는 숨긴다
+function facilityStyleFunction(feature) {
+  if (isFacilitySpiderExpanded(feature)) return null;
+  return buildFacilityPinStyle(feature);
+}
+
+/* ============================================================================
+   레이어 순서
+   시설물(핀·묶음)은 이 서비스의 주 기능이라 **항상 다른 레이어 위에** 그린다.
+   다른 레이어의 현재 값: WFS·WMS 1000, 영역 선택 999~1000, 측정·기본 지도는 미지정(0).
+   ============================================================================ */
+
+// 다른 레이어와 충분히 벌려 둔 기본값. 새 레이어가 이 값에 가까워지면 아래 보정이 다시 올린다.
+const FACILITY_LAYER_Z_INDEX = 1500;
+// 시설물 심볼의 declutter 모드.
+// "obstacle" = 항상 그리되(하나도 숨지 않음) 다른 declutter 심볼이 이 자리를 피해 가게 한다.
+// zIndex 만으로는 부족하다 — OpenLayers 가 declutter 심볼을 프레임 마지막에 따로 그려서
+// declutter 를 쓰는 WFS 레이어 아이콘이 시설물 위에 올라오기 때문(2026-09-23 실제 발생).
+const FACILITY_DECLUTTER_MODE = "obstacle";
+// 새 레이어가 시설물보다 높거나 같게 들어왔을 때 올려 줄 여유
+const FACILITY_LAYER_Z_MARGIN = 10;
+
+/**
+ * 시설물 레이어를 항상 맨 위로 유지한다.
+ * 지금은 시설물(1500)이 가장 높지만, 다른 모듈이 나중에 더 높은 zIndex 로 레이어를 추가하면
+ * 핀이 가려지므로 레이어가 추가·제거될 때마다 다시 계산한다.
+ */
+function keepFacilityLayerOnTop(map) {
+  const raiseFacilityLayer = () => {
+    if (!facilityLayer) return;
+    let highestOther = Number.NEGATIVE_INFINITY;
+    map.getLayers().forEach((layer) => {
+      // 시설물 자신과 그 위에 붙는 펼침 레이어는 기준에서 뺀다(서로를 밀어 올리며 값이 무한히 커지는 것 방지)
+      if (layer === facilityLayer || layer === facilitySpiderLayer) return;
+      const zIndex = layer.getZIndex();
+      if (typeof zIndex === "number" && zIndex > highestOther) {
+        highestOther = zIndex;
+      }
+    });
+
+    const desired =
+      highestOther === Number.NEGATIVE_INFINITY
+        ? FACILITY_LAYER_Z_INDEX
+        : Math.max(FACILITY_LAYER_Z_INDEX, highestOther + FACILITY_LAYER_Z_MARGIN);
+    if (facilityLayer.getZIndex() !== desired) {
+      facilityLayer.setZIndex(desired);
+    }
+    // 펼친 핀은 묶음 배지 위에 있어야 한다
+    if (facilitySpiderLayer && facilitySpiderLayer.getZIndex() !== desired + 1) {
+      facilitySpiderLayer.setZIndex(desired + 1);
+    }
+  };
+
+  raiseFacilityLayer();
+  // setZIndex 는 add/remove 이벤트를 일으키지 않으므로 순환 호출 걱정은 없다
+  map.getLayers().on("add", raiseFacilityLayer);
+  map.getLayers().on("remove", raiseFacilityLayer);
+}
+
+/* ============================================================================
+   핀 묶음(클러스터링)
+   전국 조회 시 2,400여 개의 핀이 겹쳐 개수를 가늠할 수 없으므로, 가까운 핀을 하나로 묶어
+   개수를 보여주고 누르면 그 범위로 확대한다. 묶음은 표시 방식일 뿐이라 원본 소스
+   (facilitySource)는 그대로 두고 ol.source.Cluster 를 씌운다 — getFeatureById·목록 연동 등
+   기존 코드는 원본 소스를 계속 쓴다.
+   ============================================================================ */
+
+// 묶는 거리(px)와 묶음끼리의 최소 간격(px)
+const FACILITY_CLUSTER_DISTANCE = 44;
+const FACILITY_CLUSTER_MIN_DISTANCE = 20;
+const FACILITY_CLUSTER_STORAGE_KEY = "sjLabFacilityCluster";
+
+let facilityClusterSource = null;
+let facilityClusteringEnabled = true;
+const facilityClusterStyleCache = new Map();
+
+// 필터를 통과한 피처만 묶음에 넣는다. null 을 돌려주면 그 피처는 묶음에서 빠지므로
+// 화면의 개수 배지가 필터 결과와 항상 일치한다(스타일에서 거르는 것만으로는 개수가 어긋남).
+function facilityClusterGeometry(feature) {
+  const needsRepair = String(feature.get("repair_required_yn") || "").toUpperCase() === "Y";
+  const officeWorkStatus = feature.get("office_work_status") || "";
+  if (!matchesFacilityRepairFilter(needsRepair)) return null;
+  if (!matchesFacilityOfficeFilter(needsRepair, officeWorkStatus)) return null;
+
+  const geometry = feature.getGeometry();
+  if (!geometry) return null;
+  return geometry.getType() === "Point"
+    ? geometry
+    : new ol.geom.Point(ol.extent.getCenter(geometry.getExtent()));
+}
+
+// 묶음 색: 아직 처리할 보수 건이 있으면 경고색, 전부 내업 완료면 완료색, 그 외에는 기본색
+function resolveFacilityClusterTone(members) {
+  let hasRepair = false;
+  let hasOpenRepair = false;
+  members.forEach((member) => {
+    if (String(member.get("repair_required_yn") || "").toUpperCase() !== "Y") return;
+    hasRepair = true;
+    if (String(member.get("office_work_status") || "").toUpperCase() !== "DONE") {
+      hasOpenRepair = true;
+    }
+  });
+  if (hasOpenRepair) return "warn";
+  if (hasRepair) return "done";
+  return "base";
+}
+
+/**
+ * 묶음 배지를 SVG 한 장으로 만든다(원 + 개수 숫자, 선택 시 강조 링까지).
+ * 숫자를 `ol.style.Text` 로 얹지 않는 이유: 레이어가 declutter 라 텍스트는 declutter 대상이 되어
+ * 같은 자리의 원(obstacle)과 충돌해 사라진다(2026-09-23 실제 발생). 이미지 하나로 그리면 항상 보인다.
+ */
+function buildFacilityClusterIconUrl(size, color, radius, isSelected) {
+  const ring = isSelected ? radius + 7 : radius;
+  const half = Math.ceil(ring + 3);
+  const box = half * 2;
+  const fontSize = radius >= 20 ? 13 : 12;
+
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' + box + '" height="' + box + '" viewBox="0 0 ' + box + " " + box + '">' +
+    (isSelected
+      ? '<circle cx="' + half + '" cy="' + half + '" r="' + (radius + 7) +
+        '" fill="rgba(59, 130, 246, 0.30)" stroke="#2563eb" stroke-width="3"/>'
+      : "") +
+    '<circle cx="' + half + '" cy="' + half + '" r="' + radius + '" fill="' + color + '" stroke="#ffffff" stroke-width="2"/>' +
+    '<text x="' + half + '" y="' + half + '" text-anchor="middle" dominant-baseline="central" ' +
+    'font-family="\'Noto Sans KR\', sans-serif" font-size="' + fontSize + '" font-weight="600" fill="#ffffff">' +
+    size +
+    "</text></svg>";
+
+  return { url: "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg), box };
+}
+
+function getFacilityClusterStyle(size, tone, isSelected) {
+  const cacheKey = `${size}|${tone}|${isSelected ? "sel" : "def"}`;
+  if (facilityClusterStyleCache.has(cacheKey)) {
+    return facilityClusterStyleCache.get(cacheKey);
+  }
+
+  const color =
+    tone === "warn" ? FACILITY_WARN_COLOR : tone === "done" ? FACILITY_OFFICE_DONE_COLOR : FACILITY_ICON_COLOR;
+  // 개수가 많을수록 조금씩 커지되 한없이 커지지 않도록 로그로 제한한다
+  const radius = Math.round(Math.min(26, 14 + Math.log10(Math.max(size, 1)) * 8));
+  const icon = buildFacilityClusterIconUrl(size, color, radius, isSelected);
+
+  const style = new ol.style.Style({
+    image: new ol.style.Icon({
+      src: icon.url,
+      anchor: [0.5, 0.5],
+      size: [icon.box, icon.box],
+      imgSize: [icon.box, icon.box],
+      declutterMode: FACILITY_DECLUTTER_MODE,
+    }),
+  });
+
+  facilityClusterStyleCache.set(cacheKey, style);
+  return style;
+}
+
+// 묶음 레이어 스타일 — 1건이면 기존 시설물 핀 그대로, 2건 이상이면 개수 배지.
+// 이미 펼쳐 놓은 묶음은 배지를 그리지 않는다(펼친 핀만 보이게).
+function facilityClusterStyleFunction(clusterFeature) {
+  const members = clusterFeature.get("features") || [];
+  if (members.length === 0) return null;
+  if (isFacilitySpiderExpandedGroup(members)) return null;
+  if (members.length === 1) return facilityStyleFunction(members[0]);
+
+  const isSelected =
+    Boolean(selectedTotalId) &&
+    members.some((member) => String(member.get("total_id") || member.getId()) === String(selectedTotalId));
+
+  return getFacilityClusterStyle(members.length, resolveFacilityClusterTone(members), isSelected);
+}
+
+// 묶음 안의 원본 피처들 (묶지 않은 상태면 그 피처 자신)
+function getClusterMembers(feature) {
+  const members = feature.get("features");
+  return Array.isArray(members) ? members : [feature];
+}
+
+/* ----------------------------------------------------------------------------
+   묶음 펼치기(spiderfy)
+   같은 건물에 여러 시설물이 있으면 좌표가 사실상 같아 **끝까지 확대해도 묶음이 풀리지 않는다**.
+   그 경우 핀을 중심에서 부채꼴로 펼쳐(연결선 포함) 하나씩 고를 수 있게 한다.
+   ---------------------------------------------------------------------------- */
+
+const FACILITY_SPIDER_MIN_RADIUS = 42; // 펼칠 때 중심에서 핀까지의 최소 거리(px)
+const FACILITY_SPIDER_STEP = 5; // 개수가 많을수록 반지름을 늘리는 정도(px)
+// 이 배율 이상으로 충분히 확대하면 같은 자리 시설물이 저절로 펼쳐진다(클릭할 필요 없음).
+// 건물 하나가 화면을 채울 정도로 들어갔을 때 나오도록 잡았다(최대 배율 19).
+const FACILITY_SPIDER_MIN_ZOOM = 18;
+
+let facilitySpiderSource = null;
+let facilitySpiderLayer = null;
+let facilitySpiderKey = null; // 지금 펼쳐 둔 구성이 무엇인지 — 같으면 다시 그리지 않는다
+// 지금 펼쳐 놓은 시설물 id. 원래 자리의 핀과 묶음 배지를 숨기는 데 쓴다.
+const facilitySpiderExpandedIds = new Set();
+
+function isFacilitySpiderExpanded(feature) {
+  if (facilitySpiderExpandedIds.size === 0) return false;
+  return facilitySpiderExpandedIds.has(String(feature.get("total_id") || feature.getId()));
+}
+
+// 묶음 구성원이 전부 펼쳐진 상태인지 (그 묶음의 개수 배지를 숨길지 판단)
+function isFacilitySpiderExpandedGroup(members) {
+  if (facilitySpiderExpandedIds.size === 0 || members.length === 0) return false;
+  return members.every((member) => isFacilitySpiderExpanded(member));
+}
+
+// 펼친 핀 스타일 — 원본 피처 기준으로 기존 핀 규칙을 그대로 쓴다(펼침 여부는 보지 않는 builder 사용)
+function facilitySpiderStyleFunction(feature) {
+  const source = feature.get("__facilityFeature");
+  return source ? buildFacilityPinStyle(source) : null;
+}
+
+function initFacilitySpiderLayer(map) {
+  if (facilitySpiderLayer) return;
+  facilitySpiderSource = new ol.source.Vector();
+  facilitySpiderLayer = new ol.layer.Vector({
+    source: facilitySpiderSource,
+    style: facilitySpiderStyleFunction,
+    updateWhileAnimating: false,
+    updateWhileInteracting: false,
+    // 시설물 레이어와 같은 이유로 obstacle declutter (docs/map-architecture.md 참고)
+    declutter: true,
+    zIndex: FACILITY_LAYER_Z_INDEX + 1,
+  });
+  map.addLayer(facilitySpiderLayer);
+
+  // 확대·이동이 끝날 때마다 펼침 상태를 다시 계산한다(클릭이 아니라 배율로 결정)
+  map.on("moveend", syncFacilitySpiders);
+}
+
+function clearFacilitySpider() {
+  facilitySpiderKey = null;
+  facilitySpiderExpandedIds.clear();
+  if (facilitySpiderSource) facilitySpiderSource.clear();
+}
+
+// 구성원들이 사실상 한 점에 모여 있는지 (확대해도 갈라지지 않는 상태)
+function isSameSpotMembers(members, resolution) {
+  const extent = ol.extent.createEmpty();
+  members.forEach((member) => {
+    const geometry = member.getGeometry();
+    if (geometry) ol.extent.extend(extent, geometry.getExtent());
+  });
+  if (ol.extent.isEmpty(extent)) return false;
+  return ol.extent.getWidth(extent) < resolution && ol.extent.getHeight(extent) < resolution;
+}
+
+/**
+ * 지금 화면에서 펼쳐야 할 묶음들을 모은다.
+ * - 묶어 보기 켬: 화면 안의 묶음 중 구성원이 한 점에 모인 것
+ * - 묶어 보기 끔: 좌표가 같아 서로 완전히 겹치는 핀들(필터 통과분만)
+ */
+function collectFacilitySpiderGroups() {
+  const map = getMap();
+  if (!map) return [];
+
+  const view = map.getView();
+  const zoom = view.getZoom();
+  if (typeof zoom !== "number" || zoom < FACILITY_SPIDER_MIN_ZOOM) return [];
+
+  const size = map.getSize();
+  if (!size) return [];
+  const extent = view.calculateExtent(size);
+  const resolution = view.getResolution();
+  const groups = [];
+
+  if (facilityClusteringEnabled && facilityClusterSource) {
+    facilityClusterSource.forEachFeatureInExtent(extent, (clusterFeature) => {
+      const members = clusterFeature.get("features") || [];
+      if (members.length < 2) return;
+      if (!isSameSpotMembers(members, resolution)) return;
+      groups.push({ coordinate: clusterFeature.getGeometry().getCoordinates(), members });
+    });
+    return groups;
+  }
+
+  if (!facilitySource) return [];
+  // 묶어 보기를 껐을 때도 좌표가 같은 핀은 하나만 보이므로 같은 방식으로 펼친다
+  const byCoordinate = new Map();
+  facilitySource.forEachFeatureInExtent(extent, (feature) => {
+    const needsRepair = String(feature.get("repair_required_yn") || "").toUpperCase() === "Y";
+    if (!matchesFacilityRepairFilter(needsRepair)) return;
+    if (!matchesFacilityOfficeFilter(needsRepair, feature.get("office_work_status") || "")) return;
+
+    const geometry = feature.getGeometry();
+    if (!geometry || geometry.getType() !== "Point") return;
+    const coordinate = geometry.getCoordinates();
+    const key = coordinate[0].toFixed(2) + "|" + coordinate[1].toFixed(2);
+    if (!byCoordinate.has(key)) byCoordinate.set(key, { coordinate, members: [] });
+    byCoordinate.get(key).members.push(feature);
+  });
+
+  byCoordinate.forEach((group) => {
+    if (group.members.length > 1) groups.push(group);
+  });
+  return groups;
+}
+
+// 펼친 구성이 바뀌었는지 비교할 식별자 (배율이 바뀌면 반지름도 달라지므로 함께 넣는다)
+function buildFacilitySpiderKey(groups, resolution) {
+  if (groups.length === 0) return "";
+  const ids = groups
+    .map((group) =>
+      group.members
+        .map((member) => String(member.get("total_id") || member.getId()))
+        .sort()
+        .join(",")
+    )
+    .sort()
+    .join(";");
+  return ids + "@" + resolution.toFixed(4);
+}
+
+// 한 묶음을 원형으로 펼친 핀을 만든다. 연결선은 그리지 않는다 —
+// 묶음 배지가 사라지고 핀만 자리를 잡아야 "확대하니 저절로 흩어졌다"처럼 보인다.
+function buildFacilitySpiderFeatures(group, resolution) {
+  const { coordinate, members } = group;
+  const radiusPx = FACILITY_SPIDER_MIN_RADIUS + Math.max(0, members.length - 4) * FACILITY_SPIDER_STEP;
+  const radius = radiusPx * resolution;
+
+  return members.map((member, index) => {
+    const angle = (2 * Math.PI * index) / members.length - Math.PI / 2;
+    const target = [coordinate[0] + Math.cos(angle) * radius, coordinate[1] + Math.sin(angle) * radius];
+
+    const leaf = new ol.Feature({ geometry: new ol.geom.Point(target) });
+    // 스타일·클릭 처리에서 원본 피처를 그대로 쓰기 위해 참조만 들고 있는다(속성 복사 X)
+    leaf.set("__facilityFeature", member);
+    return leaf;
+  });
+}
+
+/**
+ * 펼침 상태를 현재 배율·화면에 맞춘다. 클릭이 아니라 **확대만으로** 펼쳐지게 하는 진입점이며,
+ * 구성이 그대로면 아무것도 다시 그리지 않는다(이동할 때마다 깜빡이지 않도록).
+ */
+function syncFacilitySpiders() {
+  if (!facilitySpiderSource) return;
+  const map = getMap();
+  if (!map) return;
+
+  const groups = collectFacilitySpiderGroups();
+  const resolution = map.getView().getResolution() || 1;
+  const key = buildFacilitySpiderKey(groups, resolution);
+
+  if (key === facilitySpiderKey) return;
+
+  facilitySpiderSource.clear();
+  facilitySpiderExpandedIds.clear();
+  facilitySpiderKey = key;
+
+  if (groups.length > 0) {
+    const features = [];
+    groups.forEach((group) => {
+      group.members.forEach((member) => {
+        facilitySpiderExpandedIds.add(String(member.get("total_id") || member.getId()));
+      });
+      features.push(...buildFacilitySpiderFeatures(group, resolution));
+    });
+    facilitySpiderSource.addFeatures(features);
+  }
+
+  // 펼친 대상이 바뀌었으면 원래 자리의 핀·배지를 숨기거나 되살려야 하므로 본 레이어도 다시 그린다
+  if (facilityClusteringEnabled && facilityClusterSource) {
+    facilityClusterSource.changed();
+  } else if (facilitySource) {
+    facilitySource.changed();
+  }
+}
+
+// 펼친 핀에서 원본 시설물 피처를 꺼낸다 (연결선이면 null)
+function resolveSpiderFacility(feature) {
+  if (!feature) return null;
+  return feature.get("__facilityFeature") || null;
+}
+
+/**
+ * 묶음을 눌렀을 때: 그 범위로 확대한다.
+ * 좌표가 사실상 같아 확대해도 갈라지지 않는 묶음은 펼침 배율까지 확대만 한다 —
+ * 그 배율에 이르면 `syncFacilitySpiders()`가 알아서 부채꼴로 펼친다(클릭으로 펼치지 않음).
+ */
+function expandFacilityCluster(members) {
+  const map = getMap();
+  if (!map || members.length === 0) return;
+
+  const extent = ol.extent.createEmpty();
+  members.forEach((member) => {
+    const geometry = member.getGeometry();
+    if (geometry) ol.extent.extend(extent, geometry.getExtent());
+  });
+  if (ol.extent.isEmpty(extent)) return;
+
+  const view = map.getView();
+  const center = ol.extent.getCenter(extent);
+
+  if (isSameSpotMembers(members, view.getResolution())) {
+    // 범위가 없으니 fit 은 의미가 없다. 펼쳐지는 배율까지만 올려 준다
+    const targetZoom = Math.min(Math.max(view.getZoom() + 2, FACILITY_SPIDER_MIN_ZOOM), view.getMaxZoom());
+    view.animate({ center, zoom: targetZoom, duration: 400 });
+    return;
+  }
+
+  view.fit(extent, {
+    duration: 400,
+    padding: [80, 80, 80, 80],
+    maxZoom: Math.max(view.getZoom() + 1, 17),
+  });
+}
+
+// 클러스터링 켬/끔 — 레이어의 소스와 스타일만 바꾼다(원본 소스와 데이터는 그대로)
+function applyFacilityClustering(enabled) {
+  facilityClusteringEnabled = Boolean(enabled);
+  clearFacilitySpider(); // 묶음 여부가 바뀌면 펼침 구성도 달라지므로 비우고 다시 계산한다
+  if (!facilityLayer || !facilitySource) return;
+
+  if (facilityClusteringEnabled) {
+    if (!facilityClusterSource) {
+      facilityClusterSource = new ol.source.Cluster({
+        source: facilitySource,
+        distance: FACILITY_CLUSTER_DISTANCE,
+        minDistance: FACILITY_CLUSTER_MIN_DISTANCE,
+        geometryFunction: facilityClusterGeometry,
+      });
+    }
+    facilityLayer.setStyle(facilityClusterStyleFunction);
+    facilityLayer.setSource(facilityClusterSource);
+    facilityClusterSource.refresh();
+  } else {
+    facilityLayer.setStyle(facilityStyleFunction);
+    facilityLayer.setSource(facilitySource);
+  }
+
+  syncFacilitySpiders();
+}
+
+// 필터·선택이 바뀌었을 때 지도 표시 갱신. 묶음은 개수까지 다시 계산해야 하므로 refresh 를 쓴다.
+function refreshFacilityLayer() {
+  // 펼쳐 둔 핀도 선택 강조가 바뀌므로 같이 다시 그린다(내용은 그대로)
+  if (facilitySpiderSource) facilitySpiderSource.changed();
+
+  if (facilityClusteringEnabled && facilityClusterSource) {
+    facilityClusterSource.refresh();
+  } else if (facilitySource) {
+    facilitySource.changed();
+  }
+
+  // 필터가 바뀌면 펼칠 대상도 달라진다 (구성이 같으면 안에서 그냥 빠져나온다)
+  syncFacilitySpiders();
+}
+
+function readFacilityClusterPreference() {
+  try {
+    return window.localStorage.getItem(FACILITY_CLUSTER_STORAGE_KEY) !== "off";
+  } catch (e) {
+    return true; // 사생활 보호 모드 등으로 저장소를 못 읽어도 기본값으로 동작해야 한다
+  }
+}
+
+function saveFacilityClusterPreference(enabled) {
+  try {
+    window.localStorage.setItem(FACILITY_CLUSTER_STORAGE_KEY, enabled ? "on" : "off");
+  } catch (e) {
+    /* 저장에 실패해도 이번 세션 동안은 그대로 동작한다 */
+  }
+}
+
+// 핀 묶음 토글 바인딩 (서버 재조회 없음)
+function bindFacilityClusterToggle() {
+  const toggleEl = document.getElementById("facilityClusterToggle");
+  if (!toggleEl) return;
+  toggleEl.checked = facilityClusteringEnabled;
+  toggleEl.addEventListener("change", () => {
+    applyFacilityClustering(toggleEl.checked);
+    saveFacilityClusterPreference(toggleEl.checked);
+  });
 }
 
 // 팝업 요소 생성
@@ -725,18 +1207,33 @@ function initializeFacilityModule() {
 
   console.log("시설물 모듈 초기화 시작");
 
-  // 벡터 소스 및 레이어 생성 (docs/map-architecture.md 규칙 준수: zIndex 1010, declutter: false)
+  // 벡터 소스 및 레이어 생성 (docs/map-architecture.md 규칙 준수: 최상단 zIndex, obstacle declutter)
   facilitySource = new ol.source.Vector();
   facilityLayer = new ol.layer.Vector({
     source: facilitySource,
     style: facilityStyleFunction,
     updateWhileAnimating: false,
     updateWhileInteracting: false,
-    declutter: false,
-    zIndex: 1010,
+    // declutter 를 켜되 시설물 스타일은 전부 declutterMode: "obstacle" 이다(FACILITY_DECLUTTER_MODE).
+    // OpenLayers 는 declutter 레이어의 심볼을 모든 레이어를 그린 뒤 마지막에 따로 그리므로,
+    // 이걸 끄면 zIndex 를 아무리 올려도 declutter 를 쓰는 WFS 레이어 아이콘에 가려진다.
+    // obstacle 은 "항상 그리되 다른 declutter 심볼이 피해 가게" 하는 모드라 시설물 핀은 하나도 숨지 않는다
+    // (= 목록 건수와 지도 표출 건수 일치 규칙 유지).
+    declutter: true,
+    zIndex: FACILITY_LAYER_Z_INDEX,
   });
 
   map.addLayer(facilityLayer);
+
+  // 묶음을 펼쳤을 때(spiderfy) 핀과 연결선을 그릴 레이어 — 시설물 레이어 바로 위
+  initFacilitySpiderLayer(map);
+
+  // 시설물이 이 서비스의 주 기능이므로 나중에 추가되는 레이어에도 가리지 않게 한다
+  keepFacilityLayerOnTop(map);
+
+  // 핀 묶음(클러스터링) 적용 — 기본 켬, 사용자가 끄면 그 선택을 기억한다
+  facilityClusteringEnabled = readFacilityClusterPreference();
+  applyFacilityClustering(facilityClusteringEnabled);
 
   // 팝업 오버레이 생성
   const popupEl = createPopupElement();
@@ -783,6 +1280,24 @@ function initializeFacilityModule() {
 
   // 지도 클릭 이벤트 등록 (고유 id: facility-click-layer)
   MapEventManager.registerClickHandler("facility-click-layer", (evt) => {
+    // 펼친 핀(spiderfy)이 있으면 그쪽을 먼저 본다 — 묶음 배지 위에 떠 있기 때문
+    let spiderFeature = null;
+    map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
+      if (layer === facilitySpiderLayer) {
+        spiderFeature = feature;
+        return true;
+      }
+    });
+
+    if (spiderFeature) {
+      const facilityFeature = resolveSpiderFacility(spiderFeature);
+      if (facilityFeature) {
+        const spiderTotalId = facilityFeature.get("total_id") || facilityFeature.getId();
+        selectFacility(spiderTotalId, false);
+      }
+      return;
+    }
+
     let clickedFeature = null;
     map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
       if (layer === facilityLayer) {
@@ -792,7 +1307,14 @@ function initializeFacilityModule() {
     });
 
     if (clickedFeature) {
-      const totalId = clickedFeature.get("total_id") || clickedFeature.getId();
+      // 묶음(2건 이상)을 누르면 그 범위로 확대해 풀어 보여주고, 1건이면 그 시설물을 선택한다
+      const members = getClusterMembers(clickedFeature);
+      if (members.length > 1) {
+        expandFacilityCluster(members);
+        return;
+      }
+      const target = members[0];
+      const totalId = target.get("total_id") || target.getId();
       // 지도에서 직접 클릭한 경우: 가운데로만 옮기고 배율은 그대로 둔다
       selectFacility(totalId, false);
     }
@@ -806,7 +1328,7 @@ function initializeFacilityModule() {
 
     let hit = false;
     map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
-      if (layer === facilityLayer) {
+      if (layer === facilityLayer || layer === facilitySpiderLayer) {
         hit = true;
         return true;
       }
@@ -837,6 +1359,7 @@ function initializeFacilityModule() {
   bindFacilityKeywordSearch();
   bindFacilityRepairFilter();
   bindFacilityOfficeFilter();
+  bindFacilityClusterToggle();
   // 시도 목록을 불러온 뒤 기본 시·도(서울)를 적용하며 시설물도 함께 조회한다
   // (여기서 loadFacilities 를 따로 부르면 전체 조회 → 서울 조회로 두 번 요청하게 됨)
   loadFacilitySidoList();
@@ -1352,6 +1875,8 @@ function bindFacilityRepairFilter() {
   const options = Array.from(groupEl.querySelectorAll("[data-repair-filter]"));
 
   const applyRepairFilter = (value) => {
+    // 필터가 바뀌면 펼쳐 둔 핀은 더 이상 맞지 않으므로 접는다
+    clearFacilitySpider();
     facilityRepairFilter = value;
     options.forEach((option) => {
       const isActive = option.getAttribute("data-repair-filter") === value;
@@ -1375,7 +1900,7 @@ function bindFacilityRepairFilter() {
     }
 
     renderFacilityList();
-    if (facilitySource) facilitySource.changed();
+    refreshFacilityLayer();
   };
 
   options.forEach((option) => {
@@ -1389,6 +1914,8 @@ function bindFacilityOfficeFilter() {
   if (!selectEl) return;
 
   const applyOfficeFilter = (value) => {
+    // 필터가 바뀌면 펼쳐 둔 핀은 더 이상 맞지 않으므로 접는다
+    clearFacilitySpider();
     facilityOfficeFilter = value;
 
     // 열려 있는 팝업의 시설물이 필터에서 빠지면 핀이 사라지므로 팝업도 닫는다
@@ -1404,7 +1931,7 @@ function bindFacilityOfficeFilter() {
     }
 
     renderFacilityList();
-    if (facilitySource) facilitySource.changed();
+    refreshFacilityLayer();
   };
 
   selectEl.addEventListener("change", () => applyOfficeFilter(selectEl.value));
@@ -1474,6 +2001,7 @@ async function loadFacilities(filter = {}) {
       if (panelCountEl) panelCountEl.textContent = "0";
       updateFacilityRepairCounts({ all: 0, repair: 0, noRepair: 0 });
       updateFacilityOfficeCounts({ all: 0 });
+      clearFacilitySpider();
       if (facilitySource) facilitySource.clear();
       return;
     }
@@ -1485,6 +2013,7 @@ async function loadFacilities(filter = {}) {
     // 2) 지도 표출: 목록 렌더링 후 같은 응답 데이터로 벡터 레이어 채우기
     // docs/map-architecture.md 규칙: featureProjection에 vectorSource.getProjection()(= null) 전달
     if (facilitySource) {
+      clearFacilitySpider();
       facilitySource.clear();
       const geojsonFormat = new ol.format.GeoJSON();
       const olFeatures = geojsonFormat.readFeatures(geojsonData, {
@@ -1499,6 +2028,8 @@ async function loadFacilities(filter = {}) {
       });
 
       facilitySource.addFeatures(olFeatures);
+      // 새로 받은 데이터 기준으로 펼침 상태를 다시 맞춘다(배율이 이미 충분하면 바로 펼쳐짐)
+      syncFacilitySpiders();
     }
   } catch (error) {
     // 취소된 요청은 오류 UI를 띄우지 않고 조용히 무시
@@ -1509,6 +2040,7 @@ async function loadFacilities(filter = {}) {
     if (loadingEl) loadingEl.classList.add("hidden");
     if (errorEl) errorEl.classList.remove("hidden");
     if (countEl) countEl.textContent = "0";
+    clearFacilitySpider();
     if (facilitySource) facilitySource.clear();
     if (listEl) listEl.innerHTML = "";
   }
@@ -1664,7 +2196,7 @@ function selectFacility(totalId, zoomIn = true) {
 
   // 2) 지도 하이라이트 갱신
   if (facilitySource) {
-    facilitySource.changed();
+    refreshFacilityLayer();
   }
 
   // 3) 피처 위치 확인 및 지도 이동
@@ -3192,7 +3724,7 @@ function updateFacilityOfficeState(totalId, status, completeDate, managerNm) {
   // 4. 목록 배지 및 지도 핀 갱신
   renderFacilityList();
   if (facilitySource) {
-    facilitySource.changed();
+    refreshFacilityLayer();
   }
 }
 
@@ -3414,7 +3946,7 @@ function closeFacilityPopup(options = {}) {
 
   // 지도 선택 스타일 복원
   if (facilitySource) {
-    facilitySource.changed();
+    refreshFacilityLayer();
   }
   return true;
 }

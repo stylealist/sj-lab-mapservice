@@ -628,6 +628,46 @@
   display: none;
 }
 
+/* 핀 묶음(클러스터링) 토글 — 필터 줄과 목록 사이의 한 줄 체크박스.
+   지도 표시 방식만 바꾸는 설정이라 필터(세그먼트·select)와 시각적으로 구분되게 가볍게 둔다. */
+.facility-cluster-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.78rem;
+  color: #475569;
+  cursor: pointer;
+  user-select: none;
+}
+
+.facility-cluster-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.facility-cluster-label {
+  font-weight: 500;
+}
+
+/* 좁은 패널에서 먼저 줄어드는 보조 설명 */
+.facility-cluster-hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.facility-cluster-toggle input:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
 .facility-office-filter label {
   width: 52px;
   flex-shrink: 0;

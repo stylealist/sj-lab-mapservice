@@ -14,7 +14,7 @@
   <!-- CSS 파일들 -->
   <link rel="stylesheet" href="css/layouts/main.css" />
   <link rel="stylesheet" href="css/components/header.css?v=20260922-2" />
-  <link rel="stylesheet" href="css/components/layer-panel.css" />
+  <link rel="stylesheet" href="css/components/layer-panel.css?v=20260923" />
   <link rel="stylesheet" href="css/components/map-controls.css" />
   <style>
     /* CCTV 팝업 비디오 스타일 */
@@ -399,6 +399,13 @@
                         <option value="HOLD">보류</option>
                       </select>
                     </div>
+                    <!-- 핀 묶음(클러스터링) — 지도 표시 방식만 바꾼다(목록·건수에는 영향 없음).
+                         선택은 localStorage 에 기억하므로 다시 들어와도 유지된다. -->
+                    <label class="facility-cluster-toggle" for="facilityClusterToggle">
+                      <input type="checkbox" id="facilityClusterToggle" checked />
+                      <span class="facility-cluster-label">핀 묶어 보기</span>
+                      <span class="facility-cluster-hint">겹치는 핀을 개수로</span>
+                    </label>
                     <div class="facility-select-group">
                       <div class="facility-select-item">
                         <label for="facilitySidoSelect">시·도</label>
