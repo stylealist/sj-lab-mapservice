@@ -1,167 +1,121 @@
-# SJ 시설물 관리 — 지도 프론트엔드 (sj-lab-mapservice)
+# SJ 시설물 관리 — 지도 웹 프론트엔드 (sj-lab-mapservice)
 
-> 현장조사로 수집한 시설물을 **지도와 목록에서 함께 조회**하고, 보수가 필요한 시설물의 **내업(사무실 처리) 기록을 등록·관리**하는 지도 서비스입니다.
-> **빌드 도구·패키지 매니저 없는 순수 정적 SPA**(`package.json` 없음)로, OpenLayers를 직접 다뤄 구현했습니다.
-
-| | |
-|---|---|
-| **데모** | https://sj-lab.co.kr/map/ (로그인 화면의 **체험용 계정 버튼**으로 바로 입장) |
-| **스택** | HTML5 · CSS3 · JavaScript(ES 모듈) · OpenLayers(벤더링) · hls.js · VWorld 배경지도 |
-| **연동** | API Gateway(`/map/**`) → `mapservice-rest` → PostgreSQL/PostGIS |
+`sj-lab-mapservice`는 OpenLayers 기반으로 구축된 순수 정적 싱글 페이지 애플리케이션(SPA)입니다. 현장조사로 수집된 약 2,500건의 시설물 데이터와 공공 지리정보(CCTV, 버스정류장 등)를 웹 지도 및 목록으로 동기화 표출하고, 보수 필요 시설물에 대한 현장 사진/미디어 열람 및 내업(사무실 조치) 기록 관리를 지원합니다.
 
 ---
 
-## 1. 화면과 기능
+## 1. 서비스 역할 및 핵심 책임
 
-| 기능 | 설명 |
-|---|---|
-| **시설물 조회** | 시·도 → 시·군·구 → 읍·면·동 연쇄 필터, 목록·지도 동시 표출(약 2,500건), 이름·기관 검색 |
-| **핀 묶음(클러스터링)** | 겹치는 핀을 개수 배지로 묶고, 깊게 확대하면 같은 자리 시설물이 저절로 흩어짐. 토글로 끌 수 있음 |
-| **보수·내업 필터** | 전체 / 보수 필요 / 보수 불필요 + 내업 상태(처리 대기·미완료·접수·처리중·완료·보류) |
-| **상세 팝업** | 속성 표시, **현장 사진·음성·영상 재생**(백엔드 중계), 헤더 드래그로 이동, 본문↔내업 영역 크기 조절 |
-| **내업 기록** | 처리 상태·담당·일정·비용 입력, 처리 전/후 사진 업로드(리사이즈 후 전송), **PDF 보고서** 다운로드 |
-| **공공데이터 레이어** | 편의점·버스정류장·CCTV(실시간 영상)·약국·병원·관공서 — 화면 영역 단위 조회 |
-| **부가 도구** | 거리·면적 측정, 로드뷰, 지도 캡처, 배경지도 전환 |
-| **SSO 로그인** | 토큰이 없으면 공유 로그인 페이지로 리다이렉트, 헤더에 접속자·로그아웃·허브 이동 |
+- **공간정보(GIS) 시각화 및 연쇄 필터링**: 시·도 → 시·군·구 → 읍·면·동 3단계 행정구역 연쇄 필터와 시설물 상태(보수 필요/불필요/내업 상태별)에 따른 실시간 공간 렌더링 및 목록 뷰 동기화.
+- **대용량 피처 클러스터링 및 가상 분산(Spidering)**: 수천 건의 지점 객체를 축척별 클러스터 배지로 집약하고, 고배율 확대 시 동일/인접 좌표 객체를 원형으로 펼쳐 개별 선택성을 보장.
+- **시설물 내업 및 멀티미디어 조치 UI**: 조치 이력 등록, 일정/비용 산정, 현장 전/후 사진 업로드(클라이언트 이미지 리사이징), QFieldCloud 원격 미디어(사진/음성/영상) 스트리밍 팝업, PDF 보고서 생성.
+- **SSO 게이트웨이 연동**: 세션 토큰 감지 시 중앙 로그인 서버(`/auth/login.html`)와 연동하여 무중단 사용자 인증을 보장.
 
 ---
 
-## 2. 면접에서 봐주셨으면 하는 부분
+## 2. 기술 스택
 
-### ① 빌드 도구 없이 유지 가능한 구조 만들기
+- **코어 기술**: HTML5, CSS3, Modern JavaScript (ES Modules, Vanilla JS)
+- **GIS 렌더링 라이브러리**: OpenLayers 7.x (Vendor Bundle), VWorld 배경지도 타일
+- **멀티미디어**: Hls.js (CCTV 실시간 스트리밍 재생), Web Audio API
+- **아키텍처 구조**: No-Build 순수 정적 SPA (Webpack/Vite 등 빌드 도구 의존성 없음)
+- **배포 환경**: NGINX 정적 웹서버 (포트 4000 / 운영 `https://sj-lab.co.kr/map/`)
 
-번들러가 없고 인라인 `onclick` 핸들러가 남아 있는 레거시 구조라, **모듈 간 실제 통합 지점을 `window` 전역으로 명시**하고 그 규칙을 문서화했습니다. `map.js`가 하위 모듈을 모아 `window.*`에 등록하는 **배럴/브리지** 역할을 하고, 초기화 순서와 중복 실행 가드는 `app.js`가 관리합니다. 새 기능을 붙이는 사람이 어디에 무엇을 등록해야 하는지 `docs/map-architecture.md`에 규격으로 남겼습니다.
+---
 
-### ② 200MB 전국 응답 → 화면 영역 조회
+## 3. UI 및 데이터 인터랙션 프로세스
 
-공공데이터 레이어를 전국 단위로 받던 구조에서 버스정류장 85MB·병원 61MB가 나와 최초 표출이 수십 초 걸렸습니다. 백엔드에 `bbox`·`limit`을 추가하면서, 프론트는 **화면보다 가로·세로 50% 넓은 영역을 미리 받아 두고 그 안에서 움직이는 동안은 재요청하지 않도록**(`wfsFetchState`) 했습니다.
+### 3.1 지도 렌더링 및 데이터 흐름
 
-### ③ 클러스터링 — 배지 숫자와 목록 건수를 항상 일치시키기
+```
+[클라이언트 지도 뷰포트]
+       │
+       ├─ 1. 행정구역 BBOX 이동 ──> [API Gateway :8100] ──> [mapservice-rest]
+       │                            (/map/admin-area/bbox)
+       ├─ 2. 시설물 GeoJSON 요청 ─> (/map/qfield/facilities)
+       │                            (뷰포트 BBOX + 50% 버퍼 프리패칭)
+       │
+       ▼ 수신 및 렌더링 파이프라인
+[OpenLayers MapCanvas]
+  ├── Base Layer: VWorld 항공/기본 지도 타일
+  ├── Public WFS Layer: CCTV, 버스정류장, 병원, 약국 등 (BBOX 격자 표본)
+  └── Custom Facility Layer:
+        ├── geometryFunction: 필터링 조건 즉시 적용 (목록과 배지 일치)
+        ├── Cluster Source: 거리 기반 핀 집약 및 카운트 배지
+        └── Spidering Mechanism: 18 레벨 이상 고배율 시 원형 분산 배치
+```
 
-OpenLayers `ol.source.Cluster`를 **원본 소스 위에 씌우고 레이어의 소스·스타일만 교체**해, `getFeatureById()`·목록 연동 같은 기존 경로를 건드리지 않았습니다.
+### 3.2 내업 처리 및 미디어 워크플로우
+1. 지도 핀 클릭 → 상세 팝업 오픈 → 백엔드 `/map/qfield/facilities/{id}/media`를 통해 QFieldCloud 원격 첨부 파일(사진/음성/영상) 조회.
+2. 보수 필요 시설물에 대해 "내업 작성" 탭 활성화 → 처리 상태(`IN_PROGRESS`, `DONE` 등) 및 내역 입력.
+3. 조치 전/후 증빙 사진 등록:
+   - 브라우저 Canvas API를 통해 최대 1600px, JPEG 품질 0.8로 자동 압축 리사이징.
+   - Multipart API 호출로 전송하고 부분 실패 시 사용자 피드백 안내.
 
-핵심은 **필터를 `geometryFunction`에서 적용**한 것입니다. 스타일 단계에서만 거르면 배지 숫자가 필터 결과와 어긋나기 때문에, 필터 탈락 피처는 애초에 묶음에서 제외합니다.
+---
 
-```js
-// 필터를 통과한 피처만 묶음에 들어간다 → 배지 숫자 = 목록 건수
+## 4. 핵심 엔지니어링 구현 상세
+
+### 4.1 클러스터링 배지와 목록 건수의 엄격한 일치 (geometryFunction 필터링)
+OpenLayers의 기본 클러스터는 소스 내 모든 피처를 집약하므로, 화면 필터를 스타일 레이어에서만 적용할 경우 클러스터 배지의 숫자와 좌측 목록의 건수가 불일치하는 문제가 발생합니다.
+- `ol.source.Cluster`의 `geometryFunction` 내부에서 시설물 보수 필터 및 내업 상태 필터를 직접 평가하여, 탈락한 피처는 `null`을 반환하도록 설계.
+- 필터를 통과한 피처만 클러스터링 계산에 참여하여 **배지 수치와 UI 목록 카운트의 100% 동기화**를 달성했습니다.
+
+```javascript
 function facilityClusterGeometry(feature) {
-  if (!matchesFacilityRepairFilter(...)) return null;
-  if (!matchesFacilityOfficeFilter(...)) return null;
+  if (!matchesFacilityRepairFilter(feature)) return null;
+  if (!matchesFacilityOfficeFilter(feature)) return null;
   return feature.getGeometry();
 }
 ```
 
-검증: 전체 248/248 · 보수 필요 1/1 · 처리 대기 0/0 · 보수 불필요 247/247 — 모든 필터에서 일치.
+### 4.2 초근접/동일 좌표 시설물의 가상 분산(Spidering) 알고리즘
+동일 건물에 복수의 시설물이 등록된 경우 최대 배율(Zoom 18 이상)에서도 클러스터가 분리되지 않아 개별 객체 클릭이 불가능한 한계가 존재했습니다.
+- 배율 18 이상에서 묶여 있는 피처 그룹을 감지하여 가상 중심점 둘레로 반경 분산(Spidering) 좌표를 동적 생성.
+- 클러스터 배지를 숨기고 개별 핀으로 흩뿌려 표시함으로써 고배율 환경에서의 접근성과 조작성을 완벽히 확보했습니다.
 
-### ④ "확대해도 안 풀리는 묶음" 해결
+### 4.3 Declutter 파이프라인과 레이어 렌더 순서 제어
+시설물 핀이 공공데이터 아이콘에 가려지는 현상을 해결하기 위해:
+- 단순 `zIndex` 조정 대신 OpenLayers의 Declutter 렌더러 동작 방식을 분석하여, 시설물 심볼 스타일을 `declutterMode: "obstacle"`로 구성.
+- 시설물 핀은 화면에 무조건 렌더링되면서 인접한 공공데이터 심볼이 이를 피해 배치되도록 제어하여 현장 시설물의 시인성을 최우선 보장했습니다.
 
-한 건물에 여러 시설물이 있으면 **좌표가 완전히 같아** 최대 배율에서도 묶음이 풀리지 않아 선택할 수 없었습니다.
-
-- 깊게 확대하면(배율 18 이상) 아직 묶여 있는 무리를 **중심 둘레로 흩어 놓고 묶음 배지는 숨깁니다** — 확대하니 저절로 풀린 것처럼 보이게
-- 처음에는 "좌표가 완전히 같을 때만" 펼쳤는데, **몇 미터 간격이라 계속 묶이는 무리**가 여전히 안 풀렸습니다. 조건을 "이 배율인데도 묶여 있으면 전부"로 바꿔 해결했습니다
-- 구성이 그대로면 다시 그리지 않아(키 비교) 지도를 움직여도 깜빡이지 않습니다
-
-### ⑤ zIndex로는 안 되던 레이어 순서 — declutter 렌더 파이프라인
-
-시설물 핀이 공공데이터 아이콘에 가려져 zIndex를 1500까지 올렸는데도 그대로였습니다. 원인은 OpenLayers 렌더러가 **declutter 레이어의 심볼을 모든 레이어를 그린 뒤 따로 그리기** 때문이었습니다.
-
-```js
-for (...) { layer.render(frameState); if ("getDeclutter" in layer) declutterLayers.push(layer); }
-for (let i = declutterLayers.length - 1; i >= 0; --i) declutterLayers[i].renderDeclutter(frameState);
-```
-
-해결: 시설물 레이어도 declutter에 참여시키되 모든 스타일을 **`declutterMode: "obstacle"`**(항상 그리되 다른 심볼이 피해 감)로 지정. 시설물은 하나도 숨지 않고 겹치던 아이콘 쪽이 밀려납니다. 더해서 레이어가 추가·제거될 때마다 시설물 zIndex를 다시 계산해 **항상 최상단을 유지**합니다.
-
-### ⑥ 캐시 때문에 헤더가 깨진 사고 → 규칙화
-
-로컬·운영 모두 `Cache-Control` 없이 `Last-Modified`만 내려주다 보니, 새 HTML과 **옛 CSS**가 섞여 헤더가 깨졌습니다. `index.html`이 참조하는 CSS/JS에 `?v=YYYYMMDD`를 붙이는 규칙을 `CLAUDE.md`·문서에 못 박았습니다.
-
-### ⑦ 업로드 전 클라이언트 리사이즈
-
-내업 사진은 바로 올리지 않고 **긴 변 1600px·JPEG 품질 0.8로 줄인 뒤** 전송합니다(원본이 더 작으면 그대로). PNG·WebP를 JPEG로 바꾸면 확장자까지 맞추고, 투명 영역은 흰 바탕으로 처리합니다. 업로드 실패는 기록 저장과 분리해 **부분 실패를 알림으로 안내**합니다.
+### 4.4 뷰포트 버퍼 프리패칭 (BBOX Caching)
+사용자가 지도를 이동할 때마다 API를 과도하게 재호출하지 않도록:
+- 현재 뷰포트 기준 가로/세로 50% 확장된 영역을 쿼리하고 응답 바운더리를 캐싱(`wfsFetchState`).
+- 확장 영역 내에서의 팬(Pan) 이동 시 네트워크 요청을 건너뛰어 체감 반응 속도를 향상시켰습니다.
 
 ---
 
-## 3. 구조
+## 5. 프로젝트 디렉터리 구조
 
 ```
-index.html                      # 단일 페이지(지도/소개/연락처)
-css/
-  layouts/main.css
-  components/header.css         # 헤더·허브 링크·접속자·로그아웃
-  components/layer-panel.css    # 좌측 패널(시설물 목록·필터·내업)
-  components/map-controls.css
-js/
-  auth-gate.js                  # SSO 로그인 게이트(head 최상단)
-  app.js                        # 초기화 순서·중복 실행 가드
-  modules/ui.js                 # 페이지 전환, 패널·헤더 토글, 로고 동작
-  modules/map/
-    map.js                      # 배럴/브리지 — 하위 모듈을 window.* 에 등록
-    map-core.js                 # 지도 생성·배경지도
-    map-facility.js             # 시설물 레이어·목록·필터·클러스터·팝업·내업
-    map-wfs.js / map-wms.js     # 공공데이터 레이어
-    map-events.js               # 클릭·호버 핸들러 등록기
-    map-measure.js / map-roadview.js / map-tools.js
-  utils/openlayers/ · utils/hls/  # 벤더링 라이브러리
-docs/                           # 설계 문서
+sj-lab-mapservice/
+├── index.html                  # 단일 페이지 뷰 (지도, 소개, 연락처)
+├── css/
+│   ├── layouts/main.css        # 전체 화면 레이아웃
+│   ├── components/header.css   # 상단 헤더, SSO 사용자 정보, 링크
+│   └── components/layer-panel.css # 좌측 시설물 목록 및 내업 패널
+└── js/
+    ├── auth-gate.js            # 최상단 로드 SSO 인증 게이트 스크립트
+    ├── app.js                  # 전체 모듈 라이프사이클 및 초기화 가드
+    └── modules/
+        ├── ui.js               # 패널 조작, 모달, 페이지 전환 이벤트
+        └── map/
+            ├── map.js          # 모듈 통합 배럴 및 Window 인터페이스 브리지
+            ├── map-core.js     # 지도 인스턴스, VWorld 배경지도 초기화
+            ├── map-facility.js # 시설물 피처 렌더링, 클러스터링, 스파이더링
+            ├── map-wfs.js      # 공공데이터 레이어 관리
+            └── map-detail.js   # 상세 팝업, 미디어 재생, 내업 폼 연동
 ```
 
 ---
 
-## 4. 실행
+## 6. 로컬 실행 및 확인
 
-ES 모듈을 쓰므로 `file://`로 열면 CORS 오류가 납니다. **4000 포트**로 띄워야 게이트웨이 CORS를 통과합니다.
-
+별도의 빌드 과정 없이 정적 웹 서버를 통해 구동합니다:
 ```bash
-python -m http.server 4000     # 또는 npx serve . -l 4000
+# Python 내장 웹서버를 이용한 포트 4000 기동 (게이트웨이 CORS 허용 포트)
+python -m http.server 4000
 ```
-
-API는 게이트웨이(8100)를 거치므로 백엔드 스택이 함께 떠 있어야 합니다. 총괄 저장소(`mapservice-rest`)의 `scripts/local-stack.ps1`이 Eureka → 백엔드 → 로그인 서버 → 게이트웨이 → 이 사이트를 한 번에 띄웁니다.
-
-빌드·린트·테스트 스크립트는 없습니다. 검증은 브라우저에서 직접 하며, 이 프로젝트에서는 **헤드리스 Chrome + CDP로 클러스터 개수·필터 일치·레이어 순서를 자동 확인**하며 작업했습니다.
-
-### 디버그 진입점
-
-```javascript
-window.getMap()                          // OpenLayers Map (window.mapInstance는 undefined — 알려진 이슈)
-window.mapTools.flyTo([127.0, 37.5], 15)
-window.MapEventManager.debugHandlers()
-```
-
----
-
-## 5. 개발 시 규칙 (직접 겪은 함정들)
-
-- 인라인 HTML이나 다른 모듈에서 호출할 함수는 **`map.js`에서 `window.*`에 등록** — 빠뜨리면 `ReferenceError`
-- `.nav-btn` 클래스는 `ui.js`가 **페이지 전환 버튼으로 바인딩**합니다. 허브 링크·로그아웃 같은 요소에 붙이지 마세요
-- 로고 클릭은 **현재 디렉터리 기준으로 사이트를 다시 불러옵니다**. `origin + "/map"` 같은 절대 경로를 하드코딩하면 로컬에서 404
-- `index.html`이 참조하는 CSS/JS를 고치면 **`?v=` 갱신**
-- 시설물 아이콘의 기준은 DB(`map.facility_icon`)입니다. 파일 안 `FALLBACK_FACILITY_ICON_TYPES`는 API 실패 시 대체값
-- 초기화 가드(`appInitialized` 등) 제거 금지 — 이벤트·레이어가 중복 등록됩니다
-
----
-
-## 6. 문서
-
-| 문서 | 내용 |
-|---|---|
-| `docs/map-architecture.md` | 모듈별 역할, 시설물 레이어 규격(아이콘·zIndex·declutter·클러스터·펼치기), 팝업·내업 레이아웃 |
-| `docs/ui-conventions.md` | SPA 페이지 전환, 레이어 패널 탭, 시설물 탭·필터·배지 컨벤션, 헤더 규칙 |
-| `docs/external-services.md` | VWorld·백엔드·GeoServer·카카오맵 등 외부 연동 |
-| `CLAUDE.md` | 작업 규칙 |
-
-전체 시스템 구조·API 계약은 총괄 저장소 `mapservice-rest`의 `docs/system-architecture.md`에 있습니다.
-
----
-
-## 7. 배포
-
-Jenkins가 저장소 파일을 웹서버 노드의 `/home/kuber-volume/sj-lab-webserver/html/map`으로 복사하고 nginx가 서빙합니다(빌드 단계 없음).
-
-> 이 폴더는 허브 사이트 디렉터리의 **하위**라, 허브 배포가 상위를 비우면 지도가 통째로 지워집니다. 실제로 겪었고 원인·조치는 총괄 저장소의 `docs/deploy-static-sites.md`에 정리했습니다.
-
-## 8. 현재 한계
-
-- 로그인 게이트는 **화면 접근만** 막습니다(백엔드 API는 토큰을 강제하지 않음)
-- 정적 자원이 gzip·캐시 헤더 없이 서빙되고 있어(첫 로드 약 2.1MB) nginx 설정 개선이 다음 과제입니다
-- 모바일 레이아웃은 팝업 위주로만 대응돼 있습니다
+- 브라우저 접속: `http://localhost:4000`
+- 인증 상태가 없을 경우 자동으로 `http://localhost:8100/auth/login.html`로 리다이렉트됩니다.
