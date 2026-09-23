@@ -246,11 +246,20 @@ const OFFICE_WORK_STATUS_BADGE_CLASS = {
   HOLD: "status-badge-hold",
 };
 
+// 내업 상태 필터에만 쓰는 묶음 값 — 실제 상태 코드가 아니라 "완료를 뺀 나머지 전부"(아직 손이 남은 건)를 뜻한다.
+// 내업을 완료해도 보수 필요 여부(외업 값)는 그대로라 보수 필요 탭에 남는데, 그중 처리할 것만 보려는 용도.
+const OFFICE_WORK_OPEN_FILTER = "OPEN";
+
 // 시설물의 내업 상태 코드 — 보수 필요가 아니면 ""(내업 대상 아님), 보수 필요인데 값이 없거나 모르는 값이면 PENDING
 function resolveOfficeWorkStatus(needsRepair, status) {
   if (!needsRepair) return "";
   const code = String(status || "").toUpperCase();
   return OFFICE_WORK_STATUS_MAP[code] ? code : "PENDING";
+}
+
+// 내업이 완료된(=더 처리할 게 없는) 시설물인지
+function isOfficeWorkDone(needsRepair, status) {
+  return resolveOfficeWorkStatus(needsRepair, status) === "DONE";
 }
 
 // 목록·팝업 헤더용 내업 배지 클래스 (완료는 지도 핀과 같은 짙은 초록)
@@ -1080,7 +1089,7 @@ let facilityListItems = [];
 let facilityKeyword = "";
 // 보수 필요 여부 필터: "all"(기본) | "repair"(repair_required_yn = Y) | "noRepair"(Y 가 아닌 전부 — N·빈 값)
 let facilityRepairFilter = "all";
-// 내업 상태 필터: "all"(기본) | "PENDING"(미완료) | "RECEIVED" | "IN_PROGRESS" | "DONE" | "HOLD"
+// 내업 상태 필터: "all"(기본) | "OPEN"(처리 대기 — 완료 제외) | "PENDING"(미완료) | "RECEIVED" | "IN_PROGRESS" | "DONE" | "HOLD"
 // "all" 이 아니면 보수 필요 시설물 중 그 상태인 것만 남는다 (보수 불필요 시설물은 내업 대상이 아님)
 let facilityOfficeFilter = "all";
 
@@ -1092,7 +1101,10 @@ function matchesFacilityRepairFilter(needsRepair) {
 
 function matchesFacilityOfficeFilter(needsRepair, officeWorkStatus) {
   if (facilityOfficeFilter === "all") return true;
-  return resolveOfficeWorkStatus(needsRepair, officeWorkStatus) === facilityOfficeFilter;
+  const code = resolveOfficeWorkStatus(needsRepair, officeWorkStatus);
+  // 처리 대기 = 내업 대상(보수 필요)이면서 완료가 아닌 전부 (미완료·접수·처리중·보류)
+  if (facilityOfficeFilter === OFFICE_WORK_OPEN_FILTER) return code !== "" && code !== "DONE";
+  return code === facilityOfficeFilter;
 }
 
 // 응답 피처에서 목록 항목 데이터만 뽑아낸다 (중복 제거)
@@ -1141,11 +1153,18 @@ function renderFacilityList() {
     : facilityListItems;
 
   // 보수 필요 필터와 내업 필터가 함께 적용(AND)
-  const visibleItems = keywordItems.filter(
+  const filteredItems = keywordItems.filter(
     (item) =>
       matchesFacilityRepairFilter(item.needsRepair) &&
       matchesFacilityOfficeFilter(item.needsRepair, item.officeWorkStatus)
   );
+
+  // 내업 완료 건은 더 처리할 게 없으므로 목록 뒤로 보낸다 (나머지는 조회 순서 그대로 — 안정 정렬).
+  // 내업을 완료해도 보수 필요 여부(외업 값)는 바뀌지 않아 보수 필요 목록에 계속 남기 때문.
+  const visibleItems = [
+    ...filteredItems.filter((item) => !isOfficeWorkDone(item.needsRepair, item.officeWorkStatus)),
+    ...filteredItems.filter((item) => isOfficeWorkDone(item.needsRepair, item.officeWorkStatus)),
+  ];
 
   // 보수 필요 필터 건수 (현재 내업 필터 적용 기준)
   const itemsForRepairCounts = keywordItems.filter((item) =>
@@ -1162,13 +1181,15 @@ function renderFacilityList() {
   const itemsForOfficeCounts = keywordItems.filter((item) =>
     matchesFacilityRepairFilter(item.needsRepair)
   );
-  const officeCounts = { all: itemsForOfficeCounts.length };
+  const officeCounts = { all: itemsForOfficeCounts.length, [OFFICE_WORK_OPEN_FILTER]: 0 };
   Object.keys(OFFICE_WORK_STATUS_MAP).forEach((code) => {
     officeCounts[code] = 0;
   });
   itemsForOfficeCounts.forEach((item) => {
     const code = resolveOfficeWorkStatus(item.needsRepair, item.officeWorkStatus);
-    if (code) officeCounts[code] += 1;
+    if (!code) return;
+    officeCounts[code] += 1;
+    if (code !== "DONE") officeCounts[OFFICE_WORK_OPEN_FILTER] += 1;
   });
   updateFacilityOfficeCounts(officeCounts);
 
@@ -1452,7 +1473,7 @@ async function loadFacilities(filter = {}) {
       const panelCountEl = document.getElementById("panelCount");
       if (panelCountEl) panelCountEl.textContent = "0";
       updateFacilityRepairCounts({ all: 0, repair: 0, noRepair: 0 });
-      updateFacilityOfficeCounts({ all: 0, done: 0, notDone: 0 });
+      updateFacilityOfficeCounts({ all: 0 });
       if (facilitySource) facilitySource.clear();
       return;
     }

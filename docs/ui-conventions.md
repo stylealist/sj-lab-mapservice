@@ -15,6 +15,7 @@
   - 상단 행정구역 연쇄 select(시도 → 시군구 → 읍면동)는 각각 `전체` 옵션을 포함하며, 상위 select가 변경되면 하위 select를 초기화(비활성화)하고 가장 구체적인 행정구역 코드(또는 전체)로 시설물 목록과 지도를 재조회합니다. 구역 선택 시 해당 구역 extent(패딩 포함)로 지도를 이동(fit)합니다.
   - 대량 피처(약 2,474건) 렌더링 시 `DocumentFragment`를 사용하고 XSS 방지를 위해 텍스트는 `textContent`로 삽입합니다.
   - **목록 항목 구조**: `아이콘(30px) | 이름 + 소속 | 배지` 3단 그리드(`.facility-item`). 아이콘은 지도 핀과 같은 SVG를 `buildFacilityIconUrl()`로 만들어 쓰고, 소속(`.facility-sub`)은 `inst_nm · daddr`입니다 — 같은 이름이 반복되므로 이 줄이 실질적인 구분 기준이니 빼지 말 것.
+  - **목록 정렬**: `renderFacilityList()`가 필터를 통과한 항목 중 **내업 완료(`DONE`)를 맨 뒤로** 보냅니다(나머지는 조회 순서 그대로인 안정 정렬). 내업을 완료해도 보수 필요 목록에 남기 때문에 남은 일이 위로 모이게 한 것이며, 지도 핀에는 영향이 없습니다.
   - **검색**: `#facilityKeyword` 입력은 서버를 다시 부르지 않고 `renderFacilityList()`가 이름·소속 부분일치로 걸러 다시 그립니다(원본은 `facilityListItems`에 보관). 행정구역 select 변경만 서버를 재조회합니다. 검색어는 **목록에만** 적용되고 지도 핀은 그대로입니다.
   - **보수 필요 여부 필터**: 검색창 아래 세그먼트 버튼(`#facilityRepairFilter`, `전체`(기본) / `보수 필요` / `보수 불필요`). 상태는 `facilityRepairFilter`(`"all"`·`"repair"`·`"noRepair"`)이고 판정은 `matchesFacilityRepairFilter()` 하나로 목록과 지도가 공유합니다.
     - `보수 필요` = `repair_required_yn === 'Y'`, `보수 불필요` = **Y가 아닌 전부**(`N`·빈 값). 실데이터 대부분이 빈 값이라 `N`만 고르면 결과가 0건이 되니 판정을 바꾸지 말 것.
@@ -22,7 +23,8 @@
     - 버튼 옆 건수는 **검색어까지 반영한** 기준입니다(어느 쪽에 결과가 있는지 보이도록). 행정구역을 바꿔 재조회해도 선택한 필터는 유지됩니다.
     - 버튼 칸은 `grid-template-columns: auto auto auto`로 글자 길이만큼 나눕니다. 같은 너비(`1fr`)로 바꾸면 전국 조회 시 "보수 불필요 2,473"이 넘칩니다.
   - **내업 상태(보수 필요 시설물만)**: 내업은 웹에서 작성하며 보수 필요(`repair_required_yn='Y'`) 시설물만 대상입니다. 상태는 `미완료`(`PENDING`, 내업 기록 없음) / `접수`(`RECEIVED`) / `처리중`(`IN_PROGRESS`) / `완료`(`DONE`) / `보류`(`HOLD`) 다섯 가지이고, 최신 기록의 `work_status`가 현재 상태입니다. 판정은 `resolveOfficeWorkStatus(needsRepair, status)` 하나로 통일합니다(보수 불필요면 `""` = 내업 대상 아님, 보수 필요인데 값이 없으면 `PENDING`). `PENDING`은 저장값이 아니라 표시값이므로 작성 폼 선택지에 넣지 말 것.
-  - **내업 상태 필터**: 보수 필요 필터에서 `보수 필요`를 골랐을 때만 보이는 한 줄 select(`#facilityOfficeFilterRow` > `#facilityOfficeSelect`, `전체`(기본) / `미완료` / `접수` / `처리중` / `완료` / `보류`, 항목 뒤에 건수). 6개 세그먼트를 늘 띄우면 패널이 복잡해 select로 둡니다. 보수 필요를 벗어나면 `syncFacilityOfficeFilterVisibility()`가 줄을 숨기고 필터를 `전체`로 되돌립니다. 상태는 `facilityOfficeFilter`(`"all"` 또는 상태 코드)이며, `전체`가 아니면 보수 필요 시설물 중 그 상태만 남습니다. 보수 필요 필터와 AND 조건으로 목록과 지도 핀에 함께 적용되고, `matchesFacilityOfficeFilter(needsRepair, status)`로 판정하며 열려 있던 팝업의 시설물이 필터에서 빠지면 팝업을 닫습니다.
+  - **내업 상태 필터**: 보수 필요 필터에서 `보수 필요`를 골랐을 때만 보이는 한 줄 select(`#facilityOfficeFilterRow` > `#facilityOfficeSelect`, `전체`(기본) / `처리 대기(완료 제외)` / `미완료` / `접수` / `처리중` / `완료` / `보류`, 항목 뒤에 건수). 6개 세그먼트를 늘 띄우면 패널이 복잡해 select로 둡니다.
+    - **`처리 대기(완료 제외)`(`OFFICE_WORK_OPEN_FILTER = "OPEN"`)는 상태 코드가 아니라 묶음 값**입니다 — 내업 대상(보수 필요)이면서 `DONE`이 아닌 전부(미완료·접수·처리중·보류). 내업을 완료해도 `repair_required_yn`은 외업(QField) 값이라 바뀌지 않아 **보수 필요 목록에 그대로 남으므로**, "아직 처리할 건"만 보려는 용도입니다. 작성 폼 선택지에 넣지 말 것(`PENDING`과 같은 이유). 보수 필요를 벗어나면 `syncFacilityOfficeFilterVisibility()`가 줄을 숨기고 필터를 `전체`로 되돌립니다. 상태는 `facilityOfficeFilter`(`"all"` 또는 상태 코드)이며, `전체`가 아니면 보수 필요 시설물 중 그 상태만 남습니다. 보수 필요 필터와 AND 조건으로 목록과 지도 핀에 함께 적용되고, `matchesFacilityOfficeFilter(needsRepair, status)`로 판정하며 열려 있던 팝업의 시설물이 필터에서 빠지면 팝업을 닫습니다.
   - **내업 배지 및 상세 팝업 섹션**:
     - 목록 항목: 보수 필요 시설물은 보수필요 배지 옆에 `내업 <상태>` 배지를 항상 표시합니다(완료=`.badge-office-done`, 나머지=`.status-badge-*`, 미완료=`.status-badge-pending` 붉은 계열).
     - 상세 팝업 헤더: 같은 `내업 <상태>` 배지를 붙이고, 완료일 때만 `내업 완료 · 완료일 · 담당자`로 표시합니다.

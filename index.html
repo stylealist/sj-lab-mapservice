@@ -389,6 +389,9 @@
                       <label for="facilityOfficeSelect">내업상태</label>
                       <select id="facilityOfficeSelect" class="facility-select" aria-label="내업 상태">
                         <option value="all">전체</option>
+                        <!-- 처리 대기 = 완료를 뺀 나머지 전부(미완료·접수·처리중·보류). 내업을 완료해도
+                             보수 필요 여부(외업 값)는 그대로라, 아직 손이 남은 건만 보려면 이 옵션을 쓴다. -->
+                        <option value="OPEN">처리 대기(완료 제외)</option>
                         <option value="PENDING">미완료</option>
                         <option value="RECEIVED">접수</option>
                         <option value="IN_PROGRESS">처리중</option>
