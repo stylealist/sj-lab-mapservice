@@ -7,6 +7,9 @@
 
 ## 반드시 지킬 것
 
+- **헤더 로고(`#logoHome`) 클릭**은 `ui.js`의 `goToMap()`이 처리하며, **지도 사이트를 통째로 다시 불러옵니다**(첫 화면으로 초기화). 이동 주소는 **지금 문서가 있는 디렉터리**를 기준으로 만듭니다 — `window.location.origin + pathname.replace(/[^/]*$/, "")` → 운영 `https://sj-lab.co.kr/map/`, 로컬 `http://localhost:4000/`. 쿼리·해시(로그인 토큰 등)는 떨어집니다.
+  - **`origin + "/map"` 처럼 절대 경로를 하드코딩하지 말 것** — 운영에만 있는 경로라 로컬(루트에서 서빙)에서는 404가 납니다(2026-09-23 실제 발생).
+  - 반대로 SPA 페이지 전환만 하면 **이미 지도 화면일 때 아무 변화가 없어** "눌러도 반응이 없다"가 됩니다(같은 날 피드백). 그래서 새로고침 방식으로 확정했습니다. 예전처럼 `window.location.origin + "/map"` 같은 **절대 경로로 이동시키지 말 것** — 그 경로는 운영(`sj-lab.co.kr/map/`)에만 있고 로컬(루트에서 서빙)에서는 404가 납니다(2026-09-23 실제 발생). 같은 이유로 허브 링크(`#hubLink`)만 환경별로 분기합니다.
 - 새 SPA 페이지를 추가할 때는 `js/modules/ui.js`의 `navigateToPage()`가 인식하는 3요소(네비 버튼의 `data-page="xxx"`, 대상 div의 `id="xxx-page"`, 버튼/div에 각각 `.nav-btn`/`.page` 클래스)를 정확히 맞출 것 — 하나라도 어긋나면 `getElementById(pageName + "-page")`가 `null`을 반환해 페이지 전환이 조용히 실패함.
 - 지도 컨테이너의 크기나 표시 여부가 바뀌는 모든 UI 동작(헤더 토글, 페이지 전환 등)은 반드시 `window.mapInstance.updateSize()`를 호출해야 합니다(`initializeHeaderToggle`, `navigateToPage`에서 이미 이렇게 함). 빠뜨리면 OpenLayers 캔버스가 실제 컨테이너 크기를 못 따라가 지도가 잘리거나 빈 영역이 생김.
 - 레이어 패널 탭은 `.tab-btn[data-tab]` ↔ `.tab-pane`이 `switchTab()`으로 짝지어 전환됩니다. 새 탭을 추가할 때 이 `data-tab` 값과 대상 `.tab-pane`의 짝을 맞출 것.

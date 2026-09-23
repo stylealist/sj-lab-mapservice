@@ -284,10 +284,19 @@ function initializeLayerPanel() {
     });
   });
 
-  // 홈 이동 함수
+  // 홈(지도 화면) 이동.
+  // 예전에는 `origin + "/map"` 으로 통째 이동했는데, 그 경로는 운영(sj-lab.co.kr/map/)에만 있고
+  // 로컬은 루트(localhost:4000)에서 서빙하므로 404 가 났다. 게다가 새로고침이라 지도 상태도 날아간다.
+  // 같은 사이트 안의 이동이므로 SPA 페이지 전환으로 처리한다(주소도 그대로).
   function goToMap() {
-    const homeUrl = window.location.origin + "/map";
-    window.location.href = homeUrl;
+    // 현재 사이트(지도)를 처음부터 다시 불러온다.
+    // 경로를 하드코딩(`origin + "/map"`)하면 운영에서만 맞고 로컬(루트 서빙)에서는 404 가 나므로,
+    // **지금 문서가 있는 디렉터리**를 기준으로 삼는다.
+    //   운영 /map/ 또는 /map/index.html → https://sj-lab.co.kr/map/
+    //   로컬 /                          → http://localhost:4000/
+    // 쿼리·해시(로그인 토큰 등)는 떼고 이동한다.
+    const baseDir = window.location.pathname.replace(/[^/]*$/, "");
+    window.location.href = window.location.origin + baseDir;
   }
 
   // 로고 클릭 이벤트

@@ -4,6 +4,10 @@
 let map;
 let currentLayer = "common";
 
+// 첫 화면 기준값 (헤더 로고를 누르면 사이트를 다시 불러오므로 이 값으로 돌아온다)
+const DEFAULT_MAP_CENTER = [127.0, 37.5]; // 서울 중심 (EPSG:4326)
+const DEFAULT_MAP_ZOOM = 10;
+
 // 맵 초기화
 function initializeMap() {
   // VWorld 배경지도 레이어들 생성
@@ -48,8 +52,8 @@ function initializeMap() {
     target: "map",
     layers: [...Object.values(baseLayers), ...Object.values(overlayLayers)],
     view: new ol.View({
-      center: ol.proj.fromLonLat([127.0, 37.5]), // 서울 중심
-      zoom: 10,
+      center: ol.proj.fromLonLat(DEFAULT_MAP_CENTER), // 서울 중심
+      zoom: DEFAULT_MAP_ZOOM,
       maxZoom: 19,
       minZoom: 7,
     }),
