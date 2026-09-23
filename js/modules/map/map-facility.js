@@ -763,20 +763,12 @@ function clearFacilitySpider() {
   if (facilitySpiderSource) facilitySpiderSource.clear();
 }
 
-// 구성원들이 사실상 한 점에 모여 있는지 (확대해도 갈라지지 않는 상태)
-function isSameSpotMembers(members, resolution) {
-  const extent = ol.extent.createEmpty();
-  members.forEach((member) => {
-    const geometry = member.getGeometry();
-    if (geometry) ol.extent.extend(extent, geometry.getExtent());
-  });
-  if (ol.extent.isEmpty(extent)) return false;
-  return ol.extent.getWidth(extent) < resolution && ol.extent.getHeight(extent) < resolution;
-}
-
 /**
  * 지금 화면에서 펼쳐야 할 묶음들을 모은다.
- * - 묶어 보기 켬: 화면 안의 묶음 중 구성원이 한 점에 모인 것
+ * - 묶어 보기 켬: 화면 안에 **아직 묶여 있는 것 전부**. 이 배율까지 들어왔는데도 묶여 있다는 것은
+ *   구성원이 서로 묶음 거리(FACILITY_CLUSTER_DISTANCE) 안에 붙어 있다는 뜻이라, 더 확대해도
+ *   풀리지 않거나 풀려도 겹쳐 보인다. "좌표가 완전히 같을 때만" 펼치면 몇 미터씩 떨어진 묶음이
+ *   끝까지 안 풀리는 문제가 생긴다(2026-09-23 실제 발생).
  * - 묶어 보기 끔: 좌표가 같아 서로 완전히 겹치는 핀들(필터 통과분만)
  */
 function collectFacilitySpiderGroups() {
@@ -790,14 +782,12 @@ function collectFacilitySpiderGroups() {
   const size = map.getSize();
   if (!size) return [];
   const extent = view.calculateExtent(size);
-  const resolution = view.getResolution();
   const groups = [];
 
   if (facilityClusteringEnabled && facilityClusterSource) {
     facilityClusterSource.forEachFeatureInExtent(extent, (clusterFeature) => {
       const members = clusterFeature.get("features") || [];
       if (members.length < 2) return;
-      if (!isSameSpotMembers(members, resolution)) return;
       groups.push({ coordinate: clusterFeature.getGeometry().getCoordinates(), members });
     });
     return groups;
@@ -920,9 +910,12 @@ function expandFacilityCluster(members) {
 
   const view = map.getView();
   const center = ol.extent.getCenter(extent);
+  const resolution = view.getResolution();
+  // 구성원들이 화면에서 얼마나 떨어져 있는지(px). 묶음 거리보다 좁으면 더 확대해도 계속 묶인다
+  const spreadPx = Math.max(ol.extent.getWidth(extent), ol.extent.getHeight(extent)) / resolution;
 
-  if (isSameSpotMembers(members, view.getResolution())) {
-    // 범위가 없으니 fit 은 의미가 없다. 펼쳐지는 배율까지만 올려 준다
+  if (spreadPx < FACILITY_CLUSTER_DISTANCE) {
+    // fit 으로는 갈라지지 않으므로 펼쳐지는 배율까지 올려 준다(그 배율에서 자동으로 흩어짐)
     const targetZoom = Math.min(Math.max(view.getZoom() + 2, FACILITY_SPIDER_MIN_ZOOM), view.getMaxZoom());
     view.animate({ center, zoom: targetZoom, duration: 400 });
     return;
