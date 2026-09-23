@@ -56,6 +56,13 @@ window.MapEventManager.debugHandlers()
 - @docs/ui-conventions.md — SPA 페이지 전환, 레이어 패널 탭 구조, CSS 구성
 - @docs/external-services.md — VWorld/자사 백엔드/GeoServer/카카오맵 등 외부 연동 목록
 
+## README 유지 규칙
+
+- **이 저장소에 기능·API·화면·실행 방법·설정(환경변수/시크릿)·배포 방식이 추가되거나 바뀌면, 같은 작업에서 `README.md`도 함께 갱신할 것.** 코드만 고치고 README를 그대로 두지 말 것.
+- 갱신 대상 예: 새 엔드포인트·화면·모듈, 빌드/실행 명령 변경, 포트·의존 서비스 변경, 환경변수·Secret 추가, 배포 절차 변경, 해결한 이슈·새로 생긴 한계.
+- **README는 면접관·처음 보는 사람이 읽는 문서**다(이 프로젝트는 포트폴리오). 사용자·리뷰어 관점의 설명(무엇을·왜·어떻게 확인하는지)은 README에, 에이전트/내부 작업 규칙은 이 문서(CLAUDE.md)에 둔다.
+- 문구가 실제 코드와 어긋나지 않는지 확인하고, 구현되지 않은 기능을 적지 말 것. 한계·미구현 항목은 숨기지 말고 "현재 한계"에 적는다.
+
 ## 통합 허브
 
 저장소를 넘나드는 작업(프론트엔드 + 백엔드 + 게이트웨이)의 총괄 기준 저장소는 `C:\developer\workspace\mapservice-rest`입니다. MCP(GitHub/DB), 로컬 비밀값, Bash 가드 훅, DB 분석 문서, 로컬 포트·라우팅·CORS 구성은 그 저장소에서 관리하므로 이 저장소에는 MCP 서버가 연결되지 않습니다. 로컬 개발 시 API는 API Gateway(`localhost:8100`)를 거치며, 프론트엔드는 게이트웨이 CORS 허용 origin인 `http://localhost:4000`에서 서빙해야 API 호출이 됩니다.
