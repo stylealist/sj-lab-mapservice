@@ -325,6 +325,39 @@
   box-shadow: 0 4px 10px -2px rgba(37, 99, 235, 0.45);
 }
 
+/* 전체 소개 영상으로 전환 (요약본 재생 중에만 보임) */
+.intro-action-btn.ghost {
+  background: #ffffff;
+  border: 1px solid #93c5fd;
+  color: #1d4ed8;
+}
+
+.intro-action-btn.ghost:hover {
+  background: #eff6ff;
+  border-color: #60a5fa;
+}
+
+.intro-action-btn.hidden {
+  display: none;
+}
+
+/* 지금 재생 중인 것이 요약본인지 전체본인지 알려 주는 배지 */
+.intro-video-tag {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(11, 18, 32, 0.78);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+
+
 /* 반응형 모바일 쿼리 */
 @media (max-width: 640px) {
   .intro-modal-card {

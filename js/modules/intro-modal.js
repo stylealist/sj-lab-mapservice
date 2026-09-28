@@ -4,6 +4,54 @@
 
 const STORAGE_KEY = "SJ_MAP_INTRO_HIDE_UNTIL";
 
+// 팝업 기본값은 1분 요약본(무음이라 자동재생 정책에 걸리지 않음),
+// '전체 소개 영상 보기'를 누르면 같은 플레이어가 6분 전체본(소리 포함)으로 바뀐다.
+const SUMMARY_SRC = "videos/intro-summary.mp4";
+const SUMMARY_POSTER = "videos/intro-poster.jpg";
+const FULL_SRC = "videos/full-demo.mp4";
+const FULL_POSTER = "videos/full-poster.jpg";
+
+/** 팝업 플레이어를 요약본으로 되돌린다(열 때마다 같은 상태에서 시작) */
+function resetPlayerToSummary() {
+  const video = document.getElementById("introVideoPlayer");
+  if (!video) return;
+
+  if (!video.src.endsWith(SUMMARY_SRC)) {
+    video.src = SUMMARY_SRC;
+    video.poster = SUMMARY_POSTER;
+    video.load();
+  }
+  video.muted = true;
+  video.currentTime = 0;
+
+  const tag = document.getElementById("introVideoTag");
+  if (tag) tag.textContent = "1분 요약";
+
+  const fullBtn = document.getElementById("introModalFullBtn");
+  if (fullBtn) fullBtn.classList.remove("hidden");
+}
+
+/** 팝업 안에서 전체 설명 영상으로 전환 (버튼 클릭 = 사용자 제스처라 소리 재생 가능) */
+export function playFullIntroVideo() {
+  const video = document.getElementById("introVideoPlayer");
+  if (!video) return;
+
+  video.pause();
+  video.src = FULL_SRC;
+  video.poster = FULL_POSTER;
+  video.muted = false;
+  video.load();
+  video.play().catch(() => {
+    /* 브라우저가 막으면 사용자가 컨트롤로 재생 */
+  });
+
+  const tag = document.getElementById("introVideoTag");
+  if (tag) tag.textContent = "전체 6분";
+
+  const fullBtn = document.getElementById("introModalFullBtn");
+  if (fullBtn) fullBtn.classList.add("hidden");
+}
+
 /**
  * 팝업 다시 보지 않기 기간이 유효한지 확인
  * @returns {boolean} true이면 팝업을 띄우지 않음
@@ -47,11 +95,13 @@ export function openIntroModal() {
   modal.classList.add("active");
   modal.setAttribute("aria-hidden", "false");
 
-  // 비디오 준비
+  // 열 때는 항상 요약본부터 (무음이므로 자동재생이 허용된다)
+  resetPlayerToSummary();
   const video = document.getElementById("introVideoPlayer");
   if (video) {
-    // 사용자의 직접 인터랙션 전 자동 재생은 정책상 음소거가 필요하므로 컨트롤을 통한 수동 재생 유도
-    video.currentTime = 0;
+    video.play().catch(() => {
+      /* 자동재생이 막히면 포스터 상태로 두고 사용자가 재생 */
+    });
   }
 }
 
@@ -122,6 +172,13 @@ export function initializeIntroModal() {
     detailBtn.addEventListener("click", navigateToIntroAbout);
   }
 
+  // 2-1. "전체 소개 영상 보기" — 같은 플레이어에서 6분 전체본으로 전환
+  const fullBtn = document.getElementById("introModalFullBtn");
+  if (fullBtn) {
+    fullBtn.addEventListener("click", playFullIntroVideo);
+  }
+
+
   // 3. 1일 / 7일 / 30일 다시 보지 않기 버튼들 바인딩
   const hideButtons = modal.querySelectorAll(".intro-hide-btn");
   hideButtons.forEach((btn) => {
@@ -171,6 +228,7 @@ export function initializeIntroModal() {
   window.SjIntroModal = {
     open: openIntroModal,
     close: closeIntroModal,
+    playFull: playFullIntroVideo,
     hideFor: hideIntroModalFor,
     resetHideStatus: () => localStorage.removeItem(STORAGE_KEY),
   };

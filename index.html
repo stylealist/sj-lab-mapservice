@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="css/components/layer-panel.css?v=20260923" />
   <link rel="stylesheet" href="css/components/map-controls.css" />
   <link rel="stylesheet" href="css/components/info-pages.css?v=20260923" />
-  <link rel="stylesheet" href="css/components/intro-modal.css?v=20260923" />
+  <link rel="stylesheet" href="css/components/intro-modal.css?v=20260928b" />
   <style>
     /* CCTV 팝업 비디오 스타일 */
     .cctv-video-container {
@@ -1094,17 +1094,21 @@
         <!-- 모달 본문 (비디오 영역 & 프로젝트 요약) -->
         <div class="intro-modal-body">
           <div class="intro-video-wrapper">
+            <!-- 기본은 1분 요약본(무음). 자동재생 정책상 muted 여야 바로 재생된다.
+                 '전체 소개 영상 보기'를 누르면 같은 플레이어가 full-demo.mp4(소리 포함)로 바뀐다. -->
             <video
               id="introVideoPlayer"
               controls
               playsinline
+              muted
+              autoplay
               preload="metadata"
-              poster="images/mapImg/baseMap.png"
+              poster="videos/intro-poster.jpg"
+              src="videos/intro-summary.mp4"
             >
-              <!-- 1순위: 프로젝트 소개 영상 (배포 또는 로컬 영상) -->
-              <source src="videos/sj-lab-intro.mp4" type="video/mp4" />
               비디오 재생을 지원하지 않는 브라우저입니다.
             </video>
+            <span class="intro-video-tag" id="introVideoTag">1분 요약</span>
             <!-- 비디오 대체/안내 오버레이 (영상 로드 대기 또는 비디오 미존재 시 표시) -->
             <div id="introVideoFallback" class="intro-video-fallback hidden">
               <div class="fallback-content">
@@ -1146,6 +1150,13 @@
           </div>
           <div class="intro-modal-actions">
             <button type="button" class="intro-action-btn secondary" id="introModalDismissBtn">닫기</button>
+            <!-- 같은 플레이어에서 전체 설명 영상(6분, 소리 포함)으로 전환 -->
+            <button type="button" class="intro-action-btn ghost" id="introModalFullBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+              <span>전체 소개 영상 보기 (6분)</span>
+            </button>
             <button type="button" class="intro-action-btn primary" id="introModalDetailBtn">
               <span>자세히 보기</span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
