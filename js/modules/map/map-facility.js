@@ -402,6 +402,7 @@ async function loadFacilityIconConfig() {
       facilityLayer.changed();
     }
 
+    notifyFacilityLegendChanged(); // 범례도 DB 아이콘으로 다시 그린다
     console.log(`시설물 아이콘 설정 ${loadedTypes.length}건을 DB에서 불러왔습니다.`);
   } catch (error) {
     console.warn("시설물 아이콘 설정을 불러오지 못해 내장 기본 아이콘을 사용합니다:", error.message);
@@ -952,6 +953,7 @@ function applyFacilityClustering(enabled) {
   }
 
   syncFacilitySpiders();
+  notifyFacilityLegendChanged(); // 묶음 배지 항목이 범례에 나오고 사라진다
 }
 
 // 필터·선택이 바뀌었을 때 지도 표시 갱신. 묶음은 개수까지 다시 계산해야 하므로 refresh 를 쓴다.
@@ -3944,6 +3946,57 @@ function closeFacilityPopup(options = {}) {
   return true;
 }
 
+/**
+ * 범례(map-legend.js)에 넘길 시설물 항목.
+ * 지도에 실제로 쓰는 아이콘 생성 함수를 그대로 써서 범례와 핀이 어긋나지 않게 한다
+ * (아이콘·색 규칙이 바뀌면 범례도 자동으로 따라감).
+ */
+function getFacilityLegendItems() {
+  const defaultIcon = facilityDefaultIcon || FALLBACK_FACILITY_DEFAULT;
+  const baseColor = defaultIcon.pinColor || FACILITY_ICON_COLOR;
+  const warnColor = defaultIcon.warnColor || FACILITY_WARN_COLOR;
+  const doneColor = defaultIcon.officeDoneColor || FACILITY_OFFICE_DONE_COLOR;
+
+  const states = [
+    { key: "base", label: "보수 불필요", icon: buildFacilityIconUrl(defaultIcon.glyph, baseColor) },
+    { key: "warn", label: "보수 필요", icon: buildFacilityIconUrl(defaultIcon.glyph, warnColor) },
+    {
+      key: "done",
+      label: "보수 필요 · 내업 완료",
+      icon: buildFacilityIconUrl(defaultIcon.glyph, doneColor),
+    },
+  ];
+
+  if (facilityClusteringEnabled) {
+    states.push({
+      key: "cluster",
+      label: "겹친 핀 묶음(개수)",
+      icon: buildFacilityClusterIconUrl(12, baseColor, 14, false).url,
+    });
+  }
+
+  // 종류 아이콘은 DB(map.facility_icon) 설정 순서를 그대로 쓰고 기본 아이콘을 맨 뒤에 둔다
+  const types = facilityIconTypes
+    .concat([defaultIcon])
+    .filter((iconType) => iconType && iconType.glyph)
+    .map((iconType) => ({
+      key: iconType.type,
+      label: iconType.label || "시설물",
+      icon: buildFacilityIconUrl(iconType.glyph, iconType.pinColor || FACILITY_ICON_COLOR),
+    }));
+
+  return { states, types };
+}
+
+/** 범례가 다시 그리도록 알린다 (아이콘 설정 로드, 묶어 보기 토글 등) */
+function notifyFacilityLegendChanged() {
+  try {
+    document.dispatchEvent(new CustomEvent("sjlab:facility-legend-changed"));
+  } catch (e) {
+    // CustomEvent 를 못 쓰는 환경이면 범례만 갱신되지 않을 뿐 지도는 그대로 동작한다
+  }
+}
+
 // 레이어/소스 getter
 function getFacilityLayer() {
   return facilityLayer;
@@ -3955,6 +4008,7 @@ function getFacilitySource() {
 
 export {
   initializeFacilityModule,
+  getFacilityLegendItems,
   loadFacilities,
   selectFacility,
   showFacilityDetail,

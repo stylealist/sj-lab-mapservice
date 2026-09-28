@@ -379,9 +379,20 @@ function closeWmsPopup() {
   }
 }
 
+/** 범례(map-legend.js)용 — 지금 켜져 있는 WMS 레이어 목록 (아이콘 없이 이름만) */
+function getWmsLegendItems() {
+  return Object.keys(WMS_CONFIG)
+    .filter((layerName) => wmsLayers[layerName] && wmsLayers[layerName].getVisible())
+    .map((layerName) => ({
+      key: `wms-${layerName}`,
+      label: WMS_CONFIG[layerName].name,
+      icon: "",
+    }));
+}
+
 // 전역 객체에 WMS 함수들 추가
 window.toggleWmsLayer = toggleWmsLayer;
 window.showWmsPopup = showWmsPopup;
 window.closeWmsPopup = closeWmsPopup;
 
-export { initializeWmsLayers, toggleWmsLayer, showWmsPopup, closeWmsPopup };
+export { initializeWmsLayers, getWmsLegendItems, toggleWmsLayer, showWmsPopup, closeWmsPopup };

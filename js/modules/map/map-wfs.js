@@ -778,6 +778,24 @@ function initializeWfsLayers() {
   console.log("병원 레이어:", wfsLayers.hospital);
 }
 
+/**
+ * 범례(map-legend.js)용 — 지금 켜져 있는 WFS 레이어 목록.
+ * 아이콘은 지도에 쓰는 스타일에서 그대로 꺼내므로 범례와 지도가 어긋나지 않는다.
+ */
+function getWfsLegendItems() {
+  return Object.keys(WFS_CONFIG)
+    .filter((layerName) => wfsLayers[layerName] && wfsLayers[layerName].getVisible())
+    .map((layerName) => {
+      const config = WFS_CONFIG[layerName];
+      const iconStyle = config.style && config.style.image;
+      return {
+        key: layerName,
+        label: config.name,
+        icon: iconStyle && iconStyle.getSrc ? iconStyle.getSrc() : "",
+      };
+    });
+}
+
 // WFS 레이어 토글
 function toggleWfsLayer(layerName) {
   if (!wfsLayers[layerName]) {
@@ -2276,6 +2294,7 @@ window.testPharmacyHospitalApis = testPharmacyHospitalApis;
 export {
   getApiUrl,
   initializeWfsLayers,
+  getWfsLegendItems,
   toggleWfsLayer,
   toggleConvenienceStore,
   toggleBusStop,

@@ -39,6 +39,7 @@ import {
   showWmsPopup,
   closeWmsPopup,
 } from "./map-wms.js";
+import { initializeMapLegend, refreshMapLegend } from "./map-legend.js";
 import {
   initializeFacilityModule,
   loadFacilities,
@@ -85,6 +86,9 @@ function initializeMapWithModules() {
 
   // 시설물 모듈 초기화
   initializeFacilityModule();
+
+  // 지도 범례 초기화 (시설물은 항상, 그 밖의 레이어는 켠 것만 표시)
+  initializeMapLegend();
 
   // 초기화 완료 플래그 설정
   window.mapModulesInitialized = true;
@@ -134,6 +138,10 @@ window.closeWfsPopup = closeWfsPopup;
 window.showWmsPopup = showWmsPopup;
 window.closeWmsPopup = closeWmsPopup;
 
+// 범례 전역 등록
+window.initializeMapLegend = initializeMapLegend;
+window.refreshMapLegend = refreshMapLegend;
+
 // 시설물 모듈 전역 등록
 window.initializeFacilityModule = initializeFacilityModule;
 window.loadFacilities = loadFacilities;
@@ -151,6 +159,8 @@ window.testPharmacyHospitalApis = window.testPharmacyHospitalApis;
 
 export {
   initializeMapWithModules,
+  initializeMapLegend,
+  refreshMapLegend,
   mapTools,
   switchLayer,
   toggleOverlay,

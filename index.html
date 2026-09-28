@@ -16,6 +16,7 @@
   <link rel="stylesheet" href="css/components/header.css?v=20260923" />
   <link rel="stylesheet" href="css/components/layer-panel.css?v=20260923" />
   <link rel="stylesheet" href="css/components/map-controls.css" />
+  <link rel="stylesheet" href="css/components/map-legend.css?v=20260928b" />
   <link rel="stylesheet" href="css/components/info-pages.css?v=20260928" />
   <link rel="stylesheet" href="css/components/intro-modal.css?v=20260928b" />
   <style>
@@ -353,6 +354,28 @@
                 <span class="submenu-label">각도</span>
               </button>
             </div>
+          </div>
+
+          <!-- 지도 범례 — 시설물은 항상, 그 밖의 레이어는 켠 것만 (내용은 js/modules/map/map-legend.js가 채움) -->
+          <div class="map-legend" id="mapLegend">
+            <button type="button" class="map-legend-head" id="mapLegendToggle" aria-expanded="true"
+              aria-controls="mapLegendBody" title="범례 접기 (머리글을 끌면 위치를 옮길 수 있습니다)">
+              <span class="map-legend-head-icon" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2" />
+                  <polyline points="2 17 12 22 22 17" />
+                  <polyline points="2 12 12 17 22 12" />
+                </svg>
+              </span>
+              <span class="map-legend-title">범례</span>
+              <svg class="map-legend-caret" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            <div class="map-legend-body" id="mapLegendBody"></div>
           </div>
 
           <div class="layer-panel" id="layerPanel">

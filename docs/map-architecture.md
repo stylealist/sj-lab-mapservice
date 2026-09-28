@@ -10,6 +10,7 @@
 - **map-area-selector.js** (698줄) — 지도 영역 선택 → 캡처 기능. `html/fabric/fabric-editor.html`(Fabric.js 기반 편집기, 별도 페이지)로 연결됨.
 - **map-facility.js** — QField 시설물 레이어 및 관리 모듈. 시도/시군구/읍면동 행정구역 연쇄 검색에 따른 시설물 목록·지도 표출, 피처 선택 시 지도 이동 및 `ol.Overlay` 팝업 상세정보 표시.
 - **map-tools.js** — 콘솔 디버깅용 `window.mapTools` (flyTo, setZoom, resetMap 등).
+- **map-legend.js** — 지도 범례(`#mapLegend`, 왼쪽 아래). 각 레이어 모듈이 내려주는 항목(`getFacilityLegendItems()`·`getWfsLegendItems()`·`getWmsLegendItems()`)을 모아 그립니다. **시설물은 켜고 끄는 기능이 없어 항상 표시**하고, 그 밖의 레이어는 **켠 것만** 표시합니다.
 - **map-popup-drag.js** — 지도 팝업 헤더 드래그 이동 공용 함수 `bindOverlayHeaderDrag(overlay, header, { ignoreSelector })`. 시설물 팝업(`map-facility.js`), WFS 레이어 팝업(`showWfsPopup`, 편의점·약국·병원·관공서·버스·CCTV 공통), WMS 팝업(`showWmsPopup`)이 모두 이 함수를 씁니다. 오버레이 좌표는 대상 지점에 고정한 채 **offset만** 바꾸므로 옮긴 뒤에도 지도를 움직이면 팝업이 따라갑니다. WFS·WMS 팝업은 클릭할 때마다 요소와 오버레이를 새로 만들므로 **만들 때마다 다시 호출**해야 하고(요소를 지우면 리스너도 함께 사라짐), 닫기 버튼은 `ignoreSelector`로 제외해야 드래그로 오인되지 않습니다. 새 지도 팝업을 추가할 때도 헤더 드래그는 이 함수로 붙일 것(복사해서 새로 만들지 말 것).
 
 `html/` 아래 페이지들은 `index.html`의 SPA 라우팅(페이지 전환)에 포함되지 않는 **독립 팝업 페이지**입니다 — `map-roadview.js`/`map-area-selector.js`가 별도 창으로 여는 방식이므로, 관련 기능을 고칠 때는 두 파일과 그 팝업 HTML을 함께 봐야 합니다.
@@ -28,6 +29,19 @@
   - 화면에 그리는 일은 `renderLayerFromCache()` 한 곳에서만 합니다(뷰포트 필터 → `getMaxFeaturesByZoom()` 상한 → `spatialSampling()`). 레이어를 켤 때와 지도를 움직일 때 모두 이 함수를 씁니다.
   - `filterRawPointFeaturesByExtent()` + `scheduleBackgroundFeatureCaching()`은 **`bbox`를 모르는 예전 백엔드에 붙었을 때의 안전장치**로만 남아 있습니다(요청한 상한보다 훨씬 많이 오면 예전 방식대로 화면 안쪽만 먼저 파싱). 정상 경로에서는 타지 않으므로, 이 두 함수가 자주 불린다면 백엔드 버전을 의심할 것.
 - **`readFeatures()`에 넘기는 `featureProjection`은 반드시 `vectorSource.getProjection()`(= `null`)을 유지할 것.** OpenLayers 7.4.0에서 `ol.source.Vector`의 `getProjection()`은 `null`을 반환하고, `featureProjection`이 `null`이면 `readFeatures()`가 좌표를 **변환하지 않고 그대로** 사용합니다. 백엔드 응답 좌표가 이미 뷰 좌표계(EPSG:3857)이므로 이 동작에 의존하고 있습니다(옵션의 `dataProjection: "EPSG:4326"`은 실질적으로 무시됨). 여기에 `map.getView().getProjection()` 같은 실제 투영을 넘기면 미터 좌표를 경위도로 간주해 변환해버려 피처가 지도 밖으로 밀려나 **레이어가 아예 표시되지 않음**. 같은 이유로 원본 좌표 기반 뷰포트 필터링도 4326이 아니라 **뷰 좌표계 extent**로 비교해야 함.
+- **범례(`map-legend.js`) 규격**:
+  - 표시 규칙: **시설물(상태 색·종류 아이콘)은 항상**, WFS·WMS 레이어는 **`getVisible()`이 참인 것만**. 시설물 레이어에는 토글이 없으므로 조건 없이 그립니다.
+  - **아이콘을 범례에서 새로 만들지 말 것.** 지도에 쓰는 것과 같은 함수(`buildFacilityIconUrl()`·`buildFacilityClusterIconUrl()`, WFS 는 스타일의 `ol.style.Icon#getSrc()`)에서 가져오므로 아이콘·색 규칙을 바꾸면 범례도 자동으로 따라갑니다. 범례에 항목을 추가하려면 그 레이어 모듈의 `get*LegendItems()`를 고칠 것.
+  - 갱신 시점: 레이어의 `change:visible`(지도 레이어 컬렉션 전체와 이후 추가되는 레이어까지 구독)과 `sjlab:facility-legend-changed` 커스텀 이벤트(시설물 아이콘 DB 설정 로드, 핀 묶어 보기 토글). 50ms 안에 여러 번 불려도 한 번만 그립니다.
+  - 위치는 **왼쪽 아래**(레이어 패널 오른쪽, `left: 348px`)입니다. 오른쪽에는 세로 컨트롤 줄(`.cadastral-control`)이 있어 화면이 낮으면 범례가 그 버튼들을 덮습니다(실제로 1280×800·1366×700에서 발생) — 오른쪽으로 옮기지 말 것.
+  - `bottom` 값은 JS(`positionLegendAboveViewportBottom()`)가 다시 계산합니다. `.main-content`가 헤더 높이만큼 화면 아래로 넘쳐 있어 CSS `bottom`만으로는 범례가 화면 밖으로 잘립니다. 창 크기가 바뀌거나 범례를 다시 그릴 때마다 맞춥니다.
+  - 섹션 순서는 **시설물 상태 → 시설물 종류 → 공공데이터 레이어**입니다. 앞의 둘은 항상 있는 내용이고 마지막만 레이어를 켜고 끌 때 생겼다 없어지므로, **바뀌는 섹션을 맨 아래**에 둬야 켤 때마다 아래 내용이 밀려 내려가지 않습니다(중간에 두지 말 것). 새로 켠 레이어가 가려지지 않도록 항목이 늘어나면 본문을 아래로 스크롤합니다(`scrollLegendToBottom()`, `prefers-reduced-motion`이면 즉시 이동).
+  - 섹션 이름은 "켜 둔 레이어"가 아니라 **"공공데이터 레이어"**입니다(2026-09-28 변경) — 켜져 있을 때만 나오므로 "켜 둔"은 군더더기이고, 무엇을 가리키는지 이름만으로 알 수 있게 했습니다.
+  - 접기 상태는 `localStorage`(`sjLabMapLegendOpen`, 읽기·쓰기 모두 try/catch)에 기억합니다.
+  - **머리글 드래그로 옮길 수 있습니다.** 머리글(`#mapLegendToggle`)은 접기 버튼이면서 드래그 손잡이라, 움직인 거리가 `LEGEND_DRAG_THRESHOLD`(4px) 미만이면 접기/펼치기, 그 이상이면 이동으로 봅니다(끌고 난 직후의 `click` 은 `dataset.suppressToggle` 로 무시). 옮긴 자리는 지도 컨테이너 기준 `{left, top}` 으로 `localStorage`(`sjLabMapLegendPos`)에 저장하고 다음 접속에 복원합니다.
+    - 옮긴 뒤에는 기본 자리(`left`/`bottom`) 대신 인라인 `left`/`top`(+`bottom: auto`)으로 붙습니다. 그래서 `positionLegendAboveViewportBottom()`은 **옮긴 자리가 있으면 그 자리를 유지**하고 화면 밖으로 나가지 않게 다듬기만 합니다.
+    - `clampLegendPosition()`이 지도 폭과 **화면에 보이는 아래 끝**(컨테이너가 헤더 높이만큼 넘쳐 있으므로 `window.innerHeight` 기준)을 함께 봐서 가장자리 밖으로 나가지 못하게 막습니다. 창 크기가 바뀌거나 접었다 펴도 다시 맞춥니다.
+    - 드래그는 pointer 이벤트로 처리하고 머리글에 `touch-action: none`을 둡니다. `pointerdown`에서 전파를 막아 지도가 같이 끌려가지 않게 합니다.
 - **시설물 레이어 (`map-facility.js`) 규격**:
   - **`zIndex`: 항상 최상단** — 시설물 관리가 이 서비스의 주 기능이므로 핀·묶음이 어떤 레이어에도 가리지 않게 합니다. 기본값은 `FACILITY_LAYER_Z_INDEX = 1500`(다른 레이어: WFS·WMS 1000, 영역 선택 999~1000, 측정·배경 지도 미지정=0)이고, `keepFacilityLayerOnTop()`이 **레이어가 추가·제거될 때마다 다시 계산해** 더 높은 레이어가 생기면 그보다 `FACILITY_LAYER_Z_MARGIN`(10)만큼 위로 올립니다. 새 레이어를 만들 때 1500 이상을 쓰더라도 시설물이 자동으로 위로 올라가므로, **시설물 레이어의 zIndex 를 다른 곳에서 직접 바꾸지 말 것**(보정과 싸우게 됩니다).
   - **아이콘**: PNG 파일이 아니라 `buildFacilityIconUrl()`이 만드는 **SVG data URI 핀**(원본 24×32, `anchor [0.5, 1.0]`)을 사용합니다. 시설물명(`fclt_nm`)에 포함된 키워드로 종류를 판별해 글리프를 고르고, `repair_required_yn === 'Y'`면 핀 색을 경고색(주황 `#d97706`)으로 바꾸되, 보수 필요 시설물 중 내업이 완료된(`office_work_status === 'DONE'`) 것은 초록 계열(`FACILITY_OFFICE_DONE_COLOR` `#059669`)로 구분합니다. 글리프 안의 문자열 `COLOR`는 핀 색으로 치환되므로 색을 직접 적지 말 것. 종류·색(base/warn/done)·선택 상태 조합은 `facilityStyleCache`에 캐시되므로(피처 2천여 건) 스타일 함수 안에서 `new ol.style.Style`을 새로 만들지 말 것.
