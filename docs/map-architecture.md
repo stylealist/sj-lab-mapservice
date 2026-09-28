@@ -2,7 +2,7 @@
 
 - **map-core.js** — OpenLayers `Map`/`View` 생성. VWorld XYZ 타일(`xdworld.vworld.kr`)로 일반지도/위성/하이브리드 오버레이 구성, 서울 중심(`[127.0, 37.5]`)으로 초기화.
 - **map-events.js** — `MapEventManager`: id 기반으로 move/click 등 지도 이벤트 리스너를 등록하고 중복 등록을 막는 중앙 레지스트리. 모듈이 재초기화될 수 있어 이 가드가 필요함.
-- **map-layers.js** — 배경지도 전환(`switchLayer`), 오버레이 토글.
+- **map-layers.js** — 배경지도 전환(`switchLayer`), 오버레이 토글(`toggleOverlay`)과 **상태 지정**(`setOverlayVisible`).
 - **map-wfs.js** (2,200줄, 최대 파일) — 편의점/버스정류장/CCTV/약국/병원/관공서 등 POI를 자체 백엔드 API로부터 WFS 방식으로 조회·표시. `getApiUrl()`이 `location.hostname`에 따라 `http://localhost:8100`(개발)과 `https://api.sj-lab.co.kr`(운영)을 전환함 — 새 WFS 레이어를 추가할 때 이 패턴을 그대로 따라야 함.
 - **map-wms.js** — `geoserver.sj-lab.co.kr`의 GeoServer WMS 레이어(현재 편의점 WMS 1종).
 - **map-measure.js** (1,339줄) — 거리/면적/반경/각도 측정 도구와 측정 결과 팝업.
@@ -29,6 +29,7 @@
   - 화면에 그리는 일은 `renderLayerFromCache()` 한 곳에서만 합니다(뷰포트 필터 → `getMaxFeaturesByZoom()` 상한 → `spatialSampling()`). 레이어를 켤 때와 지도를 움직일 때 모두 이 함수를 씁니다.
   - `filterRawPointFeaturesByExtent()` + `scheduleBackgroundFeatureCaching()`은 **`bbox`를 모르는 예전 백엔드에 붙었을 때의 안전장치**로만 남아 있습니다(요청한 상한보다 훨씬 많이 오면 예전 방식대로 화면 안쪽만 먼저 파싱). 정상 경로에서는 타지 않으므로, 이 두 함수가 자주 불린다면 백엔드 버전을 의심할 것.
 - **`readFeatures()`에 넘기는 `featureProjection`은 반드시 `vectorSource.getProjection()`(= `null`)을 유지할 것.** OpenLayers 7.4.0에서 `ol.source.Vector`의 `getProjection()`은 `null`을 반환하고, `featureProjection`이 `null`이면 `readFeatures()`가 좌표를 **변환하지 않고 그대로** 사용합니다. 백엔드 응답 좌표가 이미 뷰 좌표계(EPSG:3857)이므로 이 동작에 의존하고 있습니다(옵션의 `dataProjection: "EPSG:4326"`은 실질적으로 무시됨). 여기에 `map.getView().getProjection()` 같은 실제 투영을 넘기면 미터 좌표를 경위도로 간주해 변환해버려 피처가 지도 밖으로 밀려나 **레이어가 아예 표시되지 않음**. 같은 이유로 원본 좌표 기반 뷰포트 필터링도 4326이 아니라 **뷰 좌표계 extent**로 비교해야 함.
+- **배경지도 버튼과 하이브리드 오버레이**: 일반/위성 버튼(`.map-type-btn`)은 하이브리드(도로·지명) 오버레이를 **`setOverlayVisible("hybrid", 위성인가)`로 상태를 정해** 켭니다. `toggleOverlay()`로 뒤집으면 같은 버튼을 두 번 눌렀을 때 하이브리드가 켜졌다 꺼졌다 합니다(2026-09-28 실제 발생). "이 지도면 켜짐"이 정해져 있는 자리에는 토글을 쓰지 말 것.
 - **범례(`map-legend.js`) 규격**:
   - 표시 규칙: **시설물(상태 색·종류 아이콘)은 항상**, WFS·WMS 레이어는 **`getVisible()`이 참인 것만**. 시설물 레이어에는 토글이 없으므로 조건 없이 그립니다.
   - **아이콘을 범례에서 새로 만들지 말 것.** 지도에 쓰는 것과 같은 함수(`buildFacilityIconUrl()`·`buildFacilityClusterIconUrl()`, WFS 는 스타일의 `ol.style.Icon#getSrc()`)에서 가져오므로 아이콘·색 규칙을 바꾸면 범례도 자동으로 따라갑니다. 범례에 항목을 추가하려면 그 레이어 모듈의 `get*LegendItems()`를 고칠 것.

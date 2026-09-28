@@ -336,9 +336,10 @@
 }
 
 /* 기술 스택 섹션 */
+/* 그룹이 3개를 넘어도 줄이 어색하게 남지 않도록 폭에 맞춰 자동 배치 */
 .tech-groups {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1.25rem;
 }
 

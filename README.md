@@ -9,6 +9,7 @@
 - **공간정보(GIS) 시각화 및 연쇄 필터링**: 시·도 → 시·군·구 → 읍·면·동 3단계 행정구역 연쇄 필터와 시설물 상태(보수 필요/불필요/내업 상태별)에 따른 실시간 공간 렌더링 및 목록 뷰 동기화.
 - **대용량 피처 클러스터링 및 가상 분산(Spidering)**: 수천 건의 지점 객체를 축척별 클러스터 배지로 집약하고, 고배율 확대 시 동일/인접 좌표 객체를 원형으로 펼쳐 개별 선택성을 보장.
 - **시설물 내업 및 멀티미디어 조치 UI**: 조치 이력 등록, 일정/비용 산정, 현장 전/후 사진 업로드(클라이언트 이미지 리사이징), QFieldCloud 원격 미디어(사진/음성/영상) 스트리밍 팝업, PDF 보고서 생성.
+- **현장 확인 보조 도구**: 공공데이터 레이어 6종(편의점·버스정류장·CCTV·약국·병원·관공서, 화면 영역만 조회), 카카오맵 로드뷰 연동, 거리·면적·반경·각도 측정, 지도 캡처 후 Fabric.js 편집기에서 표시·저장.
 - **지도 범례**: 지도 왼쪽 아래에 지금 보이는 기호를 설명합니다. **시설물은 켜고 끄는 기능이 없어 항상**(보수 불필요/보수 필요/내업 완료 핀 색, 묶음 배지, 종류 아이콘), 공공데이터 레이어는 **켠 것만** 목록 맨 아래에 나옵니다. 아이콘은 지도에 쓰는 것과 같은 함수에서 가져오므로 아이콘·색을 바꾸면 범례도 함께 바뀝니다. **머리글을 잡아 끌어 원하는 자리로 옮길 수 있고**(지도 밖으로는 나가지 않습니다), 접기 상태와 옮긴 위치는 브라우저에 기억됩니다.
 - **소개(About) · 저장소 · 문의(Contact) 화면**: 데이터가 지나가는 길(현장 외업 → 30초 동기화 → PostGIS → 웹 관제), 주요 지표와 기능 설명, 사용한 기술을 정리해 보여 줍니다. "저장소 · 문의" 탭에는 이 플랫폼을 이루는 **공개 저장소 13곳**과 운영 중인 서비스(허브 · ArgoCD · Jenkins · QFieldCloud · 쿠버네티스 대시보드) 링크, 이메일을 모아 두었습니다.
 - **프로젝트 설명 영상 팝업 & 노출 제어**: 첫 접속 시 **1분 요약 영상**(`videos/intro-summary.mp4`)을 음소거 자동재생하는 팝업을 띄우고, "전체 소개 영상 보기(6분)"를 누르면 같은 플레이어에서 **전체 데모 영상**(`videos/full-demo.mp4`, 소리 포함)으로 전환. 소개 탭의 "프로젝트 소개 영상 보기" 버튼으로 같은 팝업을 다시 열 수 있고, "자세히 보기" 시 소개 탭 즉시 전환, 1일/7일/30일 만료 기반 다시 보지 않기(localStorage) 제어. 영상 규격·교체 방법은 [`videos/README.md`](videos/README.md).
@@ -18,11 +19,12 @@
 
 ## 2. 기술 스택
 
-- **코어 기술**: HTML5, CSS3, Modern JavaScript (ES Modules, Vanilla JS)
-- **GIS 렌더링 라이브러리**: OpenLayers 7.x (Vendor Bundle), VWorld 배경지도 타일
-- **멀티미디어**: Hls.js (CCTV 실시간 스트리밍 재생), Web Audio API
-- **아키텍처 구조**: No-Build 순수 정적 SPA (Webpack/Vite 등 빌드 도구 의존성 없음)
-- **배포 환경**: NGINX 정적 웹서버 (포트 4000 / 운영 `https://sj-lab.co.kr/map/`)
+- **코어 기술**: HTML5, CSS3, Modern JavaScript (ES Modules, Vanilla JS) — 빌드 도구·패키지 매니저 없이 동작하는 정적 SPA
+- **지도·공간정보**: OpenLayers(벤더링), VWorld 배경지도(일반·위성·하이브리드), GeoJSON/WFS, GeoServer WMS
+- **연동 라이브러리**: hls.js(CCTV 스트리밍), 카카오맵 로드뷰 SDK, Fabric.js(지도 캡처 편집), Canvas API(업로드 사진 리사이즈)
+- **백엔드**(`mapservice-rest`): Spring Boot 3.3 / Java 17, MyBatis, PostgreSQL 17 + PostGIS 3.4, OpenPDF(보고서), springdoc OpenAPI
+- **현장 수집·동기화**: QField 포크 앱(C++·QML) + QGIS, QFieldCloud, GeoPackage, Python 워커(GeoPandas·Shapely·psycopg2·SQLAlchemy)
+- **인프라·배포**: Kubernetes(k3s) + Helm + ArgoCD, Jenkins, Docker, NCP 컨테이너 레지스트리, nginx 정적 웹서버(운영 `https://sj-lab.co.kr/map/`), Spring Cloud Gateway + Eureka, JWT 로그인 서버
 
 ---
 

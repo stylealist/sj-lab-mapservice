@@ -662,12 +662,10 @@ function initializeLayerPanel() {
         window.switchLayer(mapType);
       }
 
-      // 위성 지도 선택 시 하이브리드도 함께 켜기
-      if (mapType === "satellite" && window.toggleOverlay) {
-        window.toggleOverlay("hybrid");
-      } else if (mapType === "common" && window.toggleOverlay) {
-        // 일반 지도 선택 시 하이브리드 끄기
-        window.toggleOverlay("hybrid");
+      // 하이브리드(도로·지명) 오버레이는 위성 지도에서만 켠다.
+      // 예전에는 toggleOverlay 로 뒤집어서, 같은 버튼을 두 번 누르면 켜졌다 꺼졌다 했다.
+      if (window.setOverlayVisible) {
+        window.setOverlayVisible("hybrid", mapType === "satellite");
       }
     });
   });
