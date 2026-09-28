@@ -448,12 +448,16 @@
   word-break: keep-all;
 }
 
-/* 연락처 채널 그리드 */
+/* 연락처 채널 그리드 — 저장소 카드는 링크가 많아 한 줄을 다 쓴다 */
 .contact-channels-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1.25rem;
   margin-bottom: 2.5rem;
+}
+
+.contact-channel-card.wide {
+  grid-column: 1 / -1;
 }
 
 .contact-channel-card {
@@ -506,7 +510,6 @@
   line-height: 1.5;
   margin-bottom: 1rem;
   word-break: keep-all;
-  flex-grow: 1;
 }
 
 .channel-links {
@@ -539,6 +542,36 @@
   width: 14px;
   height: 14px;
   flex-shrink: 0;
+}
+
+/* 링크 옆 설명 (저장소가 무엇인지) */
+.link-note {
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  word-break: keep-all;
+}
+
+.channel-links li a:hover .link-note {
+  color: #64748b;
+}
+
+/* 저장소 목록은 개수가 많아 폭이 되는 만큼 여러 열로 늘어놓는다 */
+.channel-links.repo-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 10px 1.5rem;
+}
+
+/* 저장소 이름이 글자 단위로 끊기지 않도록(sj-lab-k8s-man/ifests 방지) */
+.channel-links.repo-list li a {
+  align-items: flex-start;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.channel-links.repo-list li a svg {
+  margin-top: 3px;
 }
 
 /* 가이드 및 팁 박스 */

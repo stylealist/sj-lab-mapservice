@@ -9,7 +9,7 @@
 - **공간정보(GIS) 시각화 및 연쇄 필터링**: 시·도 → 시·군·구 → 읍·면·동 3단계 행정구역 연쇄 필터와 시설물 상태(보수 필요/불필요/내업 상태별)에 따른 실시간 공간 렌더링 및 목록 뷰 동기화.
 - **대용량 피처 클러스터링 및 가상 분산(Spidering)**: 수천 건의 지점 객체를 축척별 클러스터 배지로 집약하고, 고배율 확대 시 동일/인접 좌표 객체를 원형으로 펼쳐 개별 선택성을 보장.
 - **시설물 내업 및 멀티미디어 조치 UI**: 조치 이력 등록, 일정/비용 산정, 현장 전/후 사진 업로드(클라이언트 이미지 리사이징), QFieldCloud 원격 미디어(사진/음성/영상) 스트리밍 팝업, PDF 보고서 생성.
-- **플랫폼 소개(About) 및 엔지니어링/지원(Contact) 뷰**: 시스템 파이프라인(현장 외업 → 동기화 → PostGIS → 관제), 핵심 기술 지표, 기술 지원 창구 및 공식 GitHub/DevOps 링크 포털 제공.
+- **소개(About) · 저장소 · 문의(Contact) 화면**: 데이터가 지나가는 길(현장 외업 → 30초 동기화 → PostGIS → 웹 관제), 주요 지표와 기능 설명, 사용한 기술을 정리해 보여 줍니다. "저장소 · 문의" 탭에는 이 플랫폼을 이루는 **공개 저장소 13곳**과 운영 중인 서비스(허브 · ArgoCD · Jenkins · QFieldCloud · 쿠버네티스 대시보드) 링크, 이메일을 모아 두었습니다.
 - **프로젝트 설명 영상 팝업 & 노출 제어**: 첫 접속 시 **1분 요약 영상**(`videos/intro-summary.mp4`)을 음소거 자동재생하는 팝업을 띄우고, "전체 소개 영상 보기(6분)"를 누르면 같은 플레이어에서 **전체 데모 영상**(`videos/full-demo.mp4`, 소리 포함)으로 전환. 소개 탭의 "프로젝트 소개 영상 보기" 버튼으로 같은 팝업을 다시 열 수 있고, "자세히 보기" 시 소개 탭 즉시 전환, 1일/7일/30일 만료 기반 다시 보지 않기(localStorage) 제어. 영상 규격·교체 방법은 [`videos/README.md`](videos/README.md).
 - **SSO 게이트웨이 연동**: 세션 토큰 감지 시 중앙 로그인 서버(`/auth/login.html`)와 연동하여 무중단 사용자 인증을 보장.
 
@@ -92,12 +92,12 @@ function facilityClusterGeometry(feature) {
 
 ```
 sj-lab-mapservice/
-├── index.html                  # 단일 페이지 뷰 (지도, 소개, 연락처)
+├── index.html                  # 단일 페이지 뷰 (지도, 소개, 저장소 · 문의)
 ├── css/
 │   ├── layouts/main.css        # 전체 화면 레이아웃
 │   ├── components/header.css   # 상단 헤더, SSO 사용자 정보, 링크
 │   ├── components/layer-panel.css # 좌측 시설물 목록 및 내업 패널
-│   ├── components/info-pages.css  # 소개 및 연락처 전용 반응형 레이아웃/스타일
+│   ├── components/info-pages.css  # 소개 · 저장소 · 문의 화면 전용 반응형 레이아웃/스타일
 │   └── components/intro-modal.css # 프로젝트 소개 영상 팝업 모달 스타일
 ├── videos/                     # 소개 영상 미디어 파일 (mp4) 저장소
 └── js/
@@ -118,10 +118,14 @@ sj-lab-mapservice/
 
 ## 6. 로컬 실행 및 확인
 
-별도의 빌드 과정 없이 정적 웹 서버를 통해 구동합니다:
+별도의 빌드 과정 없이 정적 웹 서버를 통해 구동합니다. **Range 요청(206 Partial Content)을 지원하는 서버**로 띄워야 소개 영상의 재생 위치를 옮길 수 있습니다:
 ```bash
-# Python 내장 웹서버를 이용한 포트 4000 기동 (게이트웨이 CORS 허용 포트)
-python -m http.server 4000
+# 통합 스택 스크립트(권장) — Eureka·백엔드·게이트웨이까지 함께 기동
+powershell -ExecutionPolicy Bypass -File C:\developer\workspace\mapservice-rest\scripts\local-stack.ps1 start
+
+# 프론트만 띄울 때 (게이트웨이 CORS 허용 포트 4000)
+node C:\developer\workspace\mapservice-rest\scripts\static-server.js . 4000
 ```
 - 브라우저 접속: `http://localhost:4000`
 - 인증 상태가 없을 경우 자동으로 `http://localhost:8100/auth/login.html`로 리다이렉트됩니다.
+- `python -m http.server 4000` 도 화면은 뜨지만 **Range 요청을 지원하지 않아 동영상 위치 이동(seek)이 되지 않습니다.**
