@@ -65,4 +65,4 @@ window.MapEventManager.debugHandlers()
 
 ## 통합 허브
 
-저장소를 넘나드는 작업(프론트엔드 + 백엔드 + 게이트웨이)의 총괄 기준 저장소는 `C:\developer\workspace\mapservice-rest`입니다. MCP(GitHub/DB), 로컬 비밀값, Bash 가드 훅, DB 분석 문서, 로컬 포트·라우팅·CORS 구성은 그 저장소에서 관리하므로 이 저장소에는 MCP 서버가 연결되지 않습니다. 로컬 개발 시 API는 API Gateway(`localhost:8100`)를 거치며, 프론트엔드는 게이트웨이 CORS 허용 origin인 `http://localhost:4000`에서 서빙해야 API 호출이 됩니다.
+저장소를 넘나드는 작업(프론트엔드 + 백엔드 + 게이트웨이)의 총괄 기준 저장소는 `C:\developer\workspace\sj-lab`입니다. MCP(GitHub/DB), 로컬 비밀값, Bash 가드 훅, DB 분석 문서, 로컬 포트·라우팅·CORS 구성은 그 저장소에서 관리하므로 이 저장소에는 MCP 서버가 연결되지 않습니다. 로컬 개발 시 API는 API Gateway(`localhost:8100`)를 거치며, 프론트엔드는 게이트웨이 CORS 허용 origin인 `http://localhost:4000`에서 서빙해야 API 호출이 됩니다.

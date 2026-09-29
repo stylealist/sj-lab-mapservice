@@ -126,10 +126,10 @@ sj-lab-mapservice/
 별도의 빌드 과정 없이 정적 웹 서버를 통해 구동합니다. **Range 요청(206 Partial Content)을 지원하는 서버**로 띄워야 소개 영상의 재생 위치를 옮길 수 있습니다:
 ```bash
 # 통합 스택 스크립트(권장) — Eureka·백엔드·게이트웨이까지 함께 기동
-powershell -ExecutionPolicy Bypass -File C:\developer\workspace\mapservice-rest\scripts\local-stack.ps1 start
+powershell -ExecutionPolicy Bypass -File C:\developer\workspace\sj-lab\scripts\local-stack.ps1 start
 
 # 프론트만 띄울 때 (게이트웨이 CORS 허용 포트 4000)
-node C:\developer\workspace\mapservice-rest\scripts\static-server.js . 4000
+node C:\developer\workspace\sj-lab\scripts\static-server.js . 4000
 ```
 - 브라우저 접속: `http://localhost:4000`
 - 인증 상태가 없을 경우 자동으로 `http://localhost:8100/auth/login.html`로 리다이렉트됩니다.

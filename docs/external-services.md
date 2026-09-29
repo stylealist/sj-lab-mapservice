@@ -15,7 +15,7 @@
 
 # MCP·총괄 설정 (이전됨)
 
-GitHub/DB MCP 설정(`.mcp.json`), 로컬 비밀값(`.claude/settings.local.json`), Bash 가드 훅, DB 분석 문서, 로컬 개발 구성(포트·라우팅·CORS) 문서는 2026-09-15에 통합 허브 저장소 `mapservice-rest`(`C:\developer\workspace\mapservice-rest`)로 옮겼습니다. 저장소를 넘나드는 작업과 DB 조회는 그 저장소에서 Claude Code 세션을 띄워 진행합니다 — `docs/mcp.md`, `docs/dev-environment.md` 참고.
+GitHub/DB MCP 설정(`.mcp.json`), 로컬 비밀값(`.claude/settings.local.json`), Bash 가드 훅, DB 분석 문서, 로컬 개발 구성(포트·라우팅·CORS) 문서는 통합 허브 저장소 `sj-lab`(`C:\developer\workspace\sj-lab`)에 있습니다(2026-09-15 `mapservice-rest`로, 2026-09-30 `sj-lab`으로 이전). 저장소를 넘나드는 작업과 DB 조회는 그 저장소에서 Claude Code 세션을 띄워 진행합니다 — `docs/mcp.md`, `docs/dev-environment.md` 참고.
 
 ## 반드시 지킬 것
 
