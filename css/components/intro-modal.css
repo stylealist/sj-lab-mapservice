@@ -126,12 +126,24 @@
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
+/* object-fit 은 반드시 contain — cover 로 두면 전체화면(브라우저 창 비율이 16:9 가 아닐 때)에서
+   위아래가 잘려 **화면에 새겨 둔 자막이 보이지 않는다**(2026-09-29 실제 발생).
+   팝업 안에서는 래퍼가 16:9 라 contain 과 cover 의 결과가 같다. */
 .intro-video-wrapper video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   background: #090d16;
+}
+
+/* 전체화면일 때도 같은 규칙을 유지한다(브라우저가 기본 스타일을 덮어쓰는 경우 대비) */
+.intro-video-wrapper video:fullscreen,
+.intro-video-wrapper video:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000000;
 }
 
 /* 비디오 폴백/플레이스홀더 오버레이 */
