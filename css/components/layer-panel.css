@@ -11,11 +11,13 @@
   height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   background: #ffffff;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
   z-index: 1600;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* transition 은 한 줄로만 둘 것 — 두 번 적으면 뒤의 것이 앞의 것을 덮어써서
+     헤더를 다시 펼칠 때 패널 높이가 즉시 줄고 아래가 잠깐 비어 보인다(2026-09-29). */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateX(0);
   border-right: 1px solid #e2e8f0;
 }
