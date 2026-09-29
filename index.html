@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="css/components/layer-panel.css?v=20260928" />
   <link rel="stylesheet" href="css/components/map-controls.css" />
   <link rel="stylesheet" href="css/components/map-legend.css?v=20260928b" />
-  <link rel="stylesheet" href="css/components/info-pages.css?v=20260928b" />
+  <link rel="stylesheet" href="css/components/info-pages.css?v=20260928c" />
   <link rel="stylesheet" href="css/components/intro-modal.css?v=20260928b" />
   <style>
     /* CCTV 팝업 비디오 스타일 */
@@ -672,6 +672,15 @@
                   </svg>
                   <span>프로젝트 소개 영상 보기</span>
                 </button>
+                <a class="info-video-trigger-btn info-log-link" href="https://claude.ai/artifact/HhEYu2UmxSko5h8uef7hB9" target="_blank" rel="noopener noreferrer">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 8v4l3 2"/>
+                    <path d="M3.05 11a9 9 0 1 1 .5 4"/>
+                    <polyline points="3 4 3 11 10 11"/>
+                  </svg>
+                  <span>개발 변경 로그 보기</span>
+                </a>
               </div>
             </div>
 
@@ -1069,6 +1078,18 @@
               </div>
               <div class="channel-title">GitHub 저장소</div>
               <p class="channel-desc">화면부터 API, 배치, 배포 설정까지 전부 공개해 뒀습니다. 저장소마다 README에 구조와 실행 방법을 적어 뒀습니다.</p>
+              <a class="channel-highlight-link" href="https://claude.ai/artifact/HhEYu2UmxSko5h8uef7hB9" target="_blank" rel="noopener noreferrer">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                  stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 8v4l3 2"/>
+                  <path d="M3.05 11a9 9 0 1 1 .5 4"/>
+                  <polyline points="3 4 3 11 10 11"/>
+                </svg>
+                <span class="channel-highlight-text">
+                  <strong>개발 변경 로그 (v1.0 ~ 현재)</strong>
+                  <span class="link-note">하네스 엔지니어링으로 개발하면서 버전마다 남긴 작업 기록 — 무엇을 왜 바꿨는지, 어떻게 확인했는지</span>
+                </span>
+              </a>
               <ul class="channel-links repo-list">
                 <li>
                   <a href="https://github.com/stylealist/sj-lab" target="_blank" rel="noopener noreferrer">
@@ -1180,12 +1201,36 @@
                 </svg>
               </div>
               <div class="channel-title">플랫폼 포털 & 인프라</div>
-              <p class="channel-desc">서비스가 실제로 돌아가고 있는 곳들입니다. 허브를 뺀 나머지는 로그인이 필요합니다.</p>
+              <p class="channel-desc">서비스가 실제로 돌아가고 있는 곳들입니다. 허브 · API 게이트웨이 · Eureka · 로그인 화면은 바로 열리고, ArgoCD · Jenkins · QFieldCloud · 쿠버네티스 대시보드는 로그인이 필요합니다.</p>
               <ul class="channel-links">
                 <li>
                   <a href="https://sj-lab.co.kr" target="_blank" rel="noopener noreferrer">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                     SJ-LAB 허브 <span class="link-note">전체 서비스 첫 화면</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="https://api.sj-lab.co.kr/map/check" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    API 게이트웨이 <span class="link-note">지도·시설물 백엔드 상태 확인</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="https://eureka.sj-lab.co.kr" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    Eureka <span class="link-note">마이크로서비스 등록 현황</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="https://api.sj-lab.co.kr/auth/login.html" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    로그인(SSO) <span class="link-note">허브·지도가 함께 쓰는 로그인 화면</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="https://qfield.sj-lab.co.kr" target="_blank" rel="noopener noreferrer">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    QFieldCloud <span class="link-note">현장 앱이 데이터를 올리는 서버</span>
                   </a>
                 </li>
                 <li>
@@ -1201,18 +1246,12 @@
                   </a>
                 </li>
                 <li>
-                  <a href="https://qfield.sj-lab.co.kr" target="_blank" rel="noopener noreferrer">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                    QFieldCloud <span class="link-note">현장 앱이 데이터를 올리는 서버</span>
-                  </a>
-                </li>
-                <li>
                   <a href="https://dashboard.sj-lab.co.kr/" target="_blank" rel="noopener noreferrer">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                     Kubernetes 대시보드 <span class="link-note">클러스터 · 워크로드 상태 (k3s)</span>
                   </a>
                 </li>
-              </ul>
+</ul>
             </div>
           </div>
 

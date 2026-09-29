@@ -16,8 +16,10 @@
   - "다시 보지 않기"는 1·7·30일 버튼이며 `localStorage`(`SJ_MAP_INTRO_HIDE_UNTIL`)에 만료 시각을 저장합니다. 영상 로드가 실패하면 기존 안내 카드(`#introVideoFallback`)로 대체됩니다. 파일 규격·교체 방법은 `videos/README.md` 참고.
 - **소개 · 연락처 탭 문구**: 사람이 말하듯 쉬운 표현으로 적습니다(2026-09-28 전면 수정). "차세대", "엔드투엔드로 완결", "100% 동기화", "초고속", "~를 완비하였으며" 같은 홍보 문구나 번역투를 쓰지 말고, **무엇이 어떻게 동작하는지**를 그대로 적을 것. 숫자는 실제 값과 맞출 것(내업 처리 상태는 5단계, 공공데이터 레이어는 6종).
   - 기술 뱃지는 **실제로 쓰는 것만** 적습니다. 보고서 PDF는 프론트가 아니라 백엔드(`mapservice-rest`, OpenPDF)가 만들므로 `jsPDF` 같은 안 쓰는 항목을 넣지 말 것.
+  - **개발 변경 로그 링크**(`https://claude.ai/artifact/HhEYu2UmxSko5h8uef7hB9`)는 두 곳에 있습니다 — 소개 히어로의 "개발 변경 로그 보기"(`.info-log-link`)와 저장소·문의 탭 저장소 카드 위의 강조 링크(`.channel-highlight-link`). **주소가 바뀌면 두 곳을 함께 고칠 것**(같은 페이지를 가리킵니다). 이 주소는 `mapservice-rest/history/web/artifact.html`을 발행한 페이지이며, 발행 페이지 주소가 바뀌면 `sj-lab` 저장소 README의 표도 같이 봐야 합니다.
   - 연락처의 **GitHub 저장소 목록(`.channel-links.repo-list`)은 손으로 관리**합니다. 저장소를 새로 만들거나 이름을 바꾸면 이 목록도 같이 고칠 것(공개 저장소만 — 비공개 저장소 링크는 넣지 않습니다). 카드는 `.contact-channel-card.wide`로 한 줄을 다 쓰고 링크만 여러 열로 배치합니다.
-  - 인프라 링크는 **실제로 열리는 주소만** 적습니다(2026-09-28 기준 허브 `sj-lab.co.kr`, ArgoCD `argo.`, Jenkins `jenkins.`, QFieldCloud `qfield.`, 쿠버네티스 대시보드 `dashboard.`). 주소를 추가·변경할 때는 눌러서 응답을 확인하고 넣을 것 — 없는 주소를 적어 두면 처음 보는 사람이 그대로 실패합니다.
+  - 인프라 링크는 **실제로 열리는 주소만** 적습니다. 2026-09-28 기준 8개: 허브 `sj-lab.co.kr`, API 게이트웨이 `api.sj-lab.co.kr/map/check`, Eureka `eureka.`, 로그인 `api.sj-lab.co.kr/auth/login.html`, QFieldCloud `qfield.`, ArgoCD `argo.`, Jenkins `jenkins.`, 쿠버네티스 대시보드 `dashboard.`. 주소를 추가·변경할 때는 눌러서 응답을 확인하고 넣을 것 — 없는 주소를 적어 두면 처음 보는 사람이 그대로 실패합니다.
+  - 순서는 **로그인 없이 바로 열리는 것(허브·게이트웨이·Eureka·로그인 화면) → 로그인이 필요한 것(QFieldCloud·ArgoCD·Jenkins·대시보드)**이고, 카드 설명 문구도 그 순서와 맞춰 둡니다. 링크를 더하면 둘을 같이 고칠 것.
   - 세 번째 탭 이름은 **"저장소 · 문의"** 입니다(2026-09-28 "연락처"에서 변경). 내용이 연락처보다 저장소·운영 링크 위주라서 바꾼 것이므로, 페이지 id(`#contact-page`)와 `data-page="contact"`는 그대로 두고 **표시 이름만** 바꿉니다.
 - **헤더 로고(`#logoHome`) 클릭**은 `ui.js`의 `goToMap()`이 처리하며, **지도 사이트를 통째로 다시 불러옵니다**(첫 화면으로 초기화). 이동 주소는 **지금 문서가 있는 디렉터리**를 기준으로 만듭니다 — `window.location.origin + pathname.replace(/[^/]*$/, "")` → 운영 `https://sj-lab.co.kr/map/`, 로컬 `http://localhost:4000/`. 쿼리·해시(로그인 토큰 등)는 떨어집니다.
   - **`origin + "/map"` 처럼 절대 경로를 하드코딩하지 말 것** — 운영에만 있는 경로라 로컬(루트에서 서빙)에서는 404가 납니다(2026-09-23 실제 발생).
