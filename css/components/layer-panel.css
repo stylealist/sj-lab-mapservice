@@ -11,6 +11,7 @@
   height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   background: #ffffff;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
   z-index: 1600;
@@ -21,6 +22,12 @@
 
 .layer-panel.collapsed {
   transform: translateX(-316px);
+}
+
+/* 헤더를 접으면 지도 영역이 화면 맨 위에서 시작하므로 패널도 화면 높이만큼 쓴다.
+   (그대로 두면 아래쪽에 헤더 높이만큼 빈 공간이 남는다 — 2026-09-29 실제 발생) */
+body.header-hidden .layer-panel {
+  height: 100vh;
 }
 
 .panel-header {

@@ -12,6 +12,10 @@ function initializeHeaderToggle() {
       const isHidden = header.classList.contains("header-hidden");
       header.classList.toggle("header-hidden");
 
+      // 헤더를 접으면 지도 영역이 화면 맨 위에서 시작하므로, 높이를 헤더 기준으로 잡아 둔
+      // 요소들(왼쪽 패널 등)이 같이 늘어나야 한다. CSS 는 body 의 이 클래스를 본다.
+      document.body.classList.toggle("header-hidden", !isHidden);
+
       // 메인 컨텐츠도 함께 이동 (헤더 높이만큼)
       if (mainContent) {
         const headerHeight = header.offsetHeight;
@@ -63,6 +67,9 @@ function initializeHeaderToggle() {
           map.style.height = "100vh";
         }
       }
+
+      // 높이가 바뀌었으니 화면 기준으로 자리를 계산하는 요소들(범례 등)에 알린다
+      window.setTimeout(() => window.dispatchEvent(new Event("resize")), 450);
 
       // 애니메이션 완료 후 아이콘 변경
       setTimeout(() => {
